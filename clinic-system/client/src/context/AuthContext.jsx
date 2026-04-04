@@ -5,40 +5,85 @@ const AuthContext = createContext()
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    // Get session on load
-    supabase.auth.getSession().then(({ data }) => {
-      setUser(data.session?.user ?? null)
+    const getInitialSession = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession()
+
+        if (error) {
+          setError('Could not restore your session. Please sign in again.')
+          return
+        }
+
+        setUser(data.session?.user ?? null)
+      } catch (err) {
+        setError('Network error while restoring session.')
+        console.error(err)
+      }
+    }
+
+    getInitialSession()
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
     })
 
-    // Listen for changes
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setUser(session?.user ?? null)
-      }
-    )
-
-    return () => listener.subscription.unsubscribe()
+    return () => subscription.unsubscribe()
   }, [])
 
-  const loginWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-    })
 
-    if (error) {
-      console.error(error.message)
+  const loginWithGoogle = async () => {
+    setError('')
+
+    try {
+      const redirectTo = `${window.location.origin}/login`
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo,
+        },
+      })
+
+      if (error) {
+        setError('Google sign-in failed. Please try again.')
+        console.error(error.message)
+      }
+    } catch (err) {
+      setError('Network error. Please check your connection and try again.')
+      console.error(err)
+    }
+  }
+
+  const logout = async () => {
+    setError('')
+
+    try {
+      const { error } = await supabase.auth.signOut()
+
+      if (error) {
+        setError('Could not log out. Please try again.')
+        console.error(error.message)
+        return
+      }
+
+      setUser(null)
+    } catch (err) {
+      setError('Network error while logging out.')
+      console.error(err)
     }
   }
 
   return (
-    <AuthContext.Provider value={{ user, loginWithGoogle }}>
+    <AuthContext.Provider value={{ user, error, loginWithGoogle, logout }}>
       {children}
     </AuthContext.Provider>
   )
 }
-
 
 export function useAuth() {
   return useContext(AuthContext)
