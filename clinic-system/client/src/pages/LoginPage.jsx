@@ -1,7 +1,16 @@
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function LoginPage() {
-  const { loginWithGoogle, error } = useAuth()
+  const { loginWithGoogle, error, user} = useAuth()
+    const navigate = useNavigate()
+  useEffect(() => {
+    if (user) {
+      navigate('/patient')
+    }
+  }, [user, navigate])
+
 
   return (
     <main style={styles.page}>
