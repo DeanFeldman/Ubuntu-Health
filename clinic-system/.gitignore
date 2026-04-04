@@ -17,3 +17,4 @@ server/.env.*
 !client/.env.example
 !server/.env.exampleclient/.env
 server/.env
+.env
