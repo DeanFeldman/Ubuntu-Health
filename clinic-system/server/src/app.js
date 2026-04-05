@@ -95,7 +95,7 @@ app.use(express.static(publicPath))
 // 3. CATCH-ALL (MUST BE LAST)
 // =======================
 
-app.get('*', (req, res) => {
+app.get('/*', (req, res) => {
   res.sendFile(path.join(publicPath, 'index.html'))
 })
 
