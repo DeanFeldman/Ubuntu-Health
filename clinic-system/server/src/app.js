@@ -1,22 +1,26 @@
 const express = require('express')
 const cors = require('cors')
+const path = require('path')
 const { createClient } = require('@supabase/supabase-js')
 require('dotenv').config()
 
 const app = express()
+
 app.use(cors())
 app.use(express.json())
-app.get('/', (req, res) => {
-  res.json({ message: 'Ubuntu Health API running' })
-})
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_KEY
 )
 
-// GET /clinics — filter by province, district, facility_type
-app.get('/clinics', async (req, res) => {
+// Health check
+app.get('/api', (req, res) => {
+  res.json({ message: 'Ubuntu Health API running' })
+})
+
+// GET /api/clinics — filter by province, district, facility_type
+app.get('/api/clinics', async (req, res) => {
   try {
     const { province, district, facility_type, search } = req.query
 
@@ -38,8 +42,8 @@ app.get('/clinics', async (req, res) => {
   }
 })
 
-// GET /clinics/:id — fetch single clinic detail
-app.get('/clinics/:id', async (req, res) => {
+// GET /api/clinics/:id — fetch single clinic detail
+app.get('/api/clinics/:id', async (req, res) => {
   try {
     const { id } = req.params
 
@@ -64,4 +68,15 @@ app.get('/clinics/:id', async (req, res) => {
   }
 })
 
-module.exports = app
+// Serve React frontend
+const publicPath = path.join(__dirname, 'public')
+app.use(express.static(publicPath))
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(publicPath, 'index.html'))
+})
+
+const PORT = process.env.PORT || 8080
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`)
+})
