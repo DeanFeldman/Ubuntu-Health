@@ -11,10 +11,13 @@ export default function LoginPage() {
 
     if (role === 'Admin') {
       navigate('/admin')
+    } else if (role === 'Staff') {
+      navigate('/staff')
     } else {
       navigate('/clinic')
     }
   }, [user, role, navigate])
+
 
   return (
     <main style={styles.page}>
