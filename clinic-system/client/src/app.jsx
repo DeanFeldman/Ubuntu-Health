@@ -6,7 +6,7 @@ import LoginPage from './pages/LoginPage'
 import PatientDashboard from './pages/PatientDashboard'
 import StaffDashboard from './pages/StaffDashboard'
 import AdminDashboard from './pages/AdminDashboard'
-import ClinicDashboard from './pages/ClinicPage'
+import ClinicDashboard from './pages/PatientDashboard'
 
 function RoleRedirect() {
   const { user, role, loading } = useAuth()
