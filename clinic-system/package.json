@@ -1,8 +1,14 @@
-
 {
   "name": "clinic-system",
   "private": true,
   "scripts": {
-    "dev": "npm run dev --prefix client"
+    "dev": "npm run dev --prefix client",
+    "clean:clinics": "node scripts/cleanClinicsOU5.js",
+    "seed:clinics": "node scripts/seedClinics.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.101.1",
+    "csv-parser": "^3.2.0",
+    "dotenv": "^17.4.0"
   }
 }
