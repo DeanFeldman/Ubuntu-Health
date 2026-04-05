@@ -6,6 +6,7 @@ require('dotenv').config()
 const app = express()
 app.use(cors())
 app.use(express.json())
+
 app.get('/', (req, res) => {
   res.json({ message: 'Ubuntu Health API running' })
 })
@@ -15,16 +16,16 @@ const supabase = createClient(
   process.env.SUPABASE_KEY
 )
 
-// GET /clinics — filter by province, district, facility_type
 app.get('/clinics', async (req, res) => {
   try {
-    const { province, district, facility_type, search } = req.query
+    const { province, district, municipality, facility_type, search } = req.query
 
     let query = supabase.from('clinics').select('*')
 
     if (province) query = query.eq('province', province)
     if (district) query = query.eq('district', district)
     if (facility_type) query = query.eq('facility_type', facility_type)
+    if (municipality) query = query.eq('municipality', municipality)
     if (search) query = query.ilike('name', `%${search}%`)
 
     const { data, error } = await query
@@ -38,7 +39,6 @@ app.get('/clinics', async (req, res) => {
   }
 })
 
-// GET /clinics/:id — fetch single clinic detail
 app.get('/clinics/:id', async (req, res) => {
   try {
     const { id } = req.params
