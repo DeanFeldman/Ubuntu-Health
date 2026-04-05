@@ -1,112 +1,85 @@
-AUTHENTICATION SETUP – Google OAuth Authentication Setup
+# AUTHENTICATION SETUP – Google OAuth
 
-Overview:
+## Overview
 
-Google OAuth authentication has been configured on the Google Cloud side for the Ubuntu Health system. This setup enables users to sign in using their Google accounts. The Google Cloud configuration has been completed, and credentials have been generated. Integration with Supabase and the frontend will be completed in later tasks.
+Google OAuth authentication has been configured for the Ubuntu Health system, enabling users to securely sign in using their Google accounts.
 
-Google Account:
+The setup includes:
+- Google Cloud OAuth configuration  
+- Integration with Supabase authentication  
+- Frontend login flow  
 
-A shared team Google account was created for this project to manage authentication and related services.
-
-Account email: ubuntuhealthza@gmail.com
-
-Note: credentials are stored securely and are not committed to the repository.
-
-Google Cloud Project:
-
-Project Name: ubuntu-health-auth
-
-Project ID: ubuntu-health-auth
-
-This project was created in Google Cloud Console and is used to manage OAuth authentication.
-
-OAuth Consent Screen Configuration:
-
-User Type: External
-
-Publishing Status: Testing
-
-App Name: Ubuntu Health
-
-User Support Email: ubuntuhealthza@gmail.com
-
-Developer Contact Email: ubuntuhealthza@gmail.com
-
-Test Users:
-
-• ubuntuhealthza@gmail.com
-
-• 2434490@students.wits.ac.za
-
-• 2693084@students.wits.ac.za
-
-• 2698600@students.wits.ac.za
-
-• 2799578@students.wits.ac.za
-
-• 2803899@students.wits.ac.za
-
-• 613ben.swartz@gmail.com
-
-• dean.feldman05@gmail.com
-
-• liorarosenberg2004@gmail.com
-
-• nsundy0@gmail.com
-
-• shaynaunterslak@gmail.com
-
-The app is currently in testing mode, meaning only added test users can authenticate.
-
-OAuth Credentials:
-
-These credentials have been generated and are stored securely outside the repository.
-
-Application Type: Web application
-
-Client Name: ubuntu-health-web
-
-Authorized JavaScript Origins:
-
-• http://localhost:3000
-
-Authorized Redirect URIs:
-
-• http://localhost:3000/
-
-Client ID: stored securely outside repository
-
-Client Secret: stored securely outside repository
-
-Current Status:
-
-The following has been completed:
-
-• Google Cloud project created
-
-• OAuth consent screen configured
-
-• Test users added
-
-• OAuth client credentials generated
-
-The following is still pending:
-
-• Integration with Supabase authentication
-
-• Configuration of production redirect URIs
-
-• Frontend login implementation
-
-• End-to-end testing
-
-Notes:
-
-• The support email and project ownership can be updated later if needed.
-
-• The application is currently in testing mode and does not require verification.
-
-• Redirect URIs may need to be updated depending on frontend implementation.
+Initial testing confirms that the authentication flow is functional. Full end-to-end validation will be completed once database integration is finalised.
 
 
+## Google Account
 
+A dedicated project Google account is used to manage authentication services.
+
+**Note:**
+- The initial Google Cloud project was restricted due to a service policy issue.  
+- A new account and project were created to resolve this and ensure a stable configuration.  
+
+All credentials are now stored securely and are not committed to the repository.
+
+
+## Google Cloud Project
+
+A Google Cloud project is used to manage OAuth authentication.
+
+- OAuth 2.0 credentials were created for a web application  
+- Authorized origins and redirect URIs were configured for local development  
+- The project is currently in testing mode  
+
+
+## OAuth Consent Screen
+
+- User Type: External  
+- Publishing Status: Testing  
+- App Name: Ubuntu Health  
+
+The application is currently restricted to approved test users.
+
+
+## Test Users
+
+Authentication is limited to approved test users while the application remains in testing mode.
+
+
+## OAuth Credentials
+
+OAuth credentials were generated in Google Cloud and configured in Supabase.
+
+- Application Type: Web application  
+- Credentials (Client ID and Secret) are stored securely outside the repository  
+
+### Authorized JavaScript Origins
+- http://localhost:3000  
+
+### Authorized Redirect URIs
+- http://localhost:3000/auth/callback  
+
+
+## Supabase Integration
+
+Google authentication has been integrated with Supabase:
+
+- Google provider enabled in Supabase Authentication  
+- OAuth Client ID and Secret configured  
+- Redirect URLs configured correctly  
+- Authentication flow connected to the frontend  
+
+
+## Environment Configuration
+
+Environment variables are used for frontend configuration.
+
+**Important:**
+- `.env` files are **NOT** committed to the repository  
+- A `.env.example` file is provided as a template  
+
+Each developer must create their own `.env` file:
+
+```env
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
