@@ -1,4 +1,4 @@
-name: Build and deploy Node.js app to Azure Web App - Ubuntu-Health
+name: Build and deploy full app to Azure Web App - Ubuntu-Health
 
 on:
   push:
@@ -8,7 +8,8 @@ on:
 
 env:
   AZURE_WEBAPP_NAME: Ubuntu-Health
-  WORKING_DIRECTORY: clinic-system/server
+  CLIENT_DIR: clinic-system/client
+  SERVER_DIR: clinic-system/server
 
 jobs:
   build:
@@ -17,32 +18,41 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
       - name: Set up Node.js version
         uses: actions/setup-node@v4
         with:
           node-version: '20.x'
-          cache: 'npm'
-          cache-dependency-path: '${{ env.WORKING_DIRECTORY }}/package-lock.json'
 
-      - name: Install dependencies
-        working-directory: ${{ env.WORKING_DIRECTORY }}
-        run: npm ci
+      - name: Install client dependencies
+        working-directory: ${{ env.CLIENT_DIR }}
+        run: npm install
 
-      - name: Build app
-        working-directory: ${{ env.WORKING_DIRECTORY }}
-        run: npm run build --if-present
+      - name: Build client
+        working-directory: ${{ env.CLIENT_DIR }}
+        run: npm run build
 
-      - name: Run tests
-        working-directory: ${{ env.WORKING_DIRECTORY }}
+      - name: Install server dependencies
+        working-directory: ${{ env.SERVER_DIR }}
+        run: npm install
+
+      - name: Run server tests
+        working-directory: ${{ env.SERVER_DIR }}
         run: npm test --if-present
 
-      - name: Upload artifact for deployment job
+      - name: Copy client build into server public folder
+        run: |
+          rm -rf ${{ env.SERVER_DIR }}/public
+          mkdir -p ${{ env.SERVER_DIR }}/public
+          cp -r ${{ env.CLIENT_DIR }}/dist/* ${{ env.SERVER_DIR }}/public/
+
+      - name: Upload artifact for deployment
         uses: actions/upload-artifact@v4
         with:
-          name: node-app
-          path: ${{ env.WORKING_DIRECTORY }}
+          name: full-app
+          path: ${{ env.SERVER_DIR }}
 
   deploy:
     runs-on: ubuntu-latest
@@ -52,10 +62,10 @@ jobs:
       contents: read
 
     steps:
-      - name: Download artifact from build job
+      - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: node-app
+          name: full-app
           path: .
 
       - name: Login to Azure
