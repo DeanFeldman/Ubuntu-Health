@@ -32,8 +32,11 @@ jobs:
 
       - name: Build client
         working-directory: ${{ env.CLIENT_DIR }}
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npm run build
-
+        
       - name: Install server dependencies
         working-directory: ${{ env.SERVER_DIR }}
         run: npm install
