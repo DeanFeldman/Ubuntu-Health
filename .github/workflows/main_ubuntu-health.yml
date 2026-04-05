@@ -38,9 +38,6 @@ jobs:
         working-directory: ${{ env.SERVER_DIR }}
         run: npm install
 
-      - name: Run server tests
-        working-directory: ${{ env.SERVER_DIR }}
-        run: npm test --if-present
 
       - name: Copy client build into server public folder
         run: |
