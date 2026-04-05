@@ -9,7 +9,8 @@
   "scripts": {
   "start": "node src/index.js",
   "dev": "nodemon src/index.js",
-  "test": "jest"
+  "test": "jest",
+  "test:coverage": "jest --coverage"
 },
   "keywords": [],
   "author": "",
@@ -20,5 +21,9 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.0",
     "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "jest": "^30.3.0",
+    "supertest": "^7.2.2"
   }
 }

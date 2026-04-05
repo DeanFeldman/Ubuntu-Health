@@ -6,6 +6,9 @@ require('dotenv').config()
 const app = express()
 app.use(cors())
 app.use(express.json())
+app.get('/', (req, res) => {
+  res.json({ message: 'Ubuntu Health API running' })
+})
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -39,6 +42,11 @@ app.get('/clinics', async (req, res) => {
 app.get('/clinics/:id', async (req, res) => {
   try {
     const { id } = req.params
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(id)) {
+      return res.status(400).json({ error: 'Invalid clinic ID format' })
+    }
 
     const { data, error } = await supabase
       .from('clinics')
