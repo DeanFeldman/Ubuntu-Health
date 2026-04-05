@@ -9,19 +9,32 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
-)
+// Create Supabase client ONLY if env vars exist
+let supabase = null
+
+if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
+  supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_KEY
+  )
+}
+
+// =======================
+// 1. API ROUTES FIRST
+// =======================
 
 // Health check
 app.get('/api', (req, res) => {
   res.json({ message: 'Ubuntu Health API running' })
 })
 
-// GET /api/clinics — filter by province, district, facility_type
+// GET /api/clinics
 app.get('/api/clinics', async (req, res) => {
   try {
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' })
+    }
+
     const { province, district, facility_type, search } = req.query
 
     let query = supabase.from('clinics').select('*')
@@ -32,7 +45,6 @@ app.get('/api/clinics', async (req, res) => {
     if (search) query = query.ilike('name', `%${search}%`)
 
     const { data, error } = await query
-
     if (error) throw error
 
     res.json({ clinics: data })
@@ -42,12 +54,16 @@ app.get('/api/clinics', async (req, res) => {
   }
 })
 
-// GET /api/clinics/:id — fetch single clinic detail
+// GET /api/clinics/:id
 app.get('/api/clinics/:id', async (req, res) => {
   try {
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' })
+    }
+
     const { id } = req.params
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const uuidRegex = /^[0-9a-f-]{36}$/i
     if (!uuidRegex.test(id)) {
       return res.status(400).json({ error: 'Invalid clinic ID format' })
     }
@@ -68,15 +84,19 @@ app.get('/api/clinics/:id', async (req, res) => {
   }
 })
 
-// Serve React frontend
+// =======================
+// 2. SERVE FRONTEND
+// =======================
+
 const publicPath = path.join(__dirname, '..', 'public')
 app.use(express.static(publicPath))
+
+// =======================
+// 3. CATCH-ALL (MUST BE LAST)
+// =======================
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(publicPath, 'index.html'))
 })
 
-const PORT = process.env.PORT || 8080
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`)
-})
+module.exports = app
