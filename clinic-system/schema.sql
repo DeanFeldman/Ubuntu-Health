@@ -19,11 +19,13 @@ create table clinics (
 -- Users (extends Supabase auth.users)
 create table users (
   id uuid references auth.users(id) primary key,
+  email text,
   full_name text,
   phone text,
-  role text default 'Patient' check (role in ('Patient', 'Clinic Staff', 'Admin')),
+  role text default 'Patient' check (role in ('Patient', 'Staff', 'Admin')),
   clinic_id uuid references clinics(id),
-  created_at timestamp default now()
+  created_at timestamp default now(),
+  updated_at timestamp default now()
 );
 
 -- Slots (available appointment times per clinic)
