@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
@@ -102,13 +102,12 @@ const styles = `
   }
   .uh-search-grid {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr 1fr auto;
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
     gap: 10px;
     align-items: end;
   }
   .uh-field { display: flex; flex-direction: column; gap: 6px; }
   .uh-field label { font-size: 12px; font-weight: 600; color: var(--uh-muted); }
-  .uh-label-hidden { visibility: hidden; }
   .uh-field input,
   .uh-field select {
     height: 44px;
@@ -127,7 +126,6 @@ const styles = `
     border-color: var(--uh-primary);
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
   }
-  .uh-search-submit { height: 44px; border-radius: 10px; padding: 0 20px; }
 
   /* ── Clinic listing ── */
   .uh-clinics-section { padding: 20px 24px 40px; }
@@ -187,22 +185,7 @@ const styles = `
     border: 1px solid var(--uh-border);
   }
 
-  .uh-clinic-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-  .uh-small-btn {
-    padding: 9px 14px;
-    border-radius: 9px;
-    font-weight: 600;
-    cursor: pointer;
-    border: none;
-    font-size: 13px;
-    font-family: inherit;
-    transition: background 0.15s;
-  }
-  .uh-small-btn-primary { background: var(--uh-primary); color: #fff; }
-  .uh-small-btn-primary:hover { background: var(--uh-primary-dark); }
-  .uh-small-btn-outline { background: var(--uh-surface); color: var(--uh-primary); border: 1px solid var(--uh-primary); }
-  .uh-small-btn-outline:hover { background: #EFF6FF; }
-
+  /* ── Feedback states ── */
   .uh-empty {
     padding: 3rem;
     text-align: center;
@@ -211,6 +194,21 @@ const styles = `
     background: var(--uh-surface);
     border-radius: 18px;
     border: 1px solid var(--uh-border);
+  }
+  .uh-loading {
+    padding: 3rem;
+    text-align: center;
+    color: var(--uh-muted);
+    font-size: 14px;
+  }
+  .uh-error {
+    padding: 1rem 1.5rem;
+    background: #FEF2F2;
+    color: #B91C1C;
+    border: 1px solid #FECACA;
+    border-radius: 12px;
+    font-size: 14px;
+    margin-bottom: 16px;
   }
 
   /* ── Responsive ── */
@@ -226,65 +224,103 @@ const styles = `
   }
 `
 
-const CLINICS = [
-  { name: "Chris Hani Baragwanath Academic Hospital", city: "Soweto", suburb: "Diepkloof", province: "Gauteng", district: "Johannesburg Metro", type: "Hospital", services: ["Emergency", "Maternity", "ICU", "Trauma"], phone: "011 933 8000" },
-  { name: "Tembisa Provincial Tertiary Hospital", city: "Tembisa", suburb: "Tembisa", province: "Gauteng", district: "Ekurhuleni Metro", type: "Hospital", services: ["Emergency", "Surgery", "Paediatrics"], phone: "011 923 2000" },
-  { name: "Evaton Community Health Centre", city: "Evaton", suburb: "Evaton West", province: "Gauteng", district: "Sedibeng", type: "CHC", services: ["Primary Care", "Antenatal", "TB", "HIV/AIDS"], phone: "016 420 1600" },
-  { name: "Alexandra Clinic", city: "Alexandra", suburb: "Alexandra", province: "Gauteng", district: "Johannesburg Metro", type: "Clinic", services: ["Primary Care", "Immunisation", "Family Planning"], phone: "011 882 1271" },
-  { name: "Mamelodi Community Health Centre", city: "Mamelodi", suburb: "Mamelodi East", province: "Gauteng", district: "Tshwane Metro", type: "CHC", services: ["Primary Care", "ARV", "TB", "Mental Health"], phone: "012 805 1444" },
-  { name: "Odi District Hospital", city: "Mabopane", suburb: "Mabopane", province: "Gauteng", district: "Tshwane Metro", type: "Hospital", services: ["Emergency", "Maternity", "General"], phone: "012 725 2312" },
-  { name: "Groote Schuur Hospital", city: "Cape Town", suburb: "Observatory", province: "Western Cape", district: "Cape Town Metro", type: "Hospital", services: ["Emergency", "Transplant", "Neurology", "ICU"], phone: "021 404 9111" },
-  { name: "Mitchell's Plain Community Health Centre", city: "Cape Town", suburb: "Mitchell's Plain", province: "Western Cape", district: "Cape Town Metro", type: "CHC", services: ["Primary Care", "HIV/AIDS", "TB", "Maternity"], phone: "021 377 4444" },
-  { name: "Khayelitsha District Hospital", city: "Cape Town", suburb: "Khayelitsha", province: "Western Cape", district: "Cape Town Metro", type: "Hospital", services: ["Emergency", "Surgery", "Paediatrics", "Maternity"], phone: "021 360 5000" },
-  { name: "Strand Community Day Centre", city: "Strand", suburb: "Strand", province: "Western Cape", district: "Cape Winelands", type: "Clinic", services: ["Primary Care", "Chronic Disease", "Family Planning"], phone: "021 853 2222" },
-  { name: "Addington Hospital", city: "Durban", suburb: "South Beach", province: "KwaZulu-Natal", district: "eThekwini Metro", type: "Hospital", services: ["Emergency", "Trauma", "General Surgery"], phone: "031 327 2000" },
-  { name: "Prince Mshiyeni Memorial Hospital", city: "Umlazi", suburb: "Umlazi", province: "KwaZulu-Natal", district: "eThekwini Metro", type: "Hospital", services: ["Emergency", "Paediatrics", "Maternity", "ICU"], phone: "031 907 8111" },
-  { name: "Umlazi Clinic T", city: "Umlazi", suburb: "Umlazi T-Section", province: "KwaZulu-Natal", district: "eThekwini Metro", type: "Clinic", services: ["Primary Care", "Immunisation", "ARV"], phone: "031 906 1140" },
-  { name: "Ngwelezane Hospital", city: "Empangeni", suburb: "Ngwelezane", province: "KwaZulu-Natal", district: "uThungulu", type: "Hospital", services: ["Emergency", "Surgery", "Paediatrics"], phone: "035 901 7000" },
-  { name: "Pelonomi Regional Hospital", city: "Bloemfontein", suburb: "Pelonomi", province: "Free State", district: "Mangaung Metro", type: "Hospital", services: ["Emergency", "Oncology", "Orthopaedics"], phone: "051 405 1911" },
-  { name: "Botshabelo Community Health Centre", city: "Botshabelo", suburb: "Botshabelo", province: "Free State", district: "Mangaung Metro", type: "CHC", services: ["Primary Care", "TB", "HIV/AIDS", "Maternity"], phone: "051 534 5200" },
-]
+// Maps facility_type values to badge CSS classes and display labels
+const TYPE_BADGE = {
+  Hospital: 'badge-hospital',
+  CHC: 'badge-chc',
+  Clinic: 'badge-clinic',
+  Satellite: 'badge-satellite',
+}
+const TYPE_LABEL = {
+  Hospital: 'Hospital',
+  CHC: 'Community HC',
+  Clinic: 'Clinic',
+  Satellite: 'Satellite',
+}
 
-const TYPE_BADGE = { Hospital: 'badge-hospital', CHC: 'badge-chc', Clinic: 'badge-clinic', Satellite: 'badge-satellite' }
-const TYPE_LABEL = { Hospital: 'Hospital', CHC: 'Community HC', Clinic: 'Clinic', Satellite: 'Satellite' }
+// Returns a sorted array of unique values from an array
 const unique = (arr) => [...new Set(arr)].sort()
 
 export default function PatientDashboard() {
   const { logout } = useAuth()
   const navigate = useNavigate()
 
+  // ── Clinic data state ──────────────────────────────────────────────────────
+  const [clinics, setClinics] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  // ── Filter state ───────────────────────────────────────────────────────────
   const [search, setSearch] = useState('')
   const [province, setProvince] = useState('')
   const [district, setDistrict] = useState('')
+  const [municipality, setMunicipality] = useState('')
   const [facilityType, setFacilityType] = useState('')
 
-  const provinces = useMemo(() => unique(CLINICS.map((c) => c.province)), [])
-  const districts = useMemo(() => unique(CLINICS.map((c) => c.district)), [])
-  const types = useMemo(() => unique(CLINICS.map((c) => c.type)), [])
+  // ── Fetch clinics on mount ─────────────────────────────────────────────────
+  useEffect(() => {
+    const fetchClinics = async () => {
+      try {
+        setLoading(true)
+        setError(null)
 
+        const response = await fetch('/api/clinics')
+
+        if (!response.ok) {
+          throw new Error(`Failed to load clinics (HTTP ${response.status})`)
+        }
+
+        const data = await response.json()
+        setClinics(data)
+      } catch (err) {
+        setError(err.message || 'Something went wrong. Please try again.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchClinics()
+  }, [])
+
+  // ── Derive unique filter options from fetched data ─────────────────────────
+  const provinces     = useMemo(() => unique(clinics.map((c) => c.province)),     [clinics])
+  const districts     = useMemo(() => unique(clinics.map((c) => c.district)),     [clinics])
+  const municipalities = useMemo(() => unique(clinics.map((c) => c.municipality)), [clinics])
+  const types         = useMemo(() => unique(clinics.map((c) => c.facility_type)), [clinics])
+
+  // ── Filter clinics based on all active filters ─────────────────────────────
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim()
-    return CLINICS.filter((c) => {
-      if (province && c.province !== province) return false
-      if (district && c.district !== district) return false
-      if (facilityType && c.type !== facilityType) return false
-      if (q && ![c.name, c.city, c.suburb].join(' ').toLowerCase().includes(q)) return false
+
+    return clinics.filter((c) => {
+      if (province     && c.province     !== province)     return false
+      if (district     && c.district     !== district)     return false
+      if (municipality && c.municipality !== municipality) return false
+      if (facilityType && c.facility_type !== facilityType) return false
+
+      // Text search across name, municipality, and address
+      if (q && ![c.name, c.municipality, c.address].join(' ').toLowerCase().includes(q)) {
+        return false
+      }
+
       return true
     })
-  }, [search, province, district, facilityType])
+  }, [search, province, district, municipality, facilityType, clinics])
 
+  // ── Auth ───────────────────────────────────────────────────────────────────
   const handleLogout = async () => {
     await logout()
     navigate('/login', { replace: true })
   }
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <>
       <style>{styles}</style>
       <main className="uh-root">
 
+        {/* Navbar */}
         <header className="uh-navbar">
-          {/* nav wraps the brand + links + actions — it's the primary site navigation */}
           <nav className="uh-navbar-inner" aria-label="Primary navigation">
             <span className="uh-brand">
               <abbr className="uh-brand-logo" title="Ubuntu Health">UH</abbr>
@@ -297,24 +333,31 @@ export default function PatientDashboard() {
               <li><a href="#">Queue status</a></li>
             </ul>
             <menu className="uh-nav-actions">
-              <li><button className="uh-btn uh-btn-primary" onClick={handleLogout}>Log out</button></li>
+              <li>
+                <button className="uh-btn uh-btn-primary" onClick={handleLogout}>
+                  Log out
+                </button>
+              </li>
             </menu>
           </nav>
         </header>
 
+        {/* Search & filters */}
         <section className="uh-search-section" aria-label="Search and filter clinics">
           <search className="uh-search-card">
             <fieldset className="uh-search-grid" style={{ border: 'none', padding: 0, margin: 0 }}>
+
               <p className="uh-field">
                 <label htmlFor="search-input">Search clinic</label>
                 <input
                   id="search-input"
                   type="search"
-                  placeholder="Name, city or suburb..."
+                  placeholder="Name, municipality or address..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </p>
+
               <p className="uh-field">
                 <label htmlFor="filter-province">Province</label>
                 <select id="filter-province" value={province} onChange={(e) => setProvince(e.target.value)}>
@@ -322,6 +365,7 @@ export default function PatientDashboard() {
                   {provinces.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
               </p>
+
               <p className="uh-field">
                 <label htmlFor="filter-district">District</label>
                 <select id="filter-district" value={district} onChange={(e) => setDistrict(e.target.value)}>
@@ -329,6 +373,15 @@ export default function PatientDashboard() {
                   {districts.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
               </p>
+
+              <p className="uh-field">
+                <label htmlFor="filter-municipality">Municipality</label>
+                <select id="filter-municipality" value={municipality} onChange={(e) => setMunicipality(e.target.value)}>
+                  <option value="">All municipalities</option>
+                  {municipalities.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </p>
+
               <p className="uh-field">
                 <label htmlFor="filter-type">Facility type</label>
                 <select id="filter-type" value={facilityType} onChange={(e) => setFacilityType(e.target.value)}>
@@ -336,59 +389,78 @@ export default function PatientDashboard() {
                   {types.map((t) => <option key={t} value={t}>{TYPE_LABEL[t] ?? t}</option>)}
                 </select>
               </p>
-              <p className="uh-field">
-                <label className="uh-label-hidden" aria-hidden="true">&nbsp;</label>
-                <button type="submit" className="uh-btn uh-btn-primary uh-search-submit">Search</button>
-              </p>
+
             </fieldset>
           </search>
         </section>
 
+        {/* Clinic results */}
         <section className="uh-clinics-section" aria-label="Clinic results">
           <hgroup className="uh-section-header">
             <h2>Nearby clinics</h2>
             <p>Browse available facilities and book your next appointment.</p>
           </hgroup>
 
-          <p className="uh-results-count">
-            Showing <strong>{filtered.length}</strong> of {CLINICS.length} facilities
-          </p>
+          {/* Error banner */}
+          {error && (
+            <p className="uh-error" role="alert">⚠ {error}</p>
+          )}
 
-          {filtered.length === 0 ? (
-            <p className="uh-empty">No clinics match your search. Try adjusting your filters.</p>
-          ) : (
-            <ol className="uh-clinic-grid" role="list">
-              {filtered.map((clinic) => (
-                <li key={clinic.name}>
-                  <article className="uh-clinic-card">
-                    <header className="uh-clinic-top">
-                      <hgroup>
-                        <h3 className="uh-clinic-name">{clinic.name}</h3>
-                        <p className="uh-clinic-location">{clinic.suburb}, {clinic.city}, {clinic.province}</p>
-                      </hgroup>
-                      <mark className={`uh-type-badge ${TYPE_BADGE[clinic.type] ?? 'badge-satellite'}`}>
-                        {TYPE_LABEL[clinic.type] ?? clinic.type}
-                      </mark>
-                    </header>
+          {/* Loading state */}
+          {loading && (
+            <p className="uh-loading" aria-live="polite">Loading clinics…</p>
+          )}
 
-                    <p className="uh-clinic-meta">
-                      <strong>Phone:</strong> {clinic.phone}
-                    </p>
+          {/* Results */}
+          {!loading && !error && (
+            <>
+              <p className="uh-results-count">
+                Showing <strong>{filtered.length}</strong> of {clinics.length} facilities
+              </p>
 
-                    <ul className="uh-chip-row" aria-label="Services offered">
-                      {clinic.services.map((s) => (
-                        <li key={s} className="uh-chip">{s}</li>
-                      ))}
-                    </ul>
+              {filtered.length === 0 ? (
+                <p className="uh-empty">No clinics match your search. Try adjusting your filters.</p>
+              ) : (
+                <ol className="uh-clinic-grid" role="list">
+                  {filtered.map((clinic) => (
+                    <li key={clinic.id}>
+                      <article className="uh-clinic-card">
 
-                    <footer className="uh-clinic-actions">
-                      <button className="uh-small-btn uh-small-btn-primary">Book appointment</button>
-                      <button className="uh-small-btn uh-small-btn-outline">View details</button>
-                    </footer>
-                  </article>
-                </li>
-              ))}
-            </ol>
+                        <header className="uh-clinic-top">
+                          <hgroup>
+                            <h3 className="uh-clinic-name">{clinic.name}</h3>
+                            <p className="uh-clinic-location">
+                              {clinic.municipality}, {clinic.district}, {clinic.province}
+                            </p>
+                          </hgroup>
+                          <mark className={`uh-type-badge ${TYPE_BADGE[clinic.facility_type] ?? 'badge-satellite'}`}>
+                            {TYPE_LABEL[clinic.facility_type] ?? clinic.facility_type}
+                          </mark>
+                        </header>
+
+                        <dl className="uh-clinic-meta">
+                          {clinic.address && (
+                            <>
+                              <dt><strong>Address</strong></dt>
+                              <dd>{clinic.address}</dd>
+                            </>
+                          )}
+                        </dl>
+
+                        {clinic.services?.length > 0 && (
+                          <ul className="uh-chip-row" aria-label="Services offered">
+                            {clinic.services.map((s) => (
+                              <li key={s} className="uh-chip">{s}</li>
+                            ))}
+                          </ul>
+                        )}
+
+                      </article>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </>
           )}
         </section>
 
