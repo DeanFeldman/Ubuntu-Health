@@ -36,6 +36,9 @@ jobs:
 
       - name: Test
         working-directory: ${{ env.SERVER_DIR }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: npm run test --if-present
 
       - name: Upload artifact for deployment job
