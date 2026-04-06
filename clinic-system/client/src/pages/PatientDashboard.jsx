@@ -271,7 +271,7 @@ export default function PatientDashboard() {
         }
 
         const data = await response.json()
-        setClinics(data)
+        setClinics(data.clinics || [])
       } catch (err) {
         setError(err.message || 'Something went wrong. Please try again.')
       } finally {
