@@ -1,13 +1,18 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function LoginPage() {
-  const { loginWithGoogle, error, user, role } = useAuth()
+  const { loginWithGoogle, error, user, role, loading } = useAuth()
   const navigate = useNavigate()
+
+  const [localError, setLocalError] = useState('')
 
   useEffect(() => {
     if (!user || !role) return
+
+    sessionStorage.removeItem('oauth_started')
+
 
     if (role === 'Admin') {
       navigate('/admin')
@@ -18,6 +23,21 @@ export default function LoginPage() {
     }
   }, [user, role, navigate])
 
+  useEffect(() => {
+    const started = sessionStorage.getItem('oauth_started')
+
+    if (!loading && !user && started) {
+      setLocalError('Login was cancelled or failed. Please try again.')
+      sessionStorage.removeItem('oauth_started')
+    }
+  }, [loading, user])
+
+
+  async function handleLogin() {
+    setLocalError('')
+    sessionStorage.setItem('oauth_started', 'true')
+    await loginWithGoogle()
+  }
 
   return (
     <main style={styles.page}>
@@ -30,16 +50,16 @@ export default function LoginPage() {
           </p>
         </header>
 
-        {error && (
+        {(error || localError) && (
           <p role="alert" style={styles.error}>
-            {error}
+            {error || localError}
           </p>
         )}
 
         <button
           type="button"
           style={styles.googleBtn}
-          onClick={loginWithGoogle}
+          onClick={handleLogin}
         >
           <span style={styles.googleIconWrap}>
             <svg
