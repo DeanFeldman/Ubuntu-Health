@@ -110,26 +110,27 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  async function loginWithGoogle() {
-    setError('')
+async function loginWithGoogle() {
+  sessionStorage.setItem('oauth_started', 'true')
+  setError('')
 
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/login`,
-        },
-      })
+  try {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/login`,
+      },
+    })
 
-      if (error) {
-        setError('Google sign-in failed. Please try again.')
-        console.error(error.message)
-      }
-    } catch (err) {
-      console.error(err)
-      setError('Network error. Please check your connection and try again.')
+    if (error) {
+      setError('Google sign-in failed. Please try again.')
+      sessionStorage.removeItem('oauth_started')
     }
+  } catch (err) {
+    setError('Network error. Please try again.')
+    sessionStorage.removeItem('oauth_started')
   }
+}
 
   async function logout() {
     setError('')
@@ -142,7 +143,7 @@ export function AuthProvider({ children }) {
         console.error(error.message)
         return
       }
-
+      sessionStorage.removeItem('oauth_started')
       setUser(null)
       setRole(null)
     } catch (err) {
