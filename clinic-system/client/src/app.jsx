@@ -9,17 +9,19 @@ import StaffDashboard from './pages/StaffDashboard'
 import AdminDashboard from './pages/AdminDashboard'
 
 function RoleRedirect() {
+  // Get current auth state so we can send users to the correct page
   const { user, role, loading } = useAuth()
   const navigate = useNavigate()
 
   useEffect(() => {
     if (loading) return
 
+    // If no user is logged in, send them back to login
     if (!user) {
       navigate('/login')
       return
     }
-
+    // Redirect users based on the role stored in the system
     if (role === 'Admin') navigate('/admin')
     else if (role === 'Staff') navigate('/staff')
     else if (role === 'Patient') navigate('/clinic')
@@ -30,6 +32,8 @@ function RoleRedirect() {
 }
 
 function ProtectedRoute({ children, allowedRoles }) {
+  // Used to stop unauthorised users from opening protected pages
+
   const { user, role, loading } = useAuth()
 
   if (loading) return <p>Loading...</p>
@@ -42,10 +46,12 @@ function ProtectedRoute({ children, allowedRoles }) {
 export default function App() {
   return (
     <Routes>
+      // publioc routes
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/redirect" element={<RoleRedirect />} />
 
+      // protected routes
       <Route
         path="/patient"
         element={

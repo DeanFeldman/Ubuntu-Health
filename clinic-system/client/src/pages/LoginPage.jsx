@@ -3,16 +3,19 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function LoginPage() {
+  // Get auth-related data and functions from context
   const { loginWithGoogle, error, user, role, loading } = useAuth()
   const navigate = useNavigate()
-
+  
+  // Local error state for handling cancelled OAuth flows
   const [localError, setLocalError] = useState('')
 
+  // Redirect user after successful login based on role
   useEffect(() => {
     if (!user || !role) return
 
+    // Clear Auth Flag onces login complete
     sessionStorage.removeItem('oauth_started')
-
 
     if (role === 'Admin') {
       navigate('/admin')
@@ -23,6 +26,7 @@ export default function LoginPage() {
     }
   }, [user, role, navigate])
 
+  // Check for cancelled or failed OAuth login attempts
   useEffect(() => {
     const started = sessionStorage.getItem('oauth_started')
 
@@ -32,7 +36,7 @@ export default function LoginPage() {
     }
   }, [loading, user])
 
-
+  // Initiate Google OAuth login flow
   async function handleLogin() {
     setLocalError('')
     sessionStorage.setItem('oauth_started', 'true')
@@ -40,6 +44,7 @@ export default function LoginPage() {
   }
 
   return (
+    //Html Page contents
     <main style={styles.page}>
       <section style={styles.card}>
         <header style={styles.header}>
@@ -56,11 +61,13 @@ export default function LoginPage() {
           </p>
         )}
 
+        // Google Sign-In button 
         <button
           type="button"
           style={styles.googleBtn}
           onClick={handleLogin}
         >
+          //google icon image
           <span style={styles.googleIconWrap}>
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -93,6 +100,7 @@ export default function LoginPage() {
   )
 }
 
+// Basic inline styles for layout and appearance
 const styles = {
   page: {
     minHeight: '100vh',
