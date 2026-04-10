@@ -1,9 +1,12 @@
 import { useNavigate } from 'react-router-dom'
 
 export default function HomePage() {
+  // Hook used to navigate between routes
+
   const navigate = useNavigate()
 
   return (
+    //Html Page contents
     <main style={styles.page}>
       <section style={styles.card}>
         <h1>Ubuntu Health</h1>
@@ -16,7 +19,7 @@ export default function HomePage() {
     </main>
   )
 }
-
+// Basic inline styles for layout and appearance
 const styles = {
   page: {
     minHeight: '100vh',

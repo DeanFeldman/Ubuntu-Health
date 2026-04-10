@@ -1,9 +1,11 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
+// Create a global context for authentication state
 const AuthContext = createContext()
 
 export function AuthProvider({ children }) {
+  // State to hold the current user, their role, any auth errors, and loading status from supabase
   const [user, setUser] = useState(null)
   const [role, setRole] = useState(null)
   const [error, setError] = useState('')
@@ -19,11 +21,13 @@ export function AuthProvider({ children }) {
 
       if (fetchError) throw fetchError
 
+      // If user exists, use their stored role
       if (existingUser) {
         setRole(existingUser.role)
         return existingUser.role
       }
 
+      // Otherwise create a new user with default role "Patient"
       const { data: newUser, error: insertError } = await supabase
         .from('users')
         .insert({
@@ -48,6 +52,7 @@ export function AuthProvider({ children }) {
     }
   }
 
+  // Restores user session from Supabase on page load or refresh
   async function restoreSession(session) {
     try {
       const authUser = session?.user ?? null
@@ -71,6 +76,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let mounted = true
 
+    // Initial session load when app starts
     async function init() {
       try {
         const { data, error } = await supabase.auth.getSession()
@@ -103,13 +109,13 @@ export function AuthProvider({ children }) {
         }
       }, 0)
     })
-
+    // Cleanup to prevent memory leaks
     return () => {
       mounted = false
       subscription.unsubscribe()
     }
   }, [])
-
+// Starts Google OAuth login flow
 async function loginWithGoogle() {
   sessionStorage.setItem('oauth_started', 'true')
   setError('')
@@ -131,7 +137,7 @@ async function loginWithGoogle() {
     sessionStorage.removeItem('oauth_started')
   }
 }
-
+  // Logs the user out and clears local state
   async function logout() {
     setError('')
 
@@ -168,6 +174,7 @@ async function loginWithGoogle() {
   )
 }
 
+// Custom hook to easily access auth context in components
 export function useAuth() {
   return useContext(AuthContext)
 }
