@@ -102,7 +102,7 @@ const styles = `
   }
   .uh-search-grid {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: 10px;
     align-items: end;
   }
@@ -212,8 +212,8 @@ const styles = `
 
   /* ── Responsive ── */
   @media (max-width: 1024px) {
-    .uh-clinic-grid { grid-template-columns: repeat(2, 1fr); }
-    .uh-search-grid { grid-template-columns: 1fr 1fr; }
+    .uh-clinic-grid { grid-template-columns: repeat(3, 1fr); }
+    .uh-search-grid { grid-template-columns: 1fr 1fr 1fr; }
     .uh-nav-links { display: none; }
   }
   @media (max-width: 640px) {
@@ -242,19 +242,20 @@ export default function PatientDashboard() {
   const { logout } = useAuth()
   const navigate = useNavigate()
 
-  // ── Clinic data state ──────────────────────────────────────────────────────
+  // Clinic data state
   const [clinics, setClinics] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  // ── Filter state ───────────────────────────────────────────────────────────
+  // Filter state
   const [search, setSearch] = useState('')
   const [province, setProvince] = useState('')
   const [district, setDistrict] = useState('')
   const [municipality, setMunicipality] = useState('')
   const [facilityType, setFacilityType] = useState('')
+  const [serviceFilter, setServiceFilter] = useState('')
 
-  // ── Fetch clinics on mount ─────────────────────────────────────────────────
+  // Fetch clinics on mount
   useEffect(() => {
     const fetchClinics = async () => {
       try {
@@ -279,13 +280,42 @@ export default function PatientDashboard() {
     fetchClinics()
   }, [])
 
-  // ── Derive unique filter options from fetched data ─────────────────────────
-  const provinces     = useMemo(() => unique(clinics.map((c) => c.province)),     [clinics])
-  const districts     = useMemo(() => unique(clinics.map((c) => c.district)),     [clinics])
-  const municipalities = useMemo(() => unique(clinics.map((c) => c.municipality)), [clinics])
-  const types         = useMemo(() => unique(clinics.map((c) => c.facility_type)), [clinics])
+  // Derive unique filter options from fetched data
+  const provinces = useMemo(() =>
+  unique(clinics.map((c) => c.province)),
+  [clinics])
 
-  // ── Filter clinics based on all active filters ─────────────────────────────
+  const districts = useMemo(() =>
+  unique(clinics
+    .filter((c) => !province || c.province === province)
+    .map((c) => c.district)),
+  [clinics, province])
+
+  const municipalities = useMemo(() =>
+  unique(clinics
+    .filter((c) => !province || c.province === province)
+    .filter((c) => !district || c.district === district)
+    .map((c) => c.municipality)),
+  [clinics, province, district])
+
+  const types = useMemo(() =>
+  unique(clinics
+    .filter((c) => !province     || c.province     === province)
+    .filter((c) => !district     || c.district     === district)
+    .filter((c) => !municipality || c.municipality === municipality)
+    .map((c) => c.facility_type)),
+  [clinics, province, district, municipality])
+
+  const services = useMemo(() =>
+  unique(clinics
+    .filter((c) => !province     || c.province     === province)
+    .filter((c) => !district     || c.district     === district)
+    .filter((c) => !municipality || c.municipality === municipality)
+    .filter((c) => !facilityType || c.facility_type === facilityType)
+    .flatMap((c) => c.services ?? [])),
+  [clinics, province, district, municipality, facilityType])
+
+  // Filter clinics based on all active filters 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim()
 
@@ -294,6 +324,7 @@ export default function PatientDashboard() {
       if (district     && c.district     !== district)     return false
       if (municipality && c.municipality !== municipality) return false
       if (facilityType && c.facility_type !== facilityType) return false
+      if (serviceFilter && !c.services?.includes(serviceFilter)) return false
 
       // Text search across name, municipality, and address
       if (q && ![c.name, c.municipality, c.address].join(' ').toLowerCase().includes(q)) {
@@ -302,15 +333,15 @@ export default function PatientDashboard() {
 
       return true
     })
-  }, [search, province, district, municipality, facilityType, clinics])
+  }, [search, province, district, municipality, facilityType, serviceFilter, clinics])
 
-  // ── Auth ───────────────────────────────────────────────────────────────────
+  // Auth
   const handleLogout = async () => {
     await logout()
     navigate('/login', { replace: true })
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // Render 
   return (
     <>
       <style>{styles}</style>
@@ -357,7 +388,7 @@ export default function PatientDashboard() {
 
               <p className="uh-field">
                 <label htmlFor="filter-province">Province</label>
-                <select id="filter-province" value={province} onChange={(e) => setProvince(e.target.value)}>
+                <select id="filter-province" value={province} onChange={(e) => { setProvince(e.target.value); setDistrict(''); setMunicipality(''); setFacilityType(''); setServiceFilter('') }}>
                   <option value="">All provinces</option>
                   {provinces.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
@@ -365,7 +396,7 @@ export default function PatientDashboard() {
 
               <p className="uh-field">
                 <label htmlFor="filter-district">District</label>
-                <select id="filter-district" value={district} onChange={(e) => setDistrict(e.target.value)}>
+                <select id="filter-district" value={district} onChange={(e) => { setDistrict(e.target.value); setMunicipality(''); setFacilityType(''); setServiceFilter('') }}>
                   <option value="">All districts</option>
                   {districts.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
@@ -373,7 +404,7 @@ export default function PatientDashboard() {
 
               <p className="uh-field">
                 <label htmlFor="filter-municipality">Municipality</label>
-                <select id="filter-municipality" value={municipality} onChange={(e) => setMunicipality(e.target.value)}>
+                <select id="filter-municipality" value={municipality} onChange={(e) => { setMunicipality(e.target.value); setFacilityType(''); setServiceFilter('') }}>
                   <option value="">All municipalities</option>
                   {municipalities.map((m) => <option key={m} value={m}>{m}</option>)}
                 </select>
@@ -381,9 +412,17 @@ export default function PatientDashboard() {
 
               <p className="uh-field">
                 <label htmlFor="filter-type">Facility type</label>
-                <select id="filter-type" value={facilityType} onChange={(e) => setFacilityType(e.target.value)}>
+                <select id="filter-type" value={facilityType} onChange={(e) => { setFacilityType(e.target.value); setServiceFilter('') }}>
                   <option value="">All types</option>
                   {types.map((t) => <option key={t} value={t}>{TYPE_LABEL[t] ?? t}</option>)}
+                </select>
+              </p>
+
+              <p className="uh-field">
+                <label htmlFor="filter-service">Service</label>
+                <select id="filter-service" value={serviceFilter} onChange={(e) => setServiceFilter(e.target.value)}>
+                  <option value="">All services</option>
+                  {services.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </p>
 
