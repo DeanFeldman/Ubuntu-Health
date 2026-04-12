@@ -35,7 +35,7 @@ const supabase = createClient(
 //   ?municipality=Tshwane
 //   ?search=some name
 // Filters are applied conditionally — only active if the parameter is provided
-app.get('/clinics', async (req, res) => {
+app.get('/api/clinics', async (req, res) => {
   try {
     const { province, district, municipality, facility_type, search } = req.query
 
@@ -66,7 +66,7 @@ app.get('/clinics', async (req, res) => {
 // Returns the full details of a single clinic by its UUID
 // Validates the ID format before hitting the database to avoid Postgres
 // throwing a type error on invalid UUIDs — returns 400 for invalid format
-app.get('/clinics/:id', async (req, res) => {
+app.get('/api/clinics/:id', async (req, res) => {
   try {
     const { id } = req.params
 
