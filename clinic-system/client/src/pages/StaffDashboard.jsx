@@ -1,15 +1,8 @@
-import { useAuth } from '../context/AuthContext'
-
 export default function StaffDashboard() {
-  // Get logout function from our auth context 
-  const { logout } = useAuth()
-
   return (
-    
-    <main>
-      {/* Html Page contents */}
+    <section>
       <h1>Staff Dashboard</h1>
-      <button onClick={logout}>Log out</button>
-    </main>
+      <p>Manage queue and patients.</p>
+    </section>
   )
 }

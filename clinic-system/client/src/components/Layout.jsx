@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
  
 const styles = `
@@ -22,7 +22,6 @@ const styles = `
     line-height: 1.5;
   }
  
-  /* ── Navbar ── */
   .uh-navbar {
     background: var(--uh-surface);
     border-bottom: 1px solid var(--uh-border);
@@ -31,6 +30,7 @@ const styles = `
     top: 0;
     z-index: 10;
   }
+
   .uh-navbar-inner {
     display: flex;
     align-items: center;
@@ -38,6 +38,7 @@ const styles = `
     padding: 16px 0;
     gap: 16px;
   }
+
   .uh-brand {
     display: flex;
     align-items: center;
@@ -48,6 +49,7 @@ const styles = `
     text-decoration: none;
     color: var(--uh-text);
   }
+
   .uh-brand-logo {
     width: 38px;
     height: 38px;
@@ -61,6 +63,7 @@ const styles = `
     flex-shrink: 0;
     text-decoration: none;
   }
+
   .uh-nav-links {
     display: flex;
     gap: 20px;
@@ -70,17 +73,21 @@ const styles = `
     margin: 0;
     padding: 0;
   }
+
   .uh-nav-links a {
     text-decoration: none;
     color: var(--uh-muted);
     transition: color 0.15s;
     padding-bottom: 2px;
   }
+
   .uh-nav-links a:hover { color: var(--uh-primary); }
+
   .uh-nav-links a.active {
     color: var(--uh-primary);
     border-bottom: 2px solid var(--uh-primary);
   }
+
   .uh-nav-actions {
     display: flex;
     gap: 10px;
@@ -89,7 +96,6 @@ const styles = `
     padding: 0;
   }
  
-  /* ── Buttons (global) ── */
   .uh-btn {
     border: none;
     border-radius: 10px;
@@ -101,15 +107,21 @@ const styles = `
     transition: background 0.15s, color 0.15s;
     white-space: nowrap;
   }
-  .uh-btn-primary { background: var(--uh-primary); color: #fff; }
-  .uh-btn-primary:hover { background: var(--uh-primary-dark); }
-  .uh-btn-secondary { background: var(--uh-surface); color: var(--uh-primary); border: 1px solid var(--uh-primary); }
-  .uh-btn-secondary:hover { background: #EFF6FF; }
+
+  .uh-btn-primary {
+    background: var(--uh-primary);
+    color: #fff;
+  }
+
+  .uh-btn-primary:hover {
+    background: var(--uh-primary-dark);
+  }
  
-  /* ── Page wrapper ── */
-  .uh-page { min-height: calc(100vh - 73px); }
+  .uh-page {
+    min-height: calc(100vh - 73px);
+    padding: 24px;
+  }
  
-  /* ── Responsive ── */
   @media (max-width: 768px) {
     .uh-nav-links { display: none; }
     .uh-navbar-inner { padding: 12px 0; }
@@ -117,12 +129,10 @@ const styles = `
 `
  
 export default function Layout() {
-  const { logout } = useAuth()
-  const navigate = useNavigate()
+  const { logout, user } = useAuth()
  
   const handleLogout = async () => {
     await logout()
-    navigate('/login', { replace: true })
   }
  
   return (
@@ -138,18 +148,20 @@ export default function Layout() {
  
           <ul className="uh-nav-links">
             <li><NavLink to="/">Home</NavLink></li>
-            <li><NavLink to="/clinics">Clinics</NavLink></li>
-            <li><NavLink to="/appointments">Appointments</NavLink></li>
-            <li><NavLink to="/queue-status">Queue status</NavLink></li>
+            <li><NavLink to="/clinic">Patient</NavLink></li>
+            <li><NavLink to="/staff">Staff</NavLink></li>
+            <li><NavLink to="/admin">Admin</NavLink></li>
           </ul>
  
-          <menu className="uh-nav-actions">
-            <li>
-              <button className="uh-btn uh-btn-primary" onClick={handleLogout}>
-                Log out
-              </button>
-            </li>
-          </menu>
+          {user && (
+            <menu className="uh-nav-actions">
+              <li>
+                <button className="uh-btn uh-btn-primary" onClick={handleLogout}>
+                  Log out
+                </button>
+              </li>
+            </menu>
+          )}
         </nav>
       </header>
  
