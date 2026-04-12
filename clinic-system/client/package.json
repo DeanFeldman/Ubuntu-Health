@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "jest --runInBand"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.101.1",
@@ -15,11 +16,16 @@
     "react-router-dom": "^6.22.3"
   },
   "devDependencies": {
+    "@babel/preset-env": "^7.29.2",
+    "@babel/preset-react": "^7.28.5",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@vitejs/plugin-react": "^4.3.4",
+    "babel-jest": "^30.3.0",
+    "identity-obj-proxy": "^3.0.0",
+    "jest": "^30.3.0",
+    "jest-environment-jsdom": "^30.3.0",
     "jsdom": "^29.0.2",
-    "vite": "^5.4.19",
-    "vitest": "^4.1.4"
+    "vite": "^5.4.19"
   }
 }
