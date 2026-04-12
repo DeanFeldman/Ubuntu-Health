@@ -124,4 +124,56 @@ test('allows Staff user to access /staff', () => {
   // Expect Staff dashboard to be shown
   expect(screen.getByText('Staff Dashboard')).toBeInTheDocument()
 })
+  test('allows Admin user to access /admin', () => {
+    // Simulate a logged-in Admin user
+    useAuth.mockReturnValue({
+      user: { id: '123' },
+      role: 'Admin',
+      loading: false,
+    })
+
+    // Render app at /admin route
+    render(
+      <MemoryRouter initialEntries={['/admin']}>
+        <App />
+      </MemoryRouter>
+    )
+
+    // Expect Admin dashboard to be shown
+    expect(screen.getByText('Admin Dashboard')).toBeInTheDocument()
+  })
+
+  test('allows Staff user to access /staff', () => {
+    // Simulate a logged-in Staff user
+    useAuth.mockReturnValue({
+      user: { id: '123' },
+      role: 'Staff',
+      loading: false,
+    })
+
+    // Render app at /staff route
+    render(
+      <MemoryRouter initialEntries={['/staff']}>
+        <App />
+      </MemoryRouter>
+    )
+
+    // Expect Staff dashboard to be shown
+    expect(screen.getByText('Staff Dashboard')).toBeInTheDocument()
+  })
+  test('redirects Patient to /clinic via RoleRedirect', () => {
+  useAuth.mockReturnValue({
+    user: { id: '123' },
+    role: 'Patient',
+    loading: false,
+  })
+
+  render(
+    <MemoryRouter initialEntries={['/redirect']}>
+      <App />
+    </MemoryRouter>
+  )
+
+  expect(screen.getByText('Patient Dashboard')).toBeInTheDocument()
+})
 })
