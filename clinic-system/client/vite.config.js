@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8080', 
+        target: 'https://ubuntu-health-geb6dbegejfmenc7.southafricanorth-01.azurewebsites.net/', 
         changeOrigin: true,
       },
     },

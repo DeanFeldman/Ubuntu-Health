@@ -167,7 +167,6 @@ const styles = `
     white-space: nowrap;
     flex-shrink: 0;
   }
-  .badge-hospital  { background: #DBEAFE; color: #1D4ED8; }
   .badge-chc       { background: #FEF3C7; color: #B45309; }
   .badge-clinic    { background: #DCFCE7; color: #166534; }
   .badge-satellite { background: #F3F4F6; color: #6B7280; }
@@ -226,13 +225,11 @@ const styles = `
 
 // Maps facility_type values to badge CSS classes and display labels
 const TYPE_BADGE = {
-  Hospital: 'badge-hospital',
   CHC: 'badge-chc',
   Clinic: 'badge-clinic',
   Satellite: 'badge-satellite',
 }
 const TYPE_LABEL = {
-  Hospital: 'Hospital',
   CHC: 'Community HC',
   Clinic: 'Clinic',
   Satellite: 'Satellite',
@@ -421,7 +418,7 @@ export default function PatientDashboard() {
               {filtered.length === 0 ? (
                 <p className="uh-empty">No clinics match your search. Try adjusting your filters.</p>
               ) : (
-                <ol className="uh-clinic-grid" role="list">
+                <ul className="uh-clinic-grid" role="list">
                   {filtered.map((clinic) => (
                     <li key={clinic.id}>
                       <article className="uh-clinic-card">
@@ -458,7 +455,7 @@ export default function PatientDashboard() {
                       </article>
                     </li>
                   ))}
-                </ol>
+                </ul>
               )}
             </>
           )}
