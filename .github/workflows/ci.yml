@@ -24,11 +24,18 @@ jobs:
           node-version: 20
           cache: npm
           cache-dependency-path: clinic-system/client/package-lock.json
-
+      - name: Install server dependencies
+        working-directory: clinic-system/server
+        run: npm ci
+      - name: Run server tests
+        working-directory: clinic-system/server
+        run: npm test
       - name: Install client dependencies
         working-directory: clinic-system/client
         run: npm ci
-
+      - name: Run client tests
+        working-directory: clinic-system/client
+        run: npm test
       - name: Build client
         working-directory: clinic-system/client
         run: npm run build
