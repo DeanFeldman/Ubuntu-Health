@@ -1,26 +1,14 @@
 const express = require('express')
 const cors = require('cors')
+const path = require('path')
 const { createClient } = require('@supabase/supabase-js')
 require('dotenv').config()
 
 const app = express()
 
-// Allow cross-origin requests from the React frontend
 app.use(cors())
-
-// Parse incoming JSON request bodies
 app.use(express.json())
 
-// Simple health check endpoint
-app.get('/', (req, res) => {
-  res.json({ message: 'Ubuntu Health API running' })
-})
-
-// Initialise Supabase using environment variables
-//const supabase = createClient(
-//  process.env.SUPABASE_URL,
-//  process.env.SUPABASE_SERVICE_ROLE_KEY
-//)
 const supabaseUrl = process.env.SUPABASE_URL
 const supabaseKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY
@@ -31,7 +19,12 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey)
 
-// GET /api/clinics — filter by province, district, facility_type, municipality, search
+// API health check
+app.get('/api', (req, res) => {
+  res.json({ message: 'Ubuntu Health API running' })
+})
+
+// GET /api/clinics
 app.get('/api/clinics', async (req, res) => {
   try {
     const { province, district, municipality, facility_type, search } = req.query
@@ -55,7 +48,7 @@ app.get('/api/clinics', async (req, res) => {
   }
 })
 
-// GET /api/clinics/:id — fetch single clinic with UUID validation
+// GET /api/clinics/:id
 app.get('/api/clinics/:id', async (req, res) => {
   try {
     const { id } = req.params
@@ -79,6 +72,15 @@ app.get('/api/clinics/:id', async (req, res) => {
     console.error(err)
     res.status(500).json({ error: 'Failed to fetch clinic' })
   }
+})
+
+// Serve built frontend
+const publicPath = path.join(__dirname, '..', 'public')
+app.use(express.static(publicPath))
+
+// React catch-all for all non-API routes
+app.get('/{*any}', (req, res) => {
+  res.sendFile(path.join(publicPath, 'index.html'))
 })
 
 module.exports = app
