@@ -19,7 +19,7 @@ app.get('/', (req, res) => {
 // Initialise Supabase using environment variables
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
 // GET /api/clinics — filter by province, district, facility_type, municipality, search
