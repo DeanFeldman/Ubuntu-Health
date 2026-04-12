@@ -28,7 +28,9 @@ jobs:
       - name: Install client dependencies
         working-directory: clinic-system/client
         run: npm ci
-
+      - name: Run client tests
+        working-directory: clinic-system/client
+        run: npm test
       - name: Build client
         working-directory: clinic-system/client
         run: npm run build
