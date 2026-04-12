@@ -6,32 +6,98 @@ const inputPath = path.join(__dirname, "..", "data", "raw", "vwOrgunitStructureO
 const outputDir = path.join(__dirname, "..", "data", "clean");
 const outputPath = path.join(outputDir, "clinics.cleaned.json");
 
-const ALLOWED_TYPES = new Set([
-  "Clinic",
-  "Satellite Clinic",
-  "Specialised Clinic",
-  "Community Health Centre",
-  "WC Community Health Centre",
-  "WC Community Health Centre / Clinic",
-  "WC Pharmacy/Clinic",
-  "WC Special Clinic",
-  "WC Midwife Obstetrics Unit",
-  "Community Day Centre",
-  "Health Post",
-  "Mobile Service",
-  "District Hospital",
-  "Regional Hospital",
-  "Provincial Tertiary Hospital",
-  "National Central Hospital",
-  "Military Hospital",
-  "Private Hospital",
-  "Specialised Hospital Other",
-  "Specialised Psychiatric Hospital",
-  "Specialised TB Hospital"
-]);
+// ✅ Allowed categories (NO hospitals)
+const CATEGORY_MAP = {
+  "Clinic": "Clinic",
+  "Satellite Clinic": "Satellite Clinic",
+  "Specialised Clinic": "Specialised Clinic",
+
+  "Community Health Centre": "Community Health Centre",
+  "WC Community Health Centre": "Community Health Centre",
+  "WC Community Health Centre / Clinic": "Community Health Centre",
+
+  "Community Day Centre": "Community Day Centre",
+
+  "Health Post": "Health Post",
+
+  "Mobile Service": "Mobile Service",
+
+  "WC Special Clinic": "Specialised Clinic",
+  "WC Pharmacy/Clinic": "Clinic",
+  "WC Midwife Obstetrics Unit": "Clinic"
+};
+
+
+function mapServices(category) {
+  switch (category) {
+
+    case "Clinic":
+      return [
+        "General Consultation",
+        "Vaccination",
+        "Maternal Care",
+        "HIV Testing",
+        "TB Treatment",
+        "Chronic Care"
+      ];
+
+    case "Satellite Clinic":
+      return [
+        "General Consultation",
+        "Vaccination",
+        "Basic Screening",
+        "Referrals"
+      ];
+
+    case "Specialised Clinic":
+      return [
+        "Specialist Consultation",
+        "Chronic Disease Management",
+        "Diagnostics",
+        "Follow-up Care"
+      ];
+
+    case "Community Health Centre":
+      return [
+        "Emergency Care",
+        "Maternity Services",
+        "Pharmacy",
+        "Minor Procedures",
+        "Chronic Care",
+        "Diagnostics"
+      ];
+
+    case "Community Day Centre":
+      return [
+        "Outpatient Care",
+        "Chronic Disease Management",
+        "Minor Procedures",
+        "Follow-up Care"
+      ];
+
+    case "Health Post":
+      return [
+        "Basic Care",
+        "First Aid",
+        "Screening",
+        "Referrals"
+      ];
+
+    case "Mobile Service":
+      return [
+        "Outreach",
+        "Vaccination",
+        "Screening",
+        "Health Education"
+      ];
+
+    default:
+      return [];
+  }
+}
 
 function normalizeText(value) {
-  if (value === undefined || value === null) return null;
+  if (!value) return null;
   const trimmed = String(value).trim();
   return trimmed === "" ? null : trimmed;
 }
@@ -49,35 +115,6 @@ function normalizeNumber(value) {
   return Number.isFinite(num) ? num : null;
 }
 
-function normalizeFacilityType(type) {
-  const text = normalizeText(type);
-  if (!text) return null;
-
-  if (text.includes("Hospital")) return "Hospital";
-  if (
-    text === "Community Health Centre" ||
-    text === "WC Community Health Centre" ||
-    text === "WC Community Health Centre / Clinic"
-  ) {
-    return "Community Health Centre";
-  }
-  if (text === "Community Day Centre") return "Community Day Centre";
-  if (text === "Health Post") return "Health Post";
-  if (text === "Mobile Service") return "Mobile Service";
-  if (
-    text === "Clinic" ||
-    text === "Satellite Clinic" ||
-    text === "Specialised Clinic" ||
-    text === "WC Special Clinic" ||
-    text === "WC Pharmacy/Clinic" ||
-    text === "WC Midwife Obstetrics Unit"
-  ) {
-    return "Clinic";
-  }
-
-  return text;
-}
-
 const seen = new Set();
 const clinics = [];
 
@@ -86,8 +123,12 @@ fs.mkdirSync(outputDir, { recursive: true });
 fs.createReadStream(inputPath)
   .pipe(csv())
   .on("data", (row) => {
-    const orgUnitType = normalizeText(row.OrgUnitType);
-    if (!orgUnitType || !ALLOWED_TYPES.has(orgUnitType)) return;
+    const rawType = normalizeText(row.OrgUnitType);
+
+   
+    if (!rawType || !CATEGORY_MAP[rawType]) return;
+
+    const category = CATEGORY_MAP[rawType];
 
     const facilityId = normalizeText(row.OU5uid);
     const name = stripPrefix(row.OU5name) || normalizeText(row.OU5short);
@@ -101,8 +142,15 @@ fs.createReadStream(inputPath)
       province: normalizeText(row.OU2short) || stripPrefix(row.OU2name),
       district: stripPrefix(row.OU3name) || normalizeText(row.OU3short),
       municipality: stripPrefix(row.OU4name) || normalizeText(row.OU4short),
-      facility_type: normalizeFacilityType(orgUnitType),
-      services: [],
+
+    
+      facility_type: category,
+
+    
+      raw_facility_type: rawType,
+
+      services: mapServices(category),
+
       latitude: normalizeNumber(row.latitude),
       longitude: normalizeNumber(row.longitude),
       operating_hours: null
