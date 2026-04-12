@@ -1,15 +1,8 @@
-import { useAuth } from '../context/AuthContext'
-
 export default function AdminDashboard() {
-    // Get logout function from our auth context
-  const { logout } = useAuth()
-
   return (
-    
-    <main>
-      {/* Html Page contents */}
+    <section>
       <h1>Admin Dashboard</h1>
-      <button onClick={logout}>Log out</button>
-    </main>
+      <p>Welcome to the admin area.</p>
+    </section>
   )
 }

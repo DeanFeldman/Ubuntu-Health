@@ -1,44 +1,30 @@
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect } from 'react'
 import { useAuth } from './context/AuthContext'
 
+import Layout from './components/Layout'
 import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
 import PatientDashboard from './pages/PatientDashboard'
 import StaffDashboard from './pages/StaffDashboard'
 import AdminDashboard from './pages/AdminDashboard'
 
-function RoleRedirect() {
-  {/*Get current auth state so we can send users to the correct page */}
-  const { user, role, loading } = useAuth()
-  const navigate = useNavigate()
+function ProtectedRoute({ children, allowedRole }) {
+  const { user, role, loading, logout } = useAuth()
 
   useEffect(() => {
-    if (loading) return
-
-    // If no user is logged in, send them back to login
-    if (!user) {
-      navigate('/login')
-      return
+    if (!loading && user && role && allowedRole && role !== allowedRole) {
+      logout()
     }
-    // Redirect users based on the role stored in the system
-    if (role === 'Admin') navigate('/admin')
-    else if (role === 'Staff') navigate('/staff')
-    else if (role === 'Patient') navigate('/clinic')
-    else navigate('/login')
-  }, [user, role, loading, navigate])
-
-  return <p>Loading...</p>
-}
-
-function ProtectedRoute({ children, allowedRoles }) {
-  // Used to stop unauthorised users from opening protected pages
-
-  const { user, role, loading } = useAuth()
+  }, [loading, user, role, allowedRole, logout])
 
   if (loading) return <p>Loading...</p>
+
   if (!user) return <Navigate to="/login" replace />
-  if (!allowedRoles.includes(role)) return <Navigate to="/login" replace />
+
+  if (allowedRole && role !== allowedRole) {
+    return <Navigate to="/login" replace />
+  }
 
   return children
 }
@@ -46,47 +32,38 @@ function ProtectedRoute({ children, allowedRoles }) {
 export default function App() {
   return (
     <Routes>
-      // publioc routes
-      <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/redirect" element={<RoleRedirect />} />
 
-      // protected routes
-      <Route
-        path="/patient"
-        element={
-          <ProtectedRoute allowedRoles={['Patient']}>
-            <PatientDashboard />
-          </ProtectedRoute>
-        }
-      />
+      <Route element={<Layout />}>
+        <Route path="/" element={<HomePage />} />
 
-      <Route
-        path="/clinic"
-        element={
-          <ProtectedRoute allowedRoles={['Patient']}>
-            <PatientDashboard />
-          </ProtectedRoute>
-        }
-      />
+        <Route
+          path="/clinic"
+          element={
+            <ProtectedRoute allowedRole="Patient">
+              <PatientDashboard />
+            </ProtectedRoute>
+          }
+        />
 
-      <Route
-        path="/staff"
-        element={
-          <ProtectedRoute allowedRoles={['Staff']}>
-            <StaffDashboard />
-          </ProtectedRoute>
-        }
-      />
+        <Route
+          path="/staff"
+          element={
+            <ProtectedRoute allowedRole="Staff">
+              <StaffDashboard />
+            </ProtectedRoute>
+          }
+        />
 
-      <Route
-        path="/admin"
-        element={
-          <ProtectedRoute allowedRoles={['Admin']}>
-            <AdminDashboard />
-          </ProtectedRoute>
-        }
-      />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute allowedRole="Admin">
+              <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+      </Route>
     </Routes>
   )
 }
