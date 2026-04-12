@@ -1,6 +1,15 @@
--- SPRINT 1 TABLES
+-- ─── Ubuntu Health Database Schema ───────────────────────────────────────────
+-- PostgreSQL schema for the Ubuntu Health clinic queue management system
+-- Hosted on Supabase. Run this in the Supabase SQL Editor to set up all tables.
+-- All tables use UUID primary keys for security and scalability.
+-- ─────────────────────────────────────────────────────────────────────────────
 
--- Clinics (seeded from SA health facility data)
+
+-- ─── CORE TABLES (Sprint 1) ───────────────────────────────────────────────────
+
+-- Clinics
+-- Seeded from the South African National Health Facility Register (HFIR)
+-- Contains real clinic data including GPS coordinates for proximity search
 create table clinics (
   id uuid default gen_random_uuid() primary key,
   name text not null,
@@ -9,18 +18,21 @@ create table clinics (
   district text,
   municipality text,
   facility_type text,
-  services text[],
+  services text[],        -- stored as array to match HFIR dataset structure
   latitude numeric,
   longitude numeric,
-  operating_hours jsonb,
+  operating_hours jsonb,  -- flexible JSON structure for hours per day of week
   created_at timestamp default now()
 );
 
--- Users (extends Supabase auth.users)
+-- Users
+-- Extends Supabase's built-in auth.users table via foreign key
+-- Role defaults to Patient on first Google login
+-- Role can be changed to Staff or Admin by an admin user
 create table users (
   id uuid references auth.users(id) primary key,
   email text,
-  full_name text,
+  full_name text,         -- stored as single field to match Google OAuth metadata
   phone text,
   role text default 'Patient' check (role in ('Patient', 'Staff', 'Admin')),
   clinic_id uuid references clinics(id),
@@ -28,7 +40,10 @@ create table users (
   updated_at timestamp default now()
 );
 
--- Slots (available appointment times per clinic)
+-- Slots
+-- Represents available appointment time slots per clinic
+-- Generated from clinic operating hours and staff availability
+-- Marked unavailable (is_available = false) once a patient books
 create table slots (
   id uuid default gen_random_uuid() primary key,
   clinic_id uuid references clinics(id),
@@ -38,31 +53,44 @@ create table slots (
 );
 
 -- Appointments
+-- Records bookings made by patients for specific slots at clinics
+-- Status transitions: Pending → Confirmed → Completed or Cancelled/No-show
 create table appointments (
   id uuid default gen_random_uuid() primary key,
   patient_id uuid references users(id),
   clinic_id uuid references clinics(id),
   slot_id uuid references slots(id),
-  status text default 'Pending' check (status in ('Pending','Confirmed','Cancelled','Rescheduled','No-show')),
+  status text default 'Pending' check (
+    status in ('Pending', 'Confirmed', 'Cancelled', 'Rescheduled', 'No-show')
+  ),
   service text,
   created_at timestamp default now()
 );
 
--- Queue entries (walk-ins)
+-- Queue Entries
+-- Manages the walk-in virtual queue per clinic
+-- Realtime is enabled on this table to support live position updates
+-- Status transitions: Waiting → In Consultation → Complete
 create table queue_entries (
   id uuid default gen_random_uuid() primary key,
   clinic_id uuid references clinics(id),
   patient_id uuid references users(id),
   position integer,
-  status text default 'Waiting' check (status in ('Waiting','In Consultation','Complete','Called')),
+  status text default 'Waiting' check (
+    status in ('Waiting', 'In Consultation', 'Complete', 'Called')
+  ),
   joined_at timestamp default now(),
-  called_at timestamp,
-  completed_at timestamp
+  called_at timestamp,      -- set when staff calls the patient
+  completed_at timestamp    -- set when consultation is marked complete
 );
 
--- SPRINT 2 TABLES
 
--- Staff availability
+-- ─── FUTURE SPRINT TABLES ─────────────────────────────────────────────────────
+
+-- Staff Availability
+-- Records working hours per staff member per day of week
+-- day_of_week: 0 = Sunday, 6 = Saturday
+-- Used to generate available appointment slots
 create table staff_availability (
   id uuid default gen_random_uuid() primary key,
   staff_id uuid references users(id),
@@ -72,7 +100,9 @@ create table staff_availability (
   is_available boolean default true
 );
 
--- Staff leave / exception dates
+-- Staff Exceptions
+-- Stores specific dates when a staff member is unavailable (e.g. leave days)
+-- Takes precedence over standard staff_availability hours
 create table staff_exceptions (
   id uuid default gen_random_uuid() primary key,
   staff_id uuid references users(id),
@@ -80,20 +110,23 @@ create table staff_exceptions (
   reason text
 );
 
--- Notifications log
+-- Notifications
+-- Logs all notifications sent to users
+-- Supports email, SMS (via Africa's Talking), and web push
 create table notifications (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references users(id),
-  type text check (type in ('reminder','queue_alert','general')),
-  channel text check (channel in ('email','sms','push')),
+  type text check (type in ('reminder', 'queue_alert', 'general')),
+  channel text check (channel in ('email', 'sms', 'push')),
   message text,
   sent_at timestamp default now(),
   delivered boolean default false
 );
 
--- SPRINT 3 TABLES
-
--- Wait time logs (for analytics)
+-- Wait Time Logs
+-- Records actual wait times per queue entry for analytics reporting
+-- Stores day of week and hour of day to support trend analysis
+-- Used to generate average wait time reports and train the ML prediction model
 create table wait_time_logs (
   id uuid default gen_random_uuid() primary key,
   clinic_id uuid references clinics(id),
@@ -104,7 +137,9 @@ create table wait_time_logs (
   logged_at timestamp default now()
 );
 
--- Visit notes (staff adds after consultation)
+-- Visit Notes
+-- Allows clinic staff to add a brief note to a completed appointment
+-- Limited to 500 characters to keep records concise
 create table visit_notes (
   id uuid default gen_random_uuid() primary key,
   appointment_id uuid references appointments(id),
