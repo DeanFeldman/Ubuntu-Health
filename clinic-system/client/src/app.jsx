@@ -1,5 +1,4 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { useEffect } from 'react'
 import { useAuth } from './context/AuthContext'
 
 import Layout from './components/Layout'
@@ -10,16 +9,9 @@ import StaffDashboard from './pages/StaffDashboard'
 import AdminDashboard from './pages/AdminDashboard'
 
 function ProtectedRoute({ children, allowedRole }) {
-  const { user, role, loading, logout } = useAuth()
-
-  useEffect(() => {
-    if (!loading && user && role && allowedRole && role !== allowedRole) {
-      logout()
-    }
-  }, [loading, user, role, allowedRole, logout])
+  const { user, role, loading } = useAuth()
 
   if (loading) return <p>Loading...</p>
-
   if (!user) return <Navigate to="/login" replace />
 
   if (allowedRole && role !== allowedRole) {
@@ -63,6 +55,8 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+
+        <Route path="/redirect" element={<Navigate to="/clinic" replace />} />
       </Route>
     </Routes>
   )
