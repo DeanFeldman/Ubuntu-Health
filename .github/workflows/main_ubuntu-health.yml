@@ -1,0 +1,83 @@
+name: Build and deploy full app to Azure Web App - Ubuntu-Health
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  AZURE_WEBAPP_NAME: Ubuntu-Health
+  CLIENT_DIR: clinic-system/client
+  SERVER_DIR: clinic-system/server
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js version
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Install client dependencies
+        working-directory: ${{ env.CLIENT_DIR }}
+        run: npm install
+
+      - name: Build client
+        working-directory: ${{ env.CLIENT_DIR }}
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npm run build
+        
+      - name: Install server dependencies
+        working-directory: ${{ env.SERVER_DIR }}
+        run: npm install
+
+
+      - name: Copy client build into server public folder
+        run: |
+          rm -rf ${{ env.SERVER_DIR }}/public
+          mkdir -p ${{ env.SERVER_DIR }}/public
+          cp -r ${{ env.CLIENT_DIR }}/dist/* ${{ env.SERVER_DIR }}/public/
+
+      - name: Upload artifact for deployment
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-app
+          path: ${{ env.SERVER_DIR }}
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: full-app
+          path: .
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_0111E234A3E44232BAC848DB67E82234 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_21C09DC7208B447E8240C20EFE26A190 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_505A71583496433CA056C919C7B538E5 }}
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          slot-name: Production
+          package: .

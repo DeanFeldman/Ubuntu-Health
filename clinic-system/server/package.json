@@ -2,16 +2,16 @@
   "name": "server",
   "version": "1.0.0",
   "description": "",
-  "main": "jest.config.js",
+  "main": "server.js",
   "directories": {
     "test": "tests"
   },
   "scripts": {
-  "start": "node src/index.js",
-  "dev": "nodemon src/index.js",
-  "test": "jest",
-  "test:coverage": "jest --coverage"
-},
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "jest",
+    "test:coverage": "jest --coverage"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",

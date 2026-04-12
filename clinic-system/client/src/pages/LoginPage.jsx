@@ -1,23 +1,51 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function LoginPage() {
-  const { loginWithGoogle, error, user, role } = useAuth()
+  // Get auth-related data and functions from context
+  const { loginWithGoogle, error, user, role, loading } = useAuth()
   const navigate = useNavigate()
+  
+  // Local error state for handling cancelled OAuth flows
+  const [localError, setLocalError] = useState('')
 
+  // Redirect user after successful login based on role
   useEffect(() => {
     if (!user || !role) return
 
+    // Clear Auth Flag onces login complete
+    sessionStorage.removeItem('oauth_started')
+
     if (role === 'Admin') {
       navigate('/admin')
+    } else if (role === 'Staff') {
+      navigate('/staff')
     } else {
       navigate('/clinic')
     }
   }, [user, role, navigate])
 
+  // Check for cancelled or failed OAuth login attempts
+  useEffect(() => {
+    const started = sessionStorage.getItem('oauth_started')
+
+    if (!loading && !user && started) {
+      setLocalError('Login was cancelled or failed. Please try again.')
+      sessionStorage.removeItem('oauth_started')
+    }
+  }, [loading, user])
+
+  // Initiate Google OAuth login flow
+  async function handleLogin() {
+    setLocalError('')
+    sessionStorage.setItem('oauth_started', 'true')
+    await loginWithGoogle()
+  }
+
   return (
     <main style={styles.page}>
+      {/* Html Page contents */}
       <section style={styles.card}>
         <header style={styles.header}>
           <span style={styles.logo}>UH</span>
@@ -27,17 +55,19 @@ export default function LoginPage() {
           </p>
         </header>
 
-        {error && (
+        {(error || localError) && (
           <p role="alert" style={styles.error}>
-            {error}
+            {error || localError}
           </p>
         )}
 
+        {/* Google Sign-In button */}
         <button
           type="button"
           style={styles.googleBtn}
-          onClick={loginWithGoogle}
+          onClick={handleLogin}
         >
+          {/* google icon image*/}
           <span style={styles.googleIconWrap}>
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -70,6 +100,7 @@ export default function LoginPage() {
   )
 }
 
+// Basic inline styles for layout and appearance
 const styles = {
   page: {
     minHeight: '100vh',
