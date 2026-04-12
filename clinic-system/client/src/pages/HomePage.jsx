@@ -6,8 +6,8 @@ export default function HomePage() {
   const navigate = useNavigate()
 
   return (
-    //Html Page contents
     <main style={styles.page}>
+      {/* Html Page contents */}
       <section style={styles.card}>
         <h1>Ubuntu Health</h1>
         <p>Book appointments and track clinic queues </p>

@@ -9,7 +9,7 @@ import StaffDashboard from './pages/StaffDashboard'
 import AdminDashboard from './pages/AdminDashboard'
 
 function RoleRedirect() {
-  // Get current auth state so we can send users to the correct page
+  {/*Get current auth state so we can send users to the correct page */}
   const { user, role, loading } = useAuth()
   const navigate = useNavigate()
 
