@@ -44,8 +44,8 @@ export default function LoginPage() {
   }
 
   return (
-    //Html Page contents
     <main style={styles.page}>
+      {/* Html Page contents */}
       <section style={styles.card}>
         <header style={styles.header}>
           <span style={styles.logo}>UH</span>
@@ -61,13 +61,13 @@ export default function LoginPage() {
           </p>
         )}
 
-        // Google Sign-In button 
+        {/* Google Sign-In button */}
         <button
           type="button"
           style={styles.googleBtn}
           onClick={handleLogin}
         >
-          //google icon image
+          {/* google icon image*/}
           <span style={styles.googleIconWrap}>
             <svg
               xmlns="http://www.w3.org/2000/svg"
