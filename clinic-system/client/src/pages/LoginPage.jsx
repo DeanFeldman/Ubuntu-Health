@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { canAccess } from '../Utils/Permissions'
 
 export default function LoginPage() {
   // Get auth-related data and functions from context
@@ -84,13 +85,6 @@ export default function LoginPage() {
           <span>Sign in with Google</span>
         </button>
 
-        <button
-          type="button"
-          style={styles.secondaryBtn}
-          onClick={() => console.log('Create Account clicked')}
-        >
-          Create Account
-        </button>
 
         <footer style={styles.footer}>
           Secure healthcare access platform
@@ -99,6 +93,8 @@ export default function LoginPage() {
     </main>
   )
 }
+
+
 
 // Basic inline styles for layout and appearance
 const styles = {
