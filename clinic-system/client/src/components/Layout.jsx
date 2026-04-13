@@ -1,6 +1,7 @@
-import { Outlet, NavLink } from 'react-router-dom'
+import { Outlet, NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
- 
+import { canAccess } from '../Utils/Permissions'
+
 const styles = `
   :root {
     --uh-primary: #2563EB;
@@ -12,16 +13,16 @@ const styles = `
     --uh-border: #E5E7EB;
     --uh-shadow: 0 8px 24px rgba(17, 24, 39, 0.07);
   }
- 
+
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
- 
+
   body {
     font-family: Inter, Arial, sans-serif;
     background: var(--uh-bg);
     color: var(--uh-text);
     line-height: 1.5;
   }
- 
+
   .uh-navbar {
     background: var(--uh-surface);
     border-bottom: 1px solid var(--uh-border);
@@ -95,7 +96,7 @@ const styles = `
     margin: 0;
     padding: 0;
   }
- 
+
   .uh-btn {
     border: none;
     border-radius: 10px;
@@ -116,56 +117,68 @@ const styles = `
   .uh-btn-primary:hover {
     background: var(--uh-primary-dark);
   }
- 
+
   .uh-page {
     min-height: calc(100vh - 73px);
     padding: 24px;
   }
- 
+
   @media (max-width: 768px) {
     .uh-nav-links { display: none; }
     .uh-navbar-inner { padding: 12px 0; }
   }
 `
- 
+
 export default function Layout() {
-  const { logout, user } = useAuth()
- 
+  const { logout, user, role } = useAuth()
+  const location = useLocation()
+
+  const isLoginPage = location.pathname === '/login'
+
   const handleLogout = async () => {
     await logout()
   }
- 
+
   return (
     <>
       <style>{styles}</style>
- 
-      <header className="uh-navbar">
-        <nav className="uh-navbar-inner" aria-label="Primary navigation">
-          <NavLink to="/" className="uh-brand">
-            <abbr className="uh-brand-logo" title="Ubuntu Health">UH</abbr>
-            Ubuntu Health
-          </NavLink>
- 
-          <ul className="uh-nav-links">
-            <li><NavLink to="/">Home</NavLink></li>
-            <li><NavLink to="/clinic">Patient</NavLink></li>
-            <li><NavLink to="/staff">Staff</NavLink></li>
-            <li><NavLink to="/admin">Admin</NavLink></li>
-          </ul>
- 
-          {user && (
-            <menu className="uh-nav-actions">
-              <li>
-                <button className="uh-btn uh-btn-primary" onClick={handleLogout}>
-                  Log out
-                </button>
-              </li>
-            </menu>
-          )}
-        </nav>
-      </header>
- 
-      <main className="uh-page">
+
+      {!isLoginPage && (
+        <header className="uh-navbar">
+          <nav className="uh-navbar-inner" aria-label="Primary navigation">
+            <NavLink to="/" className="uh-brand">
+              <abbr className="uh-brand-logo" title="Ubuntu Health">UH</abbr>
+              Ubuntu Health
+            </NavLink>
+
+            <ul className="uh-nav-links">
+              {canAccess(role, 'clinic') && (
+                <li><NavLink to="/clinic">Patient</NavLink></li>
+              )}
+
+              {canAccess(role, 'staff') && (
+                <li><NavLink to="/staff">Staff</NavLink></li>
+              )}
+
+              {canAccess(role, 'admin') && (
+                <li><NavLink to="/admin">Admin</NavLink></li>
+              )}
+            </ul>
+
+            {user && (
+              <menu className="uh-nav-actions">
+                <li>
+                  <button className="uh-btn uh-btn-primary" onClick={handleLogout}>
+                    Log out
+                  </button>
+                </li>
+              </menu>
+            )}
+          </nav>
+        </header>
+      )}
+
+      <main className={isLoginPage ? '' : 'uh-page'}>
         <Outlet />
       </main>
     </>
