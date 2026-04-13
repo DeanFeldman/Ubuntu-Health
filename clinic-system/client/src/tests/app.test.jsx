@@ -7,7 +7,6 @@ jest.mock('../context/AuthContext', () => ({
   useAuth: jest.fn(),
 }))
 
-jest.mock('../pages/HomePage', () => () => <div>Home Page</div>)
 jest.mock('../pages/LoginPage', () => () => <div>Login Page</div>)
 jest.mock('../pages/PatientDashboard', () => () => <div>Patient Dashboard</div>)
 jest.mock('../pages/StaffDashboard', () => () => <div>Staff Dashboard</div>)
@@ -48,7 +47,7 @@ describe('App routing and auth behaviour', () => {
     expect(screen.getByText('Patient Dashboard')).toBeInTheDocument()
   })
 
-  test('blocks Patient from accessing /admin', () => {
+  test('redirects Patient away from /admin to /clinic', () => {
     useAuth.mockReturnValue({
       user: { id: '123' },
       role: 'Patient',
@@ -62,7 +61,7 @@ describe('App routing and auth behaviour', () => {
       </MemoryRouter>
     )
 
-    expect(screen.getByText('Login Page')).toBeInTheDocument()
+    expect(screen.getByText('Patient Dashboard')).toBeInTheDocument()
   })
 
   test('shows loading state', () => {
