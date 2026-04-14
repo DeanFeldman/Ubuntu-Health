@@ -1,6 +1,7 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
- 
+import { canAccess } from '../Utils/Permissions'
+
 const styles = `
   :root {
     --uh-primary: #2563EB;
@@ -12,17 +13,16 @@ const styles = `
     --uh-border: #E5E7EB;
     --uh-shadow: 0 8px 24px rgba(17, 24, 39, 0.07);
   }
- 
+
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
- 
+
   body {
     font-family: Inter, Arial, sans-serif;
     background: var(--uh-bg);
     color: var(--uh-text);
     line-height: 1.5;
   }
- 
-  /* ── Navbar ── */
+
   .uh-navbar {
     background: var(--uh-surface);
     border-bottom: 1px solid var(--uh-border);
@@ -31,6 +31,7 @@ const styles = `
     top: 0;
     z-index: 10;
   }
+
   .uh-navbar-inner {
     display: flex;
     align-items: center;
@@ -38,6 +39,7 @@ const styles = `
     padding: 16px 0;
     gap: 16px;
   }
+
   .uh-brand {
     display: flex;
     align-items: center;
@@ -48,6 +50,7 @@ const styles = `
     text-decoration: none;
     color: var(--uh-text);
   }
+
   .uh-brand-logo {
     width: 38px;
     height: 38px;
@@ -61,6 +64,7 @@ const styles = `
     flex-shrink: 0;
     text-decoration: none;
   }
+
   .uh-nav-links {
     display: flex;
     gap: 20px;
@@ -70,17 +74,21 @@ const styles = `
     margin: 0;
     padding: 0;
   }
+
   .uh-nav-links a {
     text-decoration: none;
     color: var(--uh-muted);
     transition: color 0.15s;
     padding-bottom: 2px;
   }
+
   .uh-nav-links a:hover { color: var(--uh-primary); }
+
   .uh-nav-links a.active {
     color: var(--uh-primary);
     border-bottom: 2px solid var(--uh-primary);
   }
+
   .uh-nav-actions {
     display: flex;
     gap: 10px;
@@ -88,8 +96,7 @@ const styles = `
     margin: 0;
     padding: 0;
   }
- 
-  /* ── Buttons (global) ── */
+
   .uh-btn {
     border: none;
     border-radius: 10px;
@@ -101,59 +108,77 @@ const styles = `
     transition: background 0.15s, color 0.15s;
     white-space: nowrap;
   }
-  .uh-btn-primary { background: var(--uh-primary); color: #fff; }
-  .uh-btn-primary:hover { background: var(--uh-primary-dark); }
-  .uh-btn-secondary { background: var(--uh-surface); color: var(--uh-primary); border: 1px solid var(--uh-primary); }
-  .uh-btn-secondary:hover { background: #EFF6FF; }
- 
-  /* ── Page wrapper ── */
-  .uh-page { min-height: calc(100vh - 73px); }
- 
-  /* ── Responsive ── */
+
+  .uh-btn-primary {
+    background: var(--uh-primary);
+    color: #fff;
+  }
+
+  .uh-btn-primary:hover {
+    background: var(--uh-primary-dark);
+  }
+
+  .uh-page {
+    min-height: calc(100vh - 73px);
+    padding: 24px;
+  }
+
   @media (max-width: 768px) {
     .uh-nav-links { display: none; }
     .uh-navbar-inner { padding: 12px 0; }
   }
 `
- 
+
 export default function Layout() {
-  const { logout } = useAuth()
-  const navigate = useNavigate()
- 
+  const { logout, user, role } = useAuth()
+  const location = useLocation()
+
+  const isLoginPage = location.pathname === '/login'
+
   const handleLogout = async () => {
     await logout()
-    navigate('/login', { replace: true })
   }
- 
+
   return (
     <>
       <style>{styles}</style>
- 
-      <header className="uh-navbar">
-        <nav className="uh-navbar-inner" aria-label="Primary navigation">
-          <NavLink to="/" className="uh-brand">
-            <abbr className="uh-brand-logo" title="Ubuntu Health">UH</abbr>
-            Ubuntu Health
-          </NavLink>
- 
-          <ul className="uh-nav-links">
-            <li><NavLink to="/">Home</NavLink></li>
-            <li><NavLink to="/clinics">Clinics</NavLink></li>
-            <li><NavLink to="/appointments">Appointments</NavLink></li>
-            <li><NavLink to="/queue-status">Queue status</NavLink></li>
-          </ul>
- 
-          <menu className="uh-nav-actions">
-            <li>
-              <button className="uh-btn uh-btn-primary" onClick={handleLogout}>
-                Log out
-              </button>
-            </li>
-          </menu>
-        </nav>
-      </header>
- 
-      <main className="uh-page">
+
+      {!isLoginPage && (
+        <header className="uh-navbar">
+          <nav className="uh-navbar-inner" aria-label="Primary navigation">
+            <NavLink to="/" className="uh-brand">
+              <abbr className="uh-brand-logo" title="Ubuntu Health">UH</abbr>
+              Ubuntu Health
+            </NavLink>
+
+            <ul className="uh-nav-links">
+              {canAccess(role, 'clinic') && (
+                <li><NavLink to="/clinic">Patient</NavLink></li>
+              )}
+
+              {canAccess(role, 'staff') && (
+                <li><NavLink to="/staff">Staff</NavLink></li>
+              )}
+
+              {canAccess(role, 'admin') && (
+                <li><NavLink to="/admin">Admin</NavLink></li>
+              )}
+            </ul>
+
+            {user && (
+              <menu className="uh-nav-actions">
+                <li>
+                  <button className="uh-btn uh-btn-primary" onClick={handleLogout}>
+                    Log out
+                  </button>
+                </li>
+              </menu>
+            )}
+          </nav>
+        </header>
+      )}
+
+      <main className={isLoginPage ? '' : 'uh-page'}>
         <Outlet />
       </main>
     </>
