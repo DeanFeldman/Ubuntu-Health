@@ -124,7 +124,7 @@ async function loginWithGoogle() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: 'https://ubuntu-health-geb6dbegejfmenc7.southafricanorth-01.azurewebsites.net',
+        redirectTo: `${window.location.origin}/login`,
       },
     })
 
