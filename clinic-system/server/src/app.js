@@ -62,7 +62,7 @@ app.get('/api/clinics/:id', async (req, res) => {
       .from('clinics')
       .select('*')
       .eq('id', id)
-      .single()
+      .maybeSingle()
 
     if (error) throw error
     if (!data) return res.status(404).json({ error: 'Clinic not found' })
@@ -116,7 +116,7 @@ app.get('/api/queue/:clinicId/position/:patientId', async (req, res) => {
       .eq('clinic_id', clinicId)
       .eq('patient_id', patientId)
       .eq('status', 'Waiting')
-      .single()
+      .maybeSingle()
 
     if (error) throw error
     if (!data) return res.status(404).json({ error: 'No active queue entry found for this patient' })
@@ -144,7 +144,7 @@ app.get('/api/queue/:clinicId/entry/:patientId', async (req, res) => {
       .eq('clinic_id', clinicId)
       .eq('patient_id', patientId)
       .in('status', ['Waiting', 'Called'])
-      .single()
+      .maybeSingle()
 
     if (error) throw error
     if (!data) return res.status(404).json({ error: 'No active queue entry found for this patient' })
@@ -172,7 +172,7 @@ app.get('/api/queue/:clinicId/status/:patientId', async (req, res) => {
       .eq('clinic_id', clinicId)
       .eq('patient_id', patientId)
       .in('status', ['Waiting', 'Called', 'In Consultation'])
-      .single()
+      .maybeSingle()
 
     if (error) throw error
     if (!data) return res.status(404).json({ error: 'No active queue entry found for this patient' })
