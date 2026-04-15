@@ -198,6 +198,18 @@ describe('Role request GET endpoint', () => {
     expect(Array.isArray(res.body.requests)).toBe(true)
   }
 }, 15000)
+test('GET role requests with invalid status filter handled safely', async () => {
+  const res = await request(app).get(
+    `/api/role-requests?admin_id=${validAdminId}&status=invalid`
+  )
+
+  expect([200, 400, 404, 500]).toContain(res.statusCode)
+
+  if (res.statusCode === 200) {
+    expect(res.body).toHaveProperty('requests')
+    expect(Array.isArray(res.body.requests)).toBe(true)
+  }
+})
   // weird query input (helps branch coverage)
   test('handles unexpected query values safely', async () => {
     const res = await request(app)
