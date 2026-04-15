@@ -139,6 +139,9 @@ const styles = `
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 16px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
   }
   .uh-clinic-card {
     background: var(--uh-surface);
@@ -183,6 +186,23 @@ const styles = `
     color: var(--uh-muted);
     border: 1px solid var(--uh-border);
   }
+
+  /* ── Join Queue button ── */
+  .uh-join-btn {
+    width: 100%;
+    margin-top: auto;
+    padding: 10px;
+    background: var(--uh-primary);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .uh-join-btn:hover { background: var(--uh-primary-dark); }
 
   /* ── Feedback states ── */
   .uh-empty {
@@ -239,6 +259,12 @@ const TYPE_LABEL = {
 const unique = (arr) => [...new Set(arr)].sort()
 
 export default function PatientDashboard() {
+
+const navigate = useNavigate()
+
+const handleJoinQueue = (clinic) => {
+  navigate('/queue', { state: { clinic } })
+}
 
   // Clinic data state
   const [clinics, setClinics] = useState([])
@@ -460,6 +486,14 @@ export default function PatientDashboard() {
                             ))}
                           </ul>
                         )}
+
+                        <button
+                          className="uh-join-btn"
+                          onClick={() => handleJoinQueue(clinic)}
+                          aria-label={`Join queue at ${clinic.name}`}
+                        >
+                          Join Queue
+                        </button>
 
                       </article>
                     </li>

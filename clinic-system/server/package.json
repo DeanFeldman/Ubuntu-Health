@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node src/index.js",
-    "test": "jest",
+    "test": "jest --coverage --runInBand --all",
     "test:coverage": "jest --coverage"
   },
   "keywords": [],
