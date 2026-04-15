@@ -1,6 +1,5 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import App from '../app'
 import { useAuth } from '../context/AuthContext'
 
 jest.mock('../context/AuthContext', () => ({
@@ -11,6 +10,9 @@ jest.mock('../pages/LoginPage', () => () => <div>Login Page</div>)
 jest.mock('../pages/PatientDashboard', () => () => <div>Patient Dashboard</div>)
 jest.mock('../pages/StaffDashboard', () => () => <div>Staff Dashboard</div>)
 jest.mock('../pages/AdminDashboard', () => () => <div>Admin Dashboard</div>)
+jest.mock('../pages/QueuePage', () => () => <div>Queue Page</div>)
+
+import App from '../app'
 
 describe('App routing and auth behaviour', () => {
   test('redirects unauthenticated users from /clinic to /login', () => {
