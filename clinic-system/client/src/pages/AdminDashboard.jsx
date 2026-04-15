@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react'
+]import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || ''
-console.log("API_BASE_URL:", API_BASE_URL)
 
 
 const styles = `
@@ -116,17 +115,6 @@ const styles = `
   }
 `
 
-async function parseJsonResponse(response, fallbackMessage) {
-  const contentType = response.headers.get('content-type') || ''
-
-  if (contentType.includes('application/json')) {
-    return await response.json()
-  }
-
-  const text = await response.text()
-  throw new Error(text || fallbackMessage)
-}
-
 export default function AdminDashboard() {
   const { user } = useAuth()
   const [requests, setRequests] = useState([])
@@ -137,10 +125,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     async function loadRequests() {
-      if (!user?.id) {
-        setLoading(false)
-        return
-      }
+      if (!user?.id) return
 
       try {
         setLoading(true)
@@ -149,8 +134,7 @@ export default function AdminDashboard() {
         const response = await fetch(
           `${API_BASE_URL}/api/role-requests?admin_id=${encodeURIComponent(user.id)}&status=pending`
         )
-
-        const body = await parseJsonResponse(response, 'Failed to load role requests')
+        const body = await response.json()
 
         if (!response.ok) {
           throw new Error(body.error || 'Failed to load role requests')
@@ -170,32 +154,25 @@ export default function AdminDashboard() {
   async function approveRequest(request) {
     setProcessingRequestId(request.id)
     setFeedback('')
-    setError('')
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/role-requests/${request.id}/approve`,
-        {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            admin_id: user.id,
-          }),
-        }
-      )
-
-      const body = await parseJsonResponse(response, 'Failed to approve role request')
+      const response = await fetch(`${API_BASE_URL}/api/role-requests/${request.id}/approve`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          admin_id: user.id,
+        }),
+      })
+      const body = await response.json()
 
       if (!response.ok) {
         throw new Error(body.error || 'Failed to approve role request')
       }
 
       setRequests((currentRequests) =>
-        currentRequests.filter(
-          (currentRequest) => currentRequest.id !== request.id
-        )
+        currentRequests.filter((currentRequest) => currentRequest.id !== request.id)
       )
       setFeedback('Role request approved.')
     } catch (err) {
@@ -208,32 +185,25 @@ export default function AdminDashboard() {
   async function rejectRequest(request) {
     setProcessingRequestId(request.id)
     setFeedback('')
-    setError('')
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/role-requests/${request.id}/reject`,
-        {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            admin_id: user.id,
-          }),
-        }
-      )
-
-      const body = await parseJsonResponse(response, 'Failed to reject role request')
+      const response = await fetch(`${API_BASE_URL}/api/role-requests/${request.id}/reject`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          admin_id: user.id,
+        }),
+      })
+      const body = await response.json()
 
       if (!response.ok) {
         throw new Error(body.error || 'Failed to reject role request')
       }
 
       setRequests((currentRequests) =>
-        currentRequests.filter(
-          (currentRequest) => currentRequest.id !== request.id
-        )
+        currentRequests.filter((currentRequest) => currentRequest.id !== request.id)
       )
       setFeedback('Role request rejected.')
     } catch (err) {
