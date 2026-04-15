@@ -7,6 +7,7 @@ import LoginPage from './pages/LoginPage'
 import PatientDashboard from './pages/PatientDashboard'
 import StaffDashboard from './pages/StaffDashboard'
 import AdminDashboard from './pages/AdminDashboard'
+import Queue from './pages/Queue'
 
 export default function App() {
   return (
@@ -21,6 +22,15 @@ export default function App() {
           element={
             <ProtectedRoute routeName="clinic">
               <PatientDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/queue"
+          element={
+            <ProtectedRoute routeName="clinic">
+              <Queue />
             </ProtectedRoute>
           }
         />
