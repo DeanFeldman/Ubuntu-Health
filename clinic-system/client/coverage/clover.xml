@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<coverage generated="1776240659503" clover="3.2.0">
+  <project timestamp="1776240659503" name="All files">
+    <metrics statements="18" coveredstatements="17" conditionals="24" coveredconditionals="21" methods="5" coveredmethods="4" elements="47" coveredelements="42" complexity="0" loc="18" ncloc="18" packages="3" files="4" classes="4"/>
+    <package name="client">
+      <metrics statements="1" coveredstatements="1" conditionals="0" coveredconditionals="0" methods="1" coveredmethods="1"/>
+      <file name="app.jsx" path="/mnt/c/Users/deanf/OneDrive/2026/University/Courses/COMS/Sem 1/SD/Project/Ubuntu Health/clinic-system/client/app.jsx">
+        <metrics statements="1" coveredstatements="1" conditionals="0" coveredconditionals="0" methods="1" coveredmethods="1"/>
+        <line num="12" count="7" type="stmt"/>
+      </file>
+    </package>
+    <package name="client.src.Utils">
+      <metrics statements="2" coveredstatements="2" conditionals="2" coveredconditionals="2" methods="1" coveredmethods="1"/>
+      <file name="Permissions.js" path="/mnt/c/Users/deanf/OneDrive/2026/University/Courses/COMS/Sem 1/SD/Project/Ubuntu Health/clinic-system/client/src/Utils/Permissions.js">
+        <metrics statements="2" coveredstatements="2" conditionals="2" coveredconditionals="2" methods="1" coveredmethods="1"/>
+        <line num="1" count="1" type="stmt"/>
+        <line num="8" count="33" type="cond" truecount="2" falsecount="0"/>
+      </file>
+    </package>
+    <package name="client.src.components">
+      <metrics statements="15" coveredstatements="14" conditionals="22" coveredconditionals="19" methods="3" coveredmethods="2"/>
+      <file name="Layout.jsx" path="/mnt/c/Users/deanf/OneDrive/2026/University/Courses/COMS/Sem 1/SD/Project/Ubuntu Health/clinic-system/client/src/components/Layout.jsx">
+        <metrics statements="7" coveredstatements="6" conditionals="12" coveredconditionals="11" methods="2" coveredmethods="1"/>
+        <line num="5" count="1" type="stmt"/>
+        <line num="133" count="9" type="stmt"/>
+        <line num="134" count="9" type="stmt"/>
+        <line num="136" count="9" type="stmt"/>
+        <line num="138" count="9" type="stmt"/>
+        <line num="139" count="0" type="stmt"/>
+        <line num="142" count="9" type="stmt"/>
+      </file>
+      <file name="ProtectedRoute.jsx" path="/mnt/c/Users/deanf/OneDrive/2026/University/Courses/COMS/Sem 1/SD/Project/Ubuntu Health/clinic-system/client/src/components/ProtectedRoute.jsx">
+        <metrics statements="8" coveredstatements="8" conditionals="10" coveredconditionals="8" methods="1" coveredmethods="1"/>
+        <line num="6" count="8" type="stmt"/>
+        <line num="8" count="8" type="cond" truecount="2" falsecount="0"/>
+        <line num="10" count="7" type="cond" truecount="2" falsecount="0"/>
+        <line num="12" count="6" type="cond" truecount="2" falsecount="0"/>
+        <line num="13" count="1" type="cond" truecount="1" falsecount="1"/>
+        <line num="14" count="1" type="cond" truecount="1" falsecount="1"/>
+        <line num="15" count="1" type="stmt"/>
+        <line num="18" count="5" type="stmt"/>
+      </file>
+    </package>
+  </project>
+</coverage>

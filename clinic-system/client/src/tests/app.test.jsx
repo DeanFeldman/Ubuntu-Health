@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import App from '../app'
+import App from '../../app.jsx'
 import { useAuth } from '../context/AuthContext'
 
 jest.mock('../context/AuthContext', () => ({
