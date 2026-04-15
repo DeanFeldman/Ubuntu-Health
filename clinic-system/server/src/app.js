@@ -184,6 +184,144 @@ app.get('/api/queue/:clinicId/status/:patientId', async (req, res) => {
   }
 })
 
+// POST /api/role-requests — submit a new role request
+app.post('/api/role-requests', async (req, res) => {
+  try {
+    const { user_id, requested_role } = req.body
+
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+    const allowedRoles = ['Patient', 'Staff', 'Admin']
+
+    if (!user_id || !requested_role) {
+      return res.status(400).json({
+        error: 'user_id and requested_role are required'
+      })
+    }
+
+    if (!uuidRegex.test(user_id)) {
+      return res.status(400).json({ error: 'Invalid user ID format' })
+    }
+
+    if (!allowedRoles.includes(requested_role)) {
+      return res.status(400).json({ error: 'Invalid requested role' })
+    }
+
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('id', user_id)
+      .maybeSingle()
+
+    if (userError) throw userError
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    if (user.role === requested_role) {
+      return res.status(400).json({ error: 'User already has this role' })
+    }
+
+    const { data: existingRequest, error: existingError } = await supabase
+      .from('role_requests')
+      .select('id')
+      .eq('user_id', user_id)
+      .eq('requested_role', requested_role)
+      .eq('status', 'pending')
+      .maybeSingle()
+
+    if (existingError) throw existingError
+
+    if (existingRequest) {
+      return res.status(409).json({
+        error: 'A pending request for this role already exists'
+      })
+    }
+
+    const { data, error } = await supabase
+      .from('role_requests')
+      .insert({
+        user_id,
+        requested_role,
+        status: 'pending'
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+
+    res.status(201).json({ request: data })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to submit role request' })
+  }
+})
+
+// GET /api/role-requests — admin fetches role requests
+app.get('/api/role-requests', async (req, res) => {
+  try {
+    const { admin_id, status } = req.query
+
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+    if (!admin_id) {
+      return res.status(400).json({ error: 'admin_id is required' })
+    }
+
+    if (!uuidRegex.test(admin_id)) {
+      return res.status(400).json({ error: 'Invalid admin ID format' })
+    }
+
+    const { data: adminUser, error: adminError } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('id', admin_id)
+      .maybeSingle()
+
+    if (adminError) throw adminError
+
+    if (!adminUser) {
+      return res.status(404).json({ error: 'Admin user not found' })
+    }
+
+    if (adminUser.role !== 'Admin') {
+      return res.status(403).json({ error: 'Only admins can access role requests' })
+    }
+
+    let query = supabase
+      .from('role_requests')
+      .select(`
+        id,
+        user_id,
+        requested_role,
+        status,
+        created_at,
+        users (
+          full_name,
+          email,
+          role
+        )
+      `)
+      .order('created_at', { ascending: false })
+
+    if (status) {
+      query = query.eq('status', status)
+    }
+
+    const { data, error } = await query
+
+    if (error) throw error
+
+    res.json({ requests: data })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to fetch role requests' })
+  }
+})
+
 // POST /api/queue/:clinicId/join — patient joins the virtual queue
 const { validateQueueJoin } = require('./queueValidation')
 
