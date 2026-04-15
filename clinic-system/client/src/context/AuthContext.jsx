@@ -158,6 +158,52 @@ async function loginWithGoogle() {
     }
   }
 
+  const RoleRequest = async (requestedRole) => {
+  try {
+    if (!user?.id) {
+      throw new Error('No logged-in user found')
+    }
+
+    const allowedRoles = ['Patient', 'Staff', 'Admin']
+    if (!allowedRoles.includes(requestedRole)) {
+      throw new Error('Invalid requested role')
+    }
+
+    if (role === requestedRole) {
+      throw new Error('You already have this role')
+    }
+
+    const { data: existingRequest, error: existingError } = await supabase
+      .from('role_requests')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('requested_role', requestedRole)
+      .eq('status', 'pending')
+      .maybeSingle()
+
+    if (existingError) throw existingError
+
+    if (existingRequest) {
+      throw new Error('A pending request for this role already exists')
+    }
+
+    const { error } = await supabase
+      .from('role_requests')
+      .insert({
+        user_id: user.id,
+        requested_role: requestedRole,
+        status: 'pending'
+      })
+
+    if (error) throw error
+
+    alert('Request submitted!')
+  } catch (err) {
+    console.error(err)
+    alert(err.message || 'Failed to submit role request')
+  }
+}
+  
   return (
     <AuthContext.Provider
       value={{
@@ -167,6 +213,7 @@ async function loginWithGoogle() {
         loading,
         loginWithGoogle,
         logout,
+        RoleRequest
       }}
     >
       {children}
