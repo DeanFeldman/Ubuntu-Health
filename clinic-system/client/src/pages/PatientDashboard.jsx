@@ -260,6 +260,12 @@ const unique = (arr) => [...new Set(arr)].sort()
 
 export default function PatientDashboard() {
 
+const navigate = useNavigate()
+
+const handleJoinQueue = (clinic) => {
+  navigate('/queue', { state: { clinic } })
+}
+
   // Clinic data state
   const [clinics, setClinics] = useState([])
   const [loading, setLoading] = useState(true)
