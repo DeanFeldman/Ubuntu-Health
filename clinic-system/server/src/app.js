@@ -458,6 +458,162 @@ app.get('/api/role-requests', async (req, res) => {
   }
 })
 
+// PATCH /api/role-requests/:id/approve — admin approves a pending role request
+app.patch('/api/role-requests/:id/approve', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { admin_id } = req.body
+
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+    if (!uuidRegex.test(id)) {
+      return res.status(400).json({ error: 'Invalid request ID format' })
+    }
+
+    if (!admin_id) {
+      return res.status(400).json({ error: 'admin_id is required' })
+    }
+
+    if (!uuidRegex.test(admin_id)) {
+      return res.status(400).json({ error: 'Invalid admin ID format' })
+    }
+
+    const { data: adminUser, error: adminError } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('id', admin_id)
+      .maybeSingle()
+
+    if (adminError) throw adminError
+
+    if (!adminUser) {
+      return res.status(404).json({ error: 'Admin user not found' })
+    }
+
+    if (adminUser.role !== 'Admin') {
+      return res.status(403).json({ error: 'Only admins can approve role requests' })
+    }
+
+    const { data: roleRequest, error: requestError } = await supabase
+      .from('role_requests')
+      .select('id, user_id, requested_role, status, users ( role )')
+      .eq('id', id)
+      .maybeSingle()
+
+    if (requestError) throw requestError
+
+    if (!roleRequest) {
+      return res.status(404).json({ error: 'Role request not found' })
+    }
+
+    if (roleRequest.status !== 'pending') {
+      return res.status(400).json({ error: 'Role request has already been reviewed' })
+    }
+
+    const previousRole = roleRequest.users?.role
+
+    if (!previousRole) {
+      return res.status(404).json({ error: 'Request user not found' })
+    }
+
+    const { error: userUpdateError } = await supabase
+      .from('users')
+      .update({ role: roleRequest.requested_role })
+      .eq('id', roleRequest.user_id)
+
+    if (userUpdateError) throw userUpdateError
+
+    const { data: approvedRequest, error: requestUpdateError } = await supabase
+      .from('role_requests')
+      .update({ status: 'approved' })
+      .eq('id', id)
+      .eq('status', 'pending')
+      .select()
+      .maybeSingle()
+
+    if (requestUpdateError || !approvedRequest) {
+      const { error: rollbackError } = await supabase
+        .from('users')
+        .update({ role: previousRole })
+        .eq('id', roleRequest.user_id)
+
+      if (rollbackError) {
+        console.error('Failed to roll back user role after approval error:', rollbackError)
+      }
+
+      if (!approvedRequest) {
+        return res.status(409).json({ error: 'Role request is no longer pending' })
+      }
+
+      throw requestUpdateError
+    }
+
+    res.json({ request: approvedRequest })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to approve role request' })
+  }
+})
+
+// PATCH /api/role-requests/:id/reject — admin rejects a pending role request
+app.patch('/api/role-requests/:id/reject', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { admin_id } = req.body
+
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+    if (!uuidRegex.test(id)) {
+      return res.status(400).json({ error: 'Invalid request ID format' })
+    }
+
+    if (!admin_id) {
+      return res.status(400).json({ error: 'admin_id is required' })
+    }
+
+    if (!uuidRegex.test(admin_id)) {
+      return res.status(400).json({ error: 'Invalid admin ID format' })
+    }
+
+    const { data: adminUser, error: adminError } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('id', admin_id)
+      .maybeSingle()
+
+    if (adminError) throw adminError
+
+    if (!adminUser) {
+      return res.status(404).json({ error: 'Admin user not found' })
+    }
+
+    if (adminUser.role !== 'Admin') {
+      return res.status(403).json({ error: 'Only admins can reject role requests' })
+    }
+
+    const { data: rejectedRequest, error: requestUpdateError } = await supabase
+      .from('role_requests')
+      .update({ status: 'rejected' })
+      .eq('id', id)
+      .eq('status', 'pending')
+      .select()
+      .maybeSingle()
+
+    if (requestUpdateError) throw requestUpdateError
+
+    if (!rejectedRequest) {
+      return res.status(409).json({ error: 'Role request is no longer pending' })
+    }
+
+    res.json({ request: rejectedRequest })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to reject role request' })
+  }
+})
+
 // POST /api/queue/:clinicId/join — patient joins the virtual queue
 const { validateQueueJoin } = require('./queueValidation')
 
