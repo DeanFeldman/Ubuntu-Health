@@ -313,10 +313,68 @@ app.get('/api/queue/:clinicId/status/:patientId', async (req, res) => {
     if (error) throw error
     if (!data) return res.status(404).json({ error: 'No active queue entry found for this patient' })
 
-    res.json({ status: data.status, position: data.position, joined_at: data.joined_at })
+    res.json({ status: data.ascending: false })
+
+    if (status) {
+      query = query.eq('status', status)
+    }
+
+    const { data, error } = await query
+
+    if (error) throw error
+
+    res.json({ requests: data })
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Failed to fetch queue status' })
+    res.status(500).json({ error: 'Failed to fetch role requests' })
+  }
+})
+
+// DELETE /api/queue/:clinicId/entry/:entryId
+app.delete('/api/queue/:clinicId/entry/:entryId', async (req, res) => {
+  try {
+    const { clinicId, entryId } = req.params
+
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+    // 1. Validate IDs
+    if (!uuidRegex.test(clinicId) || !uuidRegex.test(entryId)) {
+      return res.status(400).json({ error: 'Invalid ID format' })
+    }
+
+    // 2. Check entry exists
+    const { data: entry, error: entryError } = await supabase
+      .from('queue_entries')
+      .select('id, clinic_id')
+      .eq('id', entryId)
+      .maybeSingle()
+
+    if (entryError) throw entryError
+
+    if (!entry) {
+      return res.status(404).json({ error: 'Queue entry not found' })
+    }
+
+    // 3. Prevent wrong clinic removal
+    if (entry.clinic_id !== clinicId) {
+      return res.status(409).json({
+        error: 'Queue entry does not belong to this clinic'
+      })
+    }
+
+    // 4. Delete entry
+    const { error: deleteError } = await supabase
+      .from('queue_entries')
+      .delete()
+      .eq('id', entryId)
+
+    if (deleteError) throw deleteError
+
+    res.json({ message: 'Queue entry removed successfully' })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to remove queue entry' })
   }
 })
 
@@ -329,7 +387,33 @@ app.post('/api/queue/:clinicId/join', async (req, res) => {
     const { patient_id, confirmed } = req.body
 
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(clinicId) || !uuidRegex.test(patient_id)) {
+    if (!uui
+    // Validate clinic exist
+    const { data: clinic, error: clinicError } = await supabase
+      .from('clinics')
+      .select('id')
+      .eq('id', clinicId)
+      .maybeSingle()
+
+    if (clinicError) throw clinicError
+
+    if (!clinic) {
+      return res.status(404).json({ error: 'Clinic not found' })
+    }
+
+    // validate patient exist
+    const { data: patient, error: patientError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', patient_id)
+      .maybeSingle()
+
+    if (patientError) throw patientError
+
+    if (!patient) {
+      return res.status(404).json({ error: 'Patient not found' })
+    }
+dRegex.test(clinicId) || !uuidRegex.test(patient_id)) {
       return res.status(400).json({ error: 'Invalid ID format' })
     }
 
