@@ -184,6 +184,71 @@ app.get('/api/queue/:clinicId/status/:patientId', async (req, res) => {
   }
 })
 
+// POST /api/queue/:clinicId/join — patient joins the virtual queue
+const { validateQueueJoin } = require('./queueValidation')
+
+app.post('/api/queue/:clinicId/join', async (req, res) => {
+  try {
+    const { clinicId } = req.params
+    const { patient_id, confirmed } = req.body
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(clinicId) || !uuidRegex.test(patient_id)) {
+      return res.status(400).json({ error: 'Invalid ID format' })
+    }
+
+    // Fetch all active queue entries for this patient across all clinics
+    const { data: activeQueues, error: activeError } = await supabase
+      .from('queue_entries')
+      .select('patient_id, status, clinic_id')
+      .eq('patient_id', patient_id)
+      .neq('status', 'Complete')
+
+    if (activeError) throw activeError
+
+    // Use validation helper — checks confirmed and no active queue
+    if (!validateQueueJoin(patient_id, activeQueues, confirmed)) {
+      if (!confirmed) {
+        return res.status(400).json({ error: 'Queue join must be confirmed by the patient' })
+      }
+      return res.status(409).json({ error: 'Patient already has an active queue entry' })
+    }
+
+    // Calculate next position in this clinic's queue
+    const { data: queueData, error: queueError } = await supabase
+      .from('queue_entries')
+      .select('position')
+      .eq('clinic_id', clinicId)
+      .eq('status', 'Waiting')
+      .order('position', { ascending: false })
+      .limit(1)
+
+    if (queueError) throw queueError
+
+    const nextPosition = queueData.length > 0 ? queueData[0].position + 1 : 1
+
+    // Insert new queue entry
+    const { data: newEntry, error: insertError } = await supabase
+      .from('queue_entries')
+      .insert({
+        clinic_id: clinicId,
+        patient_id: patient_id,
+        position: nextPosition,
+        status: 'Waiting',
+        joined_at: new Date().toISOString()
+      })
+      .select()
+      .single()
+
+    if (insertError) throw insertError
+
+    res.status(201).json({ entry: newEntry })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to join queue' })
+  }
+})
+
 // Serve built frontend
 const publicPath = path.join(__dirname, '..', 'public')
 app.use(express.static(publicPath))
