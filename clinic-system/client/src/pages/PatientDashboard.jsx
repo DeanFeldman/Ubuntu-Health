@@ -239,8 +239,6 @@ const TYPE_LABEL = {
 const unique = (arr) => [...new Set(arr)].sort()
 
 export default function PatientDashboard() {
-  const { logout } = useAuth()
-  const navigate = useNavigate()
 
   // Clinic data state
   const [clinics, setClinics] = useState([])
@@ -335,40 +333,12 @@ export default function PatientDashboard() {
     })
   }, [search, province, district, municipality, facilityType, serviceFilter, clinics])
 
-  // Auth
-  const handleLogout = async () => {
-    await logout()
-    navigate('/login', { replace: true })
-  }
 
   // Render 
   return (
     <>
       <style>{styles}</style>
-      <main className="uh-root">
 
-        {/* Navbar */}
-        <header className="uh-navbar">
-          <nav className="uh-navbar-inner" aria-label="Primary navigation">
-            <span className="uh-brand">
-              <abbr className="uh-brand-logo" title="Ubuntu Health">UH</abbr>
-              Ubuntu Health
-            </span>
-            <ul className="uh-nav-links">
-              <li><a href="#">Home</a></li>
-              <li><a href="#">Clinics</a></li>
-              <li><a href="#">Appointments</a></li>
-              <li><a href="#">Queue status</a></li>
-            </ul>
-            <menu className="uh-nav-actions">
-              <li>
-                <button className="uh-btn uh-btn-primary" onClick={handleLogout}>
-                  Log out
-                </button>
-              </li>
-            </menu>
-          </nav>
-        </header>
 
         {/* Search & filters */}
         <section className="uh-search-section" aria-label="Search and filter clinics">
@@ -500,7 +470,6 @@ export default function PatientDashboard() {
           )}
         </section>
 
-      </main>
     </>
   )
 }

@@ -1,26 +1,14 @@
 const express = require('express')
 const cors = require('cors')
+const path = require('path')
 const { createClient } = require('@supabase/supabase-js')
 require('dotenv').config()
 
 const app = express()
 
-// Allow cross-origin requests from the React frontend
 app.use(cors())
-
-// Parse incoming JSON request bodies
 app.use(express.json())
 
-// Simple health check endpoint
-app.get('/', (req, res) => {
-  res.json({ message: 'Ubuntu Health API running' })
-})
-
-// Initialise Supabase using environment variables
-//const supabase = createClient(
-//  process.env.SUPABASE_URL,
-//  process.env.SUPABASE_SERVICE_ROLE_KEY
-//)
 const supabaseUrl = process.env.SUPABASE_URL
 const supabaseKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY
@@ -31,7 +19,12 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey)
 
-// GET /api/clinics — filter by province, district, facility_type, municipality, search
+// API health check
+app.get('/api', (req, res) => {
+  res.json({ message: 'Ubuntu Health API running' })
+})
+
+// GET /api/clinics
 app.get('/api/clinics', async (req, res) => {
   try {
     const { province, district, municipality, facility_type, search } = req.query
@@ -55,7 +48,7 @@ app.get('/api/clinics', async (req, res) => {
   }
 })
 
-// GET /api/clinics/:id — fetch single clinic with UUID validation
+// GET /api/clinics/:id
 app.get('/api/clinics/:id', async (req, res) => {
   try {
     const { id } = req.params
@@ -69,7 +62,7 @@ app.get('/api/clinics/:id', async (req, res) => {
       .from('clinics')
       .select('*')
       .eq('id', id)
-      .single()
+      .maybeSingle()
 
     if (error) throw error
     if (!data) return res.status(404).json({ error: 'Clinic not found' })
@@ -79,6 +72,190 @@ app.get('/api/clinics/:id', async (req, res) => {
     console.error(err)
     res.status(500).json({ error: 'Failed to fetch clinic' })
   }
+})
+
+// GET /api/queue/:clinicId — retrieve full queue for a clinic (staff use)
+app.get('/api/queue/:clinicId', async (req, res) => {
+  try {
+    const { clinicId } = req.params
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(clinicId)) {
+      return res.status(400).json({ error: 'Invalid clinic ID format' })
+    }
+
+    const { data, error } = await supabase
+      .from('queue_entries')
+      .select('*')
+      .eq('clinic_id', clinicId)
+      .eq('status', 'Waiting')
+      .order('position', { ascending: true })
+
+    if (error) throw error
+
+    res.json({ queue: data })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to fetch clinic queue' })
+  }
+})
+
+// GET /api/queue/:clinicId/position/:patientId — retrieve a patient's position in the queue
+app.get('/api/queue/:clinicId/position/:patientId', async (req, res) => {
+  try {
+    const { clinicId, patientId } = req.params
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(clinicId) || !uuidRegex.test(patientId)) {
+      return res.status(400).json({ error: 'Invalid ID format' })
+    }
+
+    const { data, error } = await supabase
+      .from('queue_entries')
+      .select('position')
+      .eq('clinic_id', clinicId)
+      .eq('patient_id', patientId)
+      .eq('status', 'Waiting')
+      .maybeSingle()
+
+    if (error) throw error
+    if (!data) return res.status(404).json({ error: 'No active queue entry found for this patient' })
+
+    res.json({ position: data.position })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to fetch queue position' })
+  }
+})
+
+// GET /api/queue/:clinicId/entry/:patientId — retrieve a patient's full active queue entry
+app.get('/api/queue/:clinicId/entry/:patientId', async (req, res) => {
+  try {
+    const { clinicId, patientId } = req.params
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(clinicId) || !uuidRegex.test(patientId)) {
+      return res.status(400).json({ error: 'Invalid ID format' })
+    }
+
+    const { data, error } = await supabase
+      .from('queue_entries')
+      .select('*')
+      .eq('clinic_id', clinicId)
+      .eq('patient_id', patientId)
+      .in('status', ['Waiting', 'Called'])
+      .maybeSingle()
+
+    if (error) throw error
+    if (!data) return res.status(404).json({ error: 'No active queue entry found for this patient' })
+
+    res.json({ entry: data })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to fetch queue entry' })
+  }
+})
+
+// GET /api/queue/:clinicId/status/:patientId — retrieve just the status of a patient's queue entry
+app.get('/api/queue/:clinicId/status/:patientId', async (req, res) => {
+  try {
+    const { clinicId, patientId } = req.params
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(clinicId) || !uuidRegex.test(patientId)) {
+      return res.status(400).json({ error: 'Invalid ID format' })
+    }
+
+    const { data, error } = await supabase
+      .from('queue_entries')
+      .select('status, position, joined_at')
+      .eq('clinic_id', clinicId)
+      .eq('patient_id', patientId)
+      .in('status', ['Waiting', 'Called', 'In Consultation'])
+      .maybeSingle()
+
+    if (error) throw error
+    if (!data) return res.status(404).json({ error: 'No active queue entry found for this patient' })
+
+    res.json({ status: data.status, position: data.position, joined_at: data.joined_at })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to fetch queue status' })
+  }
+})
+
+// POST /api/queue/:clinicId/join — patient joins the virtual queue
+const { validateQueueJoin } = require('./queueValidation')
+
+app.post('/api/queue/:clinicId/join', async (req, res) => {
+  try {
+    const { clinicId } = req.params
+    const { patient_id, confirmed } = req.body
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(clinicId) || !uuidRegex.test(patient_id)) {
+      return res.status(400).json({ error: 'Invalid ID format' })
+    }
+
+    // Fetch all active queue entries for this patient across all clinics
+    const { data: activeQueues, error: activeError } = await supabase
+      .from('queue_entries')
+      .select('patient_id, status, clinic_id')
+      .eq('patient_id', patient_id)
+      .neq('status', 'Complete')
+
+    if (activeError) throw activeError
+
+    // Use validation helper — checks confirmed and no active queue
+    if (!validateQueueJoin(patient_id, activeQueues, confirmed)) {
+      if (!confirmed) {
+        return res.status(400).json({ error: 'Queue join must be confirmed by the patient' })
+      }
+      return res.status(409).json({ error: 'Patient already has an active queue entry' })
+    }
+
+    // Calculate next position in this clinic's queue
+    const { data: queueData, error: queueError } = await supabase
+      .from('queue_entries')
+      .select('position')
+      .eq('clinic_id', clinicId)
+      .eq('status', 'Waiting')
+      .order('position', { ascending: false })
+      .limit(1)
+
+    if (queueError) throw queueError
+
+    const nextPosition = queueData.length > 0 ? queueData[0].position + 1 : 1
+
+    // Insert new queue entry
+    const { data: newEntry, error: insertError } = await supabase
+      .from('queue_entries')
+      .insert({
+        clinic_id: clinicId,
+        patient_id: patient_id,
+        position: nextPosition,
+        status: 'Waiting',
+        joined_at: new Date().toISOString()
+      })
+      .select()
+      .single()
+
+    if (insertError) throw insertError
+
+    res.status(201).json({ entry: newEntry })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to join queue' })
+  }
+})
+
+// Serve built frontend
+const publicPath = path.join(__dirname, '..', 'public')
+app.use(express.static(publicPath))
+
+// React catch-all — must come LAST, after all API routes
+app.get('/{*any}', (req, res) => {
+  res.sendFile(path.join(publicPath, 'index.html'))
 })
 
 module.exports = app

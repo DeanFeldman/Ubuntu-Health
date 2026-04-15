@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'clinic-system/client/**'
+      - 'clinic-system/server/**'
+      - '.github/workflows/main_ubuntu-health.yml'
   workflow_dispatch:
 
 env:
@@ -25,10 +29,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20.x'
+          cache: npm
+          cache-dependency-path: |
+            clinic-system/client/package-lock.json
+            clinic-system/server/package-lock.json
 
       - name: Install client dependencies
         working-directory: ${{ env.CLIENT_DIR }}
-        run: npm install
+        run: npm ci
 
       - name: Build client
         working-directory: ${{ env.CLIENT_DIR }}
@@ -39,7 +47,7 @@ jobs:
         
       - name: Install server dependencies
         working-directory: ${{ env.SERVER_DIR }}
-        run: npm install
+        run: npm ci
 
 
       - name: Copy client build into server public folder

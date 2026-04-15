@@ -25,10 +25,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22.x'
+          cache: npm
+          cache-dependency-path: clinic-system/server/package-lock.json
 
       - name: Install dependencies
         working-directory: ${{ env.SERVER_DIR }}
-        run: npm install
+        run: npm ci
 
       - name: Build
         working-directory: ${{ env.SERVER_DIR }}
