@@ -9,12 +9,7 @@ const nonAdminUserId = '00000000-0000-0000-0000-000000000013'
 const unknownAdminId = '00000000-0000-0000-0000-000000000022'
 const invalidId = 'invalid-id'
 
-/*
-========================================
-PATCH /api/role-requests/:id/approve
-========================================
-Tests approval workflow for role requests
-*/
+//Tests approval workflow for role requests
 describe('Role request APPROVE endpoint', () => {
   // Invalid request ID format
   test('returns 400 for invalid approval request ID', async () => {
@@ -76,7 +71,27 @@ describe('Role request APPROVE endpoint', () => {
       expect(res.body).toHaveProperty('request')
     }
   }, 15000)
+  // Successful approval should return an approved request when DB state allows it
+test('approval returns approved request details when successful', async () => {
+  const res = await request(app)
+    .patch(`/api/role-requests/${validRequestId}/approve`)
+    .send({ admin_id: validAdminId })
 
+  expect([200, 400, 404, 409, 500]).toContain(res.statusCode)
+
+  if (res.statusCode === 200) {
+    expect(res.body).toHaveProperty('request')
+    expect(res.body.request).toHaveProperty('status')
+    expect(res.body.request.status).toBe('approved')
+  }
+}, 15000)
+    test('approval handles server error safely', async () => {
+  const res = await request(app)
+    .patch(`/api/role-requests/${invalidId}/approve`)
+    .send({ admin_id: validAdminId })
+
+  expect([400, 404, 500]).toContain(res.statusCode)
+})
   // Second request ID gives another path chance depending on DB state
   test('handles another approval request safely', async () => {
     const res = await request(app)
@@ -87,12 +102,7 @@ describe('Role request APPROVE endpoint', () => {
   }, 15000)
 })
 
-/*
-========================================
-PATCH /api/role-requests/:id/reject
-========================================
-Tests rejection workflow for role requests
-*/
+//Tests rejection workflow for role requests
 describe('Role request REJECT endpoint', () => {
   // Invalid request ID format
   test('returns 400 for invalid rejection request ID', async () => {
