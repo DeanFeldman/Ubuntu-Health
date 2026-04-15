@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || ''
+
 const styles = `
   .admin-header {
     margin-bottom: 24px;
@@ -129,7 +131,7 @@ export default function AdminDashboard() {
         setError('')
 
         const response = await fetch(
-          `/api/role-requests?admin_id=${encodeURIComponent(user.id)}&status=pending`
+          `${API_BASE_URL}/api/role-requests?admin_id=${encodeURIComponent(user.id)}&status=pending`
         )
         const body = await response.json()
 
@@ -153,7 +155,7 @@ export default function AdminDashboard() {
     setFeedback('')
 
     try {
-      const response = await fetch(`/api/role-requests/${request.id}/approve`, {
+      const response = await fetch(`${API_BASE_URL}/api/role-requests/${request.id}/approve`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -184,7 +186,7 @@ export default function AdminDashboard() {
     setFeedback('')
 
     try {
-      const response = await fetch(`/api/role-requests/${request.id}/reject`, {
+      const response = await fetch(`${API_BASE_URL}/api/role-requests/${request.id}/reject`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
