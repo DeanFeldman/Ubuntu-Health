@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 
+
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 
@@ -7,6 +8,7 @@ import LoginPage from './pages/LoginPage'
 import PatientDashboard from './pages/PatientDashboard'
 import StaffDashboard from './pages/StaffDashboard'
 import AdminDashboard from './pages/AdminDashboard'
+import QueuePage from './pages/QueuePage'
 
 export default function App() {
   return (
@@ -43,6 +45,15 @@ export default function App() {
           }
         />
 
+
+        <Route
+          path="/queue"
+          element={
+            <ProtectedRoute routeName="clinic">
+              <QueuePage />
+            </ProtectedRoute>
+          }
+        />
         <Route path="*" element={<Navigate to="/clinic" replace />} />
       </Route>
     </Routes>

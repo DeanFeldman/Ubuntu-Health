@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useLocation } from 'react-router-dom'
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { canAccess } from '../Utils/Permissions'
 
@@ -128,8 +128,8 @@ const styles = `
   .uh-btn-secondary:hover {
     background: #D1D5DB;
   }
-  
-  .uh-btn{
+
+  .uh-btn {
     border: none;
   }
 
@@ -148,15 +148,13 @@ const styles = `
 export default function Layout() {
   const { logout, user, role, RoleRequest } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
 
   const isLoginPage = location.pathname === '/login'
+  const isQueuePage = location.pathname === '/queue'
 
   const handleLogout = async () => {
     await logout()
-  }
-  
-  const handleRoleRequest = async () => {
-    await RoleRequest();
   }
 
   const showRequestStaff = role === 'Patient'
@@ -181,38 +179,53 @@ export default function Layout() {
               {canAccess(role, 'staff') && (
                 <li><NavLink to="/staff">Staff</NavLink></li>
               )}
-
               {canAccess(role, 'clinic') && (
                 <li><NavLink to="/clinic">Patient</NavLink></li>
               )}
-
-              
-              
             </ul>
 
             {user && (
               <menu className="uh-nav-actions">
-                {showRequestStaff && (
+                {isQueuePage && (
                   <li>
-                    <button className="uh-btn uh-btn-secondary" onClick={() => RoleRequest('Staff')}>
+                    <button
+                      className="uh-btn uh-btn-secondary"
+                      onClick={() => navigate('/clinic')}
+                    >
+                      Back
+                    </button>
+                  </li>
+                )}
+
+                {!isQueuePage && showRequestStaff && (
+                  <li>
+                    <button
+                      className="uh-btn uh-btn-secondary"
+                      onClick={() => RoleRequest('Staff')}
+                    >
                       Request Staff Role
                     </button>
                   </li>
                 )}
 
-                {showRequestAdmin && (
+                {!isQueuePage && showRequestAdmin && (
                   <li>
-                    <button className="uh-btn uh-btn-secondary" onClick={() => RoleRequest('Admin')}>
+                    <button
+                      className="uh-btn uh-btn-secondary"
+                      onClick={() => RoleRequest('Admin')}
+                    >
                       Request Admin Role
                     </button>
                   </li>
                 )}
 
-                <li>
-                  <button className="uh-btn uh-btn-primary" onClick={handleLogout}>
-                    Log out
-                  </button>
-                </li>
+                {!isQueuePage && (
+                  <li>
+                    <button className="uh-btn uh-btn-primary" onClick={handleLogout}>
+                      Log out
+                    </button>
+                  </li>
+                )}
               </menu>
             )}
           </nav>
