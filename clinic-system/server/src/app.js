@@ -317,7 +317,7 @@ app.get('/api/queue/:clinicId/status/:patientId', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch queue status' })
   }
 })
-
+/*
 // POST /api/role-requests — submit a new role request
 app.post('/api/role-requests', async (req, res) => {
   try {
@@ -391,8 +391,7 @@ app.post('/api/role-requests', async (req, res) => {
     console.error(err)
     res.status(500).json({ error: 'Failed to submit role request' })
   }
-})
-
+})*//*
 // GET /api/role-requests — admin fetches role requests
 app.get('/api/role-requests', async (req, res) => {
   try {
@@ -454,7 +453,7 @@ app.get('/api/role-requests', async (req, res) => {
     console.error(err)
     res.status(500).json({ error: 'Failed to fetch role requests' })
   }
-})
+})*/
 
 // PATCH /api/role-requests/:id/approve — admin approves a pending role request
 app.patch('/api/role-requests/:id/approve', async (req, res) => {
