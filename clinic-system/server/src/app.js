@@ -156,26 +156,24 @@ app.get('/api/queue/:clinicId/entry/:patientId', async (req, res) => {
   }
 })
 // POST /api/role-requests — submit a new role request
+const {
+  hasRequiredRoleRequestFields,isValidUuid,isValidRequestedRole, isDifferentFromCurrentRole,doesUserExist, 
+  hasDuplicatePendingRoleRequest,} = require('./roleRequestValidation')
 app.post('/api/role-requests', async (req, res) => {
   try {
     const { user_id, requested_role } = req.body
 
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-    const allowedRoles = ['Patient', 'Staff', 'Admin']
-
-    if (!user_id || !requested_role) {
+    if (!hasRequiredRoleRequestFields(user_id, requested_role)) {
       return res.status(400).json({
         error: 'user_id and requested_role are required'
       })
     }
 
-    if (!uuidRegex.test(user_id)) {
+    if (!isValidUuid(user_id)) {
       return res.status(400).json({ error: 'Invalid user ID format' })
     }
 
-    if (!allowedRoles.includes(requested_role)) {
+    if (!isValidRequestedRole(requested_role)) {
       return res.status(400).json({ error: 'Invalid requested role' })
     }
 
@@ -187,11 +185,11 @@ app.post('/api/role-requests', async (req, res) => {
 
     if (userError) throw userError
 
-    if (!user) {
+    if (!doesUserExist(user)) {
       return res.status(404).json({ error: 'User not found' })
     }
 
-    if (user.role === requested_role) {
+    if (!isDifferentFromCurrentRole(user.role, requested_role)) {
       return res.status(400).json({ error: 'User already has this role' })
     }
 
@@ -205,7 +203,7 @@ app.post('/api/role-requests', async (req, res) => {
 
     if (existingError) throw existingError
 
-    if (existingRequest) {
+    if (hasDuplicatePendingRoleRequest(existingRequest)) {
       return res.status(409).json({
         error: 'A pending request for this role already exists'
       })
