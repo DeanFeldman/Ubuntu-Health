@@ -3,8 +3,7 @@ import { useAuth } from '../context/AuthContext'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || ''
 console.log("API_BASE_URL:", API_BASE_URL)
-const url = `${API_BASE_URL}/api/role-requests?admin_id=${admin_id}&status=pending`
-console.log("REQUEST URL:", url)
+
 
 const styles = `
   .admin-header {
