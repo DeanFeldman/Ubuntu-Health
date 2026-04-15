@@ -147,6 +147,8 @@ const styles = `
     border: 1px solid rgba(229, 231, 235, 0.7);
     padding: 20px;
     transition: box-shadow 0.15s;
+    display: flex;
+    flex-direction: column;
   }
   .uh-clinic-card:hover { box-shadow: 0 8px 24px rgba(17, 24, 39, 0.1); }
   .uh-clinic-top {
@@ -183,6 +185,23 @@ const styles = `
     color: var(--uh-muted);
     border: 1px solid var(--uh-border);
   }
+
+  /* ── Join button ── */
+  .uh-join-btn {
+    width: 100%;
+    margin-top: auto;
+    padding: 10px;
+    background: var(--uh-primary);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .uh-join-btn:hover { background: var(--uh-primary-dark); }
 
   /* ── Feedback states ── */
   .uh-empty {
@@ -239,6 +258,7 @@ const TYPE_LABEL = {
 const unique = (arr) => [...new Set(arr)].sort()
 
 export default function PatientDashboard() {
+  const navigate = useNavigate()
 
   // Clinic data state
   const [clinics, setClinics] = useState([])
@@ -333,6 +353,10 @@ export default function PatientDashboard() {
     })
   }, [search, province, district, municipality, facilityType, serviceFilter, clinics])
 
+  // Navigate to Queue page, passing clinic data via location state
+  const handleJoinClinic = (clinic) => {
+    navigate('/queue', { state: { clinic } })
+  }
 
   // Render 
   return (
@@ -460,6 +484,14 @@ export default function PatientDashboard() {
                             ))}
                           </ul>
                         )}
+
+                        <button
+                          className="uh-join-btn"
+                          onClick={() => handleJoinClinic(clinic)}
+                          aria-label={`Join queue at ${clinic.name}`}
+                        >
+                          Join Clinic
+                        </button>
 
                       </article>
                     </li>
