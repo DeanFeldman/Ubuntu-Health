@@ -95,6 +95,7 @@ const styles = `
     list-style: none;
     margin: 0;
     padding: 0;
+    align-items: center;
   }
 
   .uh-btn {
@@ -118,6 +119,20 @@ const styles = `
     background: var(--uh-primary-dark);
   }
 
+  .uh-btn-secondary {
+    background: #E5E7EB !important;
+    color: var(--uh-text) !important;
+    border: none !important;
+  }
+
+  .uh-btn-secondary:hover {
+    background: #D1D5DB;
+  }
+  
+  .uh-btn{
+    border: none;
+  }
+
   .uh-page {
     min-height: calc(100vh - 73px);
     padding: 24px;
@@ -126,11 +141,12 @@ const styles = `
   @media (max-width: 768px) {
     .uh-nav-links { display: none; }
     .uh-navbar-inner { padding: 12px 0; }
+    .uh-nav-actions { flex-wrap: wrap; justify-content: flex-end; }
   }
 `
 
 export default function Layout() {
-  const { logout, user, role } = useAuth()
+  const { logout, user, role, RoleRequest } = useAuth()
   const location = useLocation()
 
   const isLoginPage = location.pathname === '/login'
@@ -138,6 +154,13 @@ export default function Layout() {
   const handleLogout = async () => {
     await logout()
   }
+  
+  const handleRoleRequest = async () => {
+    await RoleRequest();
+  }
+
+  const showRequestStaff = role === 'Patient'
+  const showRequestAdmin = role === 'Staff'
 
   return (
     <>
@@ -152,21 +175,39 @@ export default function Layout() {
             </NavLink>
 
             <ul className="uh-nav-links">
-              {canAccess(role, 'clinic') && (
-                <li><NavLink to="/clinic">Patient</NavLink></li>
+              {canAccess(role, 'admin') && (
+                <li><NavLink to="/admin">Admin</NavLink></li>
               )}
-
               {canAccess(role, 'staff') && (
                 <li><NavLink to="/staff">Staff</NavLink></li>
               )}
 
-              {canAccess(role, 'admin') && (
-                <li><NavLink to="/admin">Admin</NavLink></li>
+              {canAccess(role, 'clinic') && (
+                <li><NavLink to="/clinic">Patient</NavLink></li>
               )}
+
+              
+              
             </ul>
 
             {user && (
               <menu className="uh-nav-actions">
+                {showRequestStaff && (
+                  <li>
+                    <button className="uh-btn uh-btn-secondary" onClick={() => RoleRequest('Staff')}>
+                      Request Staff Role
+                    </button>
+                  </li>
+                )}
+
+                {showRequestAdmin && (
+                  <li>
+                    <button className="uh-btn uh-btn-secondary" onClick={() => RoleRequest('Admin')}>
+                      Request Admin Role
+                    </button>
+                  </li>
+                )}
+
                 <li>
                   <button className="uh-btn uh-btn-primary" onClick={handleLogout}>
                     Log out
