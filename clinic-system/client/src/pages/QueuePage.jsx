@@ -369,7 +369,15 @@ export default function QueuePage() {
       const data = await res.json().catch(() => null)
 
       if (!res.ok) {
-        throw new Error(data?.error ?? `Could not load queue (${res.status})`)
+        if (res.status === 409) {
+          setActionError(data?.error ?? 'Patient already has an active queue entry')
+          setPendingClinic(null)
+        } else if (res.status === 400) {
+          setActionError(data?.error ?? 'Invalid queue join request')
+        } else {
+          throw new Error(data?.error ?? `Failed to join queue (HTTP ${res.status})`)
+        }
+        return
       }
 
       setQueueEntry(data?.entry ?? null)
@@ -389,9 +397,6 @@ export default function QueuePage() {
     const id = setInterval(fetchQueue, 30_000)
     return () => clearInterval(id)
   }, [queueEntry, fetchQueue])
-
-
-
 
   const handleConfirmJoin = async () => {
     const clinicId = pendingClinic?.id
@@ -436,15 +441,21 @@ export default function QueuePage() {
       }
 
       localStorage.setItem('selectedClinicId', clinicId)
-      setQueueEntry(data?.entry ?? null)
+
+      setQueueEntry({
+        ...(data?.entry ?? {}),
+        clinic_name: clinicName,
+      })
+
       setActionSuccess(`You have joined the queue at ${clinicName}.`)
+      setPendingClinic(null)
     } catch (err) {
       setActionError(err.message)
     } finally {
       setActionLoading(false)
-      setPendingClinic(null)
     }
   }
+
 
   const handleCancelJoin = () => {
     setPendingClinic(null)
@@ -589,7 +600,7 @@ export default function QueuePage() {
         )}
       </main>
 
-      {pendingClinic && (
+      {pendingClinic && !queueEntry && (
         <aside
           className="q-overlay"
           role="dialog"
