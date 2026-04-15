@@ -139,6 +139,9 @@ const styles = `
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 16px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
   }
   .uh-clinic-card {
     background: var(--uh-surface);
@@ -147,8 +150,6 @@ const styles = `
     border: 1px solid rgba(229, 231, 235, 0.7);
     padding: 20px;
     transition: box-shadow 0.15s;
-    display: flex;
-    flex-direction: column;
   }
   .uh-clinic-card:hover { box-shadow: 0 8px 24px rgba(17, 24, 39, 0.1); }
   .uh-clinic-top {
@@ -186,7 +187,7 @@ const styles = `
     border: 1px solid var(--uh-border);
   }
 
-  /* ── Join button ── */
+  /* ── Join Queue button ── */
   .uh-join-btn {
     width: 100%;
     margin-top: auto;
@@ -258,7 +259,6 @@ const TYPE_LABEL = {
 const unique = (arr) => [...new Set(arr)].sort()
 
 export default function PatientDashboard() {
-  const navigate = useNavigate()
 
   // Clinic data state
   const [clinics, setClinics] = useState([])
@@ -353,10 +353,6 @@ export default function PatientDashboard() {
     })
   }, [search, province, district, municipality, facilityType, serviceFilter, clinics])
 
-  // Navigate to Queue page, passing clinic data via location state
-  const handleJoinClinic = (clinic) => {
-    navigate('/queue', { state: { clinic } })
-  }
 
   // Render 
   return (
@@ -487,10 +483,10 @@ export default function PatientDashboard() {
 
                         <button
                           className="uh-join-btn"
-                          onClick={() => handleJoinClinic(clinic)}
+                          onClick={() => handleJoinQueue(clinic)}
                           aria-label={`Join queue at ${clinic.name}`}
                         >
-                          Join Clinic
+                          Join Queue
                         </button>
 
                       </article>
