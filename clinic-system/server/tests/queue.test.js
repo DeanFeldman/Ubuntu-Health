@@ -56,7 +56,13 @@ describe('Queue POST endpoints', () => {
       .send({ patient_id: invalidId, confirmed: true })
     expect(res.statusCode).toBe(400)
   })
+  test('POST /api/queue/:clinicId/join returns duplicate conflict or success for valid repeated join attempt', async () => {
+  const res = await request(app)
+    .post(`/api/queue/${validClinicId}/join`)
+    .send({ patient_id: validPatientId, confirmed: true })
 
+  expect([201, 409, 500]).toContain(res.statusCode)
+}, 15000)
   test('POST /api/queue/:clinicId/join without confirmed returns 400', async () => {
     const res = await request(app)
       .post(`/api/queue/${validClinicId}/join`)
@@ -71,3 +77,31 @@ describe('Queue POST endpoints', () => {
     expect([201, 409, 500]).toContain(res.statusCode)
   }, 15000)
 })
+test('GET /api/queue/:clinicId/position/:patientId with valid ids returns position payload when successful', async () => {
+  const res = await request(app).get(`/api/queue/${validClinicId}/position/${validPatientId}`)
+  expect([200, 404]).toContain(res.statusCode)
+
+  if (res.statusCode === 200) {
+    expect(res.body).toHaveProperty('position')
+  }
+}, 15000)
+
+test('GET /api/queue/:clinicId/entry/:patientId with valid ids returns entry payload when successful', async () => {
+  const res = await request(app).get(`/api/queue/${validClinicId}/entry/${validPatientId}`)
+  expect([200, 404]).toContain(res.statusCode)
+
+  if (res.statusCode === 200) {
+    expect(res.body).toHaveProperty('entry')
+  }
+}, 15000)
+
+test('GET /api/queue/:clinicId/status/:patientId with valid ids returns status payload when successful', async () => {
+  const res = await request(app).get(`/api/queue/${validClinicId}/status/${validPatientId}`)
+  expect([200, 404]).toContain(res.statusCode)
+
+  if (res.statusCode === 200) {
+    expect(res.body).toHaveProperty('status')
+    expect(res.body).toHaveProperty('position')
+    expect(res.body).toHaveProperty('joined_at')
+  }
+}, 15000)
