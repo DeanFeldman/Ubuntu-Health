@@ -97,7 +97,7 @@ function triggerBrowserNotification(notification) {
 
   if (Notification.permission !== 'granted') {
     console.log('[QueueNotifications] Browser notification skipped: permission is not granted', {
-      permission: Notification.permission,
+      permission: Notification.permission
     })
     return
   }
@@ -191,7 +191,8 @@ export default function QueueNotifications() {
 
       setNotifications(nextNotifications)
 
-      const isInitialLoad = previousLatestId.current === null
+      const isInitialLoad =
+  previousLatestId.current === null && latestNotification?.id
       const isNewNotification =
         latestNotification?.id &&
         latestNotification.id !== previousLatestId.current
