@@ -197,7 +197,7 @@ const styles = `
   .sd-toast--error   { border-left: 3px solid #B91C1C; color: #B91C1C; }
 `
 
-const STATUS_SEQUENCE = ['Waiting', 'Called', 'In Consultation', 'Complete']
+const STATUS_SEQUENCE = ['Waiting', 'In Consultation', 'Complete']
 
 const BADGE_CLASS = {
   Waiting: 'sd-badge--waiting',
@@ -344,7 +344,7 @@ export default function StaffDashboard() {
   const stats = {
     total: queue.length,
     waiting: queue.filter(entry => entry.status === 'Waiting').length,
-    called: queue.filter(entry => entry.status === 'Called').length,
+    consultation: queue.filter(entry => entry.status === 'In Consultation').length,
     complete: queue.filter(entry => entry.status === 'Complete').length,
   }
 
@@ -362,7 +362,7 @@ export default function StaffDashboard() {
           </li>
           <li className="sd-stat">
             <p className="sd-stat-label">In Consultation</p>
-            <p className="sd-stat-value sd-stat-value--yellow">{stats.called}</p>
+            <p className="sd-stat-value sd-stat-value--yellow">{stats.consultation}</p>
           </li>
           <li className="sd-stat">
             <p className="sd-stat-label">Complete</p>
