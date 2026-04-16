@@ -416,7 +416,7 @@ export default function QueuePage() {
   }, [fetchQueue])
 
   useEffect(() => {
-    const id = setInterval(fetchQueue, 5000)
+    const id = setInterval(fetchQueue, 50000)
     return () => clearInterval(id)
   }, [fetchQueue])
 

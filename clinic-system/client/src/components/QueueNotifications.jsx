@@ -191,7 +191,7 @@ export default function QueueNotifications() {
 
       setNotifications(nextNotifications)
 
-      const isInitialLoad =
+      /*const isInitialLoad =
   previousLatestId.current === null && latestNotification?.id
       const isNewNotification =
         latestNotification?.id &&
@@ -216,8 +216,35 @@ export default function QueueNotifications() {
           hasLoaded: hasLoaded.current,
           notificationCount: nextNotifications.length,
         })
-      }
+      }*/
+     //start
+     if (latestNotification?.id) {
+  // First time seeing a notification → set baseline ONLY
+  if (previousLatestId.current === null) {
+    console.log('[QueueNotifications] Initial load — storing baseline ID', {
+      latestNotificationId: latestNotification.id,
+    })
 
+    previousLatestId.current = latestNotification.id
+    return
+  }
+
+  // New notification detected
+  if (latestNotification.id !== previousLatestId.current) {
+    console.log('[QueueNotifications] New queue notification detected', {
+      latestNotification,
+      previousLatestId: previousLatestId.current,
+    })
+
+    setPopup(latestNotification)
+    triggerBrowserNotification(latestNotification)
+  }
+
+  // Always update latest seen ID
+  previousLatestId.current = latestNotification.id
+}
+     
+//end
       previousLatestId.current = latestNotification?.id || null
       hasLoaded.current = true
     } catch (err) {
