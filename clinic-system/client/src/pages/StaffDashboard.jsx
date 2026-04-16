@@ -500,7 +500,6 @@ export default function StaffDashboard() {
 
   // ── Derived stats ────────────────────────────────────────
   const stats = {
-    total:   queue.length,
     waiting: queue.filter(e => e.status === 'Waiting').length,
     called:  queue.filter(e => e.status === 'Called').length,
     seen:    queue.filter(e => e.status === 'Seen').length,
@@ -516,15 +515,11 @@ export default function StaffDashboard() {
         {/* Stats */}
         <ul className="sd-stats" aria-label="Queue summary">
           <li className="sd-stat">
-            <p className="sd-stat-label">In queue</p>
-            <p className="sd-stat-value sd-stat-value--black">{stats.total}</p>
-          </li>
-          <li className="sd-stat">
             <p className="sd-stat-label">Waiting</p>
             <p className="sd-stat-value sd-stat-value--blue">{stats.waiting}</p>
           </li>
           <li className="sd-stat">
-            <p className="sd-stat-label">Called</p>
+            <p className="sd-stat-label">In Consultation</p>
             <p className="sd-stat-value sd-stat-value--yellow">{stats.called}</p>
           </li>
           <li className="sd-stat">
