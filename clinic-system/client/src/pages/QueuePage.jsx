@@ -648,17 +648,23 @@ export default function QueuePage() {
           <p className="q-refresh-hint">Updates automatically every 5 seconds.</p>
         )}
 
-        {!loadingQueue && queueEntry && ['Waiting', 'Called'].includes(queueEntry.status) && (
-          <div style={{ marginTop: '12px', textAlign: 'center' }}>
-            <button
-              className="q-btn q-btn-danger"
-              onClick={handleLeaveQueue}
-              disabled={actionLoading}
-            >
-              {actionLoading ? 'Leaving…' : 'Leave Queue'}
-            </button>
-          </div>
-        )}
+       {!loadingQueue && !fetchError && (
+  <>
+    <QueueNotifications />
+
+    {queueEntry && ['Waiting', 'Called'].includes(queueEntry.status) && (
+      <div style={{ marginTop: '12px', textAlign: 'center' }}>
+        <button
+          className="q-btn q-btn-danger"
+          onClick={handleLeaveQueue}
+          disabled={actionLoading}
+        >
+          {actionLoading ? 'Leaving…' : 'Leave Queue'}
+        </button>
+      </div>
+    )}
+  </>
+)}
       </main>
 
       {pendingClinic && !queueEntry && (
