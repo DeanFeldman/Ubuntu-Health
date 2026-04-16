@@ -7,7 +7,7 @@ jest.mock('../context/AuthContext', () => ({
 }))
 
 jest.mock('../pages/LoginPage', () => () => <div>Login Page</div>)
-jest.mock('../pages/PatientDashboard', () => () => <div>Patient Dashboard</div>)
+jest.mock('../pages/PatientDashboard', () => () => <div>Clinic Dashboard</div>)
 jest.mock('../pages/StaffDashboard', () => () => <div>Staff Dashboard</div>)
 jest.mock('../pages/AdminDashboard', () => () => <div>Admin Dashboard</div>)
 jest.mock('../pages/QueuePage', () => () => <div>Queue Page</div>)
@@ -46,7 +46,7 @@ describe('App routing and auth behaviour', () => {
       </MemoryRouter>
     )
 
-    expect(screen.getByText('Patient Dashboard')).toBeInTheDocument()
+    expect(screen.getByText('Clinic Dashboard')).toBeInTheDocument()
   })
 
   test('redirects Patient away from /admin to /clinic', () => {
@@ -63,7 +63,7 @@ describe('App routing and auth behaviour', () => {
       </MemoryRouter>
     )
 
-    expect(screen.getByText('Patient Dashboard')).toBeInTheDocument()
+    expect(screen.getByText('Clinic Dashboard')).toBeInTheDocument()
   })
 
   test('shows loading state', () => {
@@ -131,6 +131,23 @@ describe('App routing and auth behaviour', () => {
       </MemoryRouter>
     )
 
-    expect(screen.getByText('Patient Dashboard')).toBeInTheDocument()
+    expect(screen.getByText('Clinic Dashboard')).toBeInTheDocument()
+  })
+
+  test('allows logged-in user to access /queue', () => {
+    useAuth.mockReturnValue({
+      user: { id: '123' },
+      role: 'Patient',
+      loading: false,
+      logout: jest.fn(),
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/queue']}>
+        <App />
+      </MemoryRouter>
+    )
+
+    expect(screen.getByText('Queue Page')).toBeInTheDocument()
   })
 })

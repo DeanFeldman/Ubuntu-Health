@@ -555,6 +555,17 @@ app.post('/api/queue/:clinicId/join', async (req, res) => {
       return res.status(400).json({ error: 'Invalid ID format' })
     }
 
+    const { data: clinic, error: clinicError } = await supabase
+      .from('clinics')
+      .select('id')
+      .eq('id', clinicId)
+      .maybeSingle()
+
+    if (clinicError) throw clinicError
+    if (!clinic) {
+      return res.status(404).json({ error: 'Clinic not found' })
+    }
+
     // Fetch all active queue entries for this patient across all clinics
     const { data: activeQueues, error: activeError } = await supabase
       .from('queue_entries')
