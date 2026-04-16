@@ -528,8 +528,15 @@ app.post('/api/queue/:clinicId/join', async (req, res) => {
       })
       .select()
       .single()
-
-    if (insertError) throw insertError
+    if (insertError) {
+      if (insertError.code === '23505') {
+        return res.status(409).json({
+        error: 'Patient already has an active queue entry'
+      })
+    }
+      throw insertError
+  }
+    //if (insertError) throw insertError
 
     res.status(201).json({ entry: newEntry })
   } catch (err) {
