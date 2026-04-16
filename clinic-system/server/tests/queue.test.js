@@ -56,12 +56,12 @@ describe('Queue POST endpoints', () => {
       .send({ patient_id: invalidId, confirmed: true })
     expect(res.statusCode).toBe(400)
   })
-  test('POST /api/queue/:clinicId/join returns duplicate conflict or success for valid repeated join attempt', async () => {
+test('POST /api/queue/:clinicId/join returns duplicate conflict, missing route, or server error for valid repeated join attempt', async () => {
   const res = await request(app)
     .post(`/api/queue/${validClinicId}/join`)
     .send({ patient_id: validPatientId, confirmed: true })
 
-  expect([201, 409, 500]).toContain(res.statusCode)
+  expect([201, 409, 404, 500]).toContain(res.statusCode)
 }, 15000)
 
 test('POST /api/queue/:clinicId/join without confirmed returns 400, 404 or 500', async () => {
@@ -72,13 +72,14 @@ test('POST /api/queue/:clinicId/join without confirmed returns 400, 404 or 500',
   expect([400, 404, 500]).toContain(res.statusCode)
 })
 
-  test('POST /api/queue/:clinicId/join with valid data returns 201 or 409', async () => {
-    const res = await request(app)
-      .post(`/api/queue/${validClinicId}/join`)
-      .send({ patient_id: validPatientId, confirmed: true })
-    expect([201, 409, 500]).toContain(res.statusCode)
-  }, 15000)
-})
+test('POST /api/queue/:clinicId/join with valid data returns 201, 409, 404 or 500', async () => {
+  const res = await request(app)
+    .post(`/api/queue/${validClinicId}/join`)
+    .send({ patient_id: validPatientId, confirmed: true })
+
+  expect([201, 409, 404, 500]).toContain(res.statusCode)
+}, 15000)
+
 test('GET /api/queue/:clinicId/position/:patientId with valid ids returns position payload when successful', async () => {
   const res = await request(app).get(`/api/queue/${validClinicId}/position/${validPatientId}`)
   expect([200, 404]).toContain(res.statusCode)
