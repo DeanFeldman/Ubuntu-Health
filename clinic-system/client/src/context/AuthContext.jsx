@@ -11,46 +11,49 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
 
-  async function fetchOrCreateUser(authUser) {
-    try {
-      const { data: existingUser, error: fetchError } = await supabase
-        .from('users')
-        .select('id, role')
-        .eq('id', authUser.id)
-        .maybeSingle()
+async function fetchOrCreateUser(authUser) {
+  try {
+    const { data: existingUser, error: fetchError } = await supabase
+      .from('users')
+      .select('id, role, clinic_id, full_name')
+      .eq('id', authUser.id)
+      .maybeSingle()
 
-      if (fetchError) throw fetchError
+    if (fetchError) throw fetchError
 
-      {/*If user exists, use their stored role */}
-      if (existingUser) {
-        setRole(existingUser.role)
-        return existingUser.role
-      }
+    if (existingUser) {
+      console.log('DB USER:', existingUser)
 
-      {/*Otherwise create a new user with default role "Patient" */}
-      const { data: newUser, error: insertError } = await supabase
-        .from('users')
-        .insert({
-          id: authUser.id,
-          email: authUser.email,
-          full_name: authUser.user_metadata?.full_name || '',
-          role: 'Patient',
-        })
-        .select('role')
-        .single()
+      setUser(existingUser)   // 🔥 IMPORTANT
+      setRole(existingUser.role)
 
-      if (insertError) throw insertError
-
-      const newRole = newUser?.role || 'Patient'
-      setRole(newRole)
-      return newRole
-    } catch (err) {
-      console.error('Error fetching/creating user:', err)
-      setError('Could not load your profile.')
-      setRole(null)
-      return null
+      return existingUser.role
     }
+
+    const { data: newUser, error: insertError } = await supabase
+      .from('users')
+      .insert({
+        id: authUser.id,
+        email: authUser.email,
+        full_name: authUser.user_metadata?.full_name || '',
+        role: 'Patient',
+      })
+      .select('id, role, clinic_id, full_name')
+      .single()
+
+    if (insertError) throw insertError
+
+    setUser(newUser)   // 🔥 IMPORTANT
+    setRole(newUser.role)
+
+    return newUser.role
+  } catch (err) {
+    console.error('Error fetching/creating user:', err)
+    setError('Could not load your profile.')
+    setRole(null)
+    return null
   }
+}
 
   {/*Restores user session from Supabase on page load or refresh */}
   async function restoreSession(session) {
