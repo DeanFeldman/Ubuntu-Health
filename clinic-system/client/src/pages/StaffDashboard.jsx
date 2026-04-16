@@ -357,15 +357,11 @@ export default function StaffDashboard() {
 
         <ul className="sd-stats" aria-label="Queue summary">
           <li className="sd-stat">
-            <p className="sd-stat-label">In queue</p>
-            <p className="sd-stat-value sd-stat-value--black">{stats.total}</p>
-          </li>
-          <li className="sd-stat">
             <p className="sd-stat-label">Waiting</p>
             <p className="sd-stat-value sd-stat-value--blue">{stats.waiting}</p>
           </li>
           <li className="sd-stat">
-            <p className="sd-stat-label">Called</p>
+            <p className="sd-stat-label">In Consultation</p>
             <p className="sd-stat-value sd-stat-value--yellow">{stats.called}</p>
           </li>
           <li className="sd-stat">
