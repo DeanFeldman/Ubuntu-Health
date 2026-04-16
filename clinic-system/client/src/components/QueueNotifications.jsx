@@ -191,11 +191,16 @@ export default function QueueNotifications() {
 
       setNotifications(nextNotifications)
 
-      if (
-        hasLoaded.current &&
+      const isInitialLoad = previousLatestId.current === null
+      const isNewNotification =
         latestNotification?.id &&
         latestNotification.id !== previousLatestId.current
-      ) {
+
+      if (isInitialLoad) {
+        console.log('[QueueNotifications] Browser notification skipped: initial load', {
+          latestNotificationId: latestNotification?.id || null,
+        })
+      } else if (isNewNotification) {
         console.log('[QueueNotifications] New queue notification detected', {
           latestNotification,
           previousLatestId: previousLatestId.current,
