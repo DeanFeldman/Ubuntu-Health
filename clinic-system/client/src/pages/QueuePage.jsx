@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import getApiBase from '../lib/getAPIBase'
+import getApiBase from '../lib/getApiBase'
 // ─── Styles ──────────────────────────────────────────────────────────────────
 const styles = `
   .q-page {
