@@ -126,6 +126,27 @@ create table notifications (
   delivered boolean default false
 );
 
+-- Queue Notifications
+-- Stores position-based queue alerts separately from general notifications
+create table queue_notifications (
+  id uuid default gen_random_uuid() primary key,
+  queue_entry_id uuid not null references queue_entries(id) on delete cascade,
+  patient_id uuid not null references users(id) on delete cascade,
+  clinic_id uuid not null references clinics(id) on delete cascade,
+  type text not null check (
+    type in ('POSITION_3', 'POSITION_2', 'POSITION_1')
+  ),
+  position integer not null check (position in (1, 2, 3)),
+  created_at timestamp default now(),
+  unique (queue_entry_id, type)
+);
+
+create index idx_queue_notifications_patient_created_at
+on queue_notifications (patient_id, created_at desc);
+
+create index idx_queue_notifications_clinic_created_at
+on queue_notifications (clinic_id, created_at desc);
+
 -- Wait Time Logs
 -- Records actual wait times per queue entry for analytics reporting
 -- Stores day of week and hour of day to support trend analysis
