@@ -84,21 +84,55 @@ app.get('/api/queue/:clinicId', async (req, res) => {
       return res.status(400).json({ error: 'Invalid clinic ID format' })
     }
 
-    const { data, error } = await supabase
+    const { data: queueData, error: queueError } = await supabase
       .from('queue_entries')
-      .select('*')
+      .select(`
+        id,
+        clinic_id,
+        patient_id,
+        position,
+        status,
+        joined_at,
+        called_at,
+        completed_at
+      `)
       .eq('clinic_id', clinicId)
-      .eq('status', 'Waiting')
+      .in('status', ['Waiting', 'Called', 'In Consultation'])
       .order('position', { ascending: true })
 
-    if (error) throw error
+    if (queueError) throw queueError
 
-    res.json({ queue: data })
+    const patientIds = [...new Set((queueData || []).map(entry => entry.patient_id))]
+
+    let usersById = {}
+    if (patientIds.length > 0) {
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('id, full_name')
+        .in('id', patientIds)
+
+      if (usersError) throw usersError
+
+      usersById = Object.fromEntries((users || []).map(user => [user.id, user]))
+    }
+
+    const queueWithNames = (queueData || []).map(entry => ({
+      ...entry,
+      patient: usersById[entry.patient_id]
+        ? { full_name: usersById[entry.patient_id].full_name }
+        : null,
+    }))
+
+    res.json({
+      debug: 'manual-name-join-live',
+      queue: queueWithNames,
+    })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to fetch clinic queue' })
   }
 })
+
 
 // GET /api/queue/:clinicId/position/:patientId — retrieve a patient's position in the queue
 app.get('/api/queue/:clinicId/position/:patientId', async (req, res) => {
