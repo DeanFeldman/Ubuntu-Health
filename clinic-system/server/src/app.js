@@ -538,6 +538,95 @@ app.post('/api/queue/:clinicId/join', async (req, res) => {
   }
 })
 
+// PATCH /api/queue/:clinicId/entry/:entryId/status — staff updates a patient's queue status
+const { isValidStatusTransition } = require('./queueValidation')
+
+app.patch('/api/queue/:clinicId/entry/:entryId/status', async (req, res) => {
+  try {
+    const { clinicId, entryId } = req.params
+    const { status } = req.body
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(clinicId) || !uuidRegex.test(entryId)) {
+      return res.status(400).json({ error: 'Invalid ID format' })
+    }
+
+    const validStatuses = ['Waiting', 'In Consultation', 'Complete', 'Called']
+    if (!status || !validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid status value' })
+    }
+
+    // Fetch current entry to validate transition
+    const { data: currentEntry, error: fetchError } = await supabase
+      .from('queue_entries')
+      .select('status')
+      .eq('id', entryId)
+      .eq('clinic_id', clinicId)
+      .maybeSingle()
+
+    if (fetchError) throw fetchError
+    if (!currentEntry) return res.status(404).json({ error: 'Queue entry not found' })
+
+    if (!isValidStatusTransition(currentEntry.status, status)) {
+      return res.status(409).json({ error: `Invalid status transition from ${currentEntry.status} to ${status}` })
+    }
+
+    const updateData = { status }
+    if (status === 'In Consultation') updateData.called_at = new Date().toISOString()
+    if (status === 'Complete') updateData.completed_at = new Date().toISOString()
+
+    const { data: updatedEntry, error: updateError } = await supabase
+      .from('queue_entries')
+      .update(updateData)
+      .eq('id', entryId)
+      .eq('clinic_id', clinicId)
+      .select()
+      .single()
+
+    if (updateError) throw updateError
+
+    res.json({ entry: updatedEntry })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to update queue status' })
+  }
+})
+
+// DELETE /api/queue/:clinicId/entry/:entryId — staff removes a patient from the queue
+app.delete('/api/queue/:clinicId/entry/:entryId', async (req, res) => {
+  try {
+    const { clinicId, entryId } = req.params
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(clinicId) || !uuidRegex.test(entryId)) {
+      return res.status(400).json({ error: 'Invalid ID format' })
+    }
+
+    const { data: existingEntry, error: fetchError } = await supabase
+      .from('queue_entries')
+      .select('id')
+      .eq('id', entryId)
+      .eq('clinic_id', clinicId)
+      .maybeSingle()
+
+    if (fetchError) throw fetchError
+    if (!existingEntry) return res.status(404).json({ error: 'Queue entry not found' })
+
+    const { error: deleteError } = await supabase
+      .from('queue_entries')
+      .delete()
+      .eq('id', entryId)
+      .eq('clinic_id', clinicId)
+
+    if (deleteError) throw deleteError
+
+    res.json({ message: 'Patient removed from queue successfully' })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to remove patient from queue' })
+  }
+})
+
 // Serve built frontend
 const publicPath = path.join(__dirname, '..', 'public')
 app.use(express.static(publicPath))
