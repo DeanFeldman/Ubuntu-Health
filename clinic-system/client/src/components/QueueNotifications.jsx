@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import getApiBase from '../lib/getApiBase'
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
+
+const API_BASE = getApiBase()
 
 const NOTIFICATION_MESSAGES = {
   POSITION_3: 'You are now 3rd in the queue.',
