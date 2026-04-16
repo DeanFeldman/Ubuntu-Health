@@ -83,7 +83,10 @@ create table queue_entries (
   called_at timestamp,      -- set when staff calls the patient
   completed_at timestamp    -- set when consultation is marked complete
 );
-
+-- Prevent multiple active queue entries per patient
+create unique index unique_active_queue_per_patient
+on queue_entries (patient_id)
+where status <> 'Complete';
 
 -- ─── FUTURE SPRINT TABLES ─────────────────────────────────────────────────────
 
