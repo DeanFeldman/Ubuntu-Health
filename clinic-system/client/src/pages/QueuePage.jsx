@@ -188,6 +188,12 @@ const styles = `
     border: 1px solid var(--uh-border);
   }
   .q-btn-ghost:hover { background: #E5E7EB; }
+  .q-btn-danger {
+    background: #FEF2F2;
+    color: #B91C1C;
+    border: 1px solid #FECACA;
+  }
+  .q-btn-danger:hover { background: #FEE2E2; }
   .q-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 
   .q-loading {
@@ -381,7 +387,23 @@ export default function QueuePage() {
         return
       }
 
-      setQueueEntry(data?.entry ?? null)
+      const entry = data?.entry ?? null
+
+      if (entry && !entry.clinic_name) {
+        try {
+          const clinicRes = await fetch(`${API_BASE}/api/clinics/${clinicId}`, {
+            headers: { Accept: 'application/json' },
+          })
+          if (clinicRes.ok) {
+            const clinicData = await clinicRes.json().catch(() => null)
+            entry.clinic_name = clinicData?.name ?? clinicData?.clinic?.name ?? null
+          }
+        } catch {
+          // Non-fatal — clinic name just won't show
+        }
+      }
+
+      setQueueEntry(entry)
     } catch (err) {
       setFetchError(err.message)
     } finally {
@@ -460,6 +482,40 @@ export default function QueuePage() {
   const handleCancelJoin = () => {
     setPendingClinic(null)
     setActionError(null)
+  }
+
+  const handleLeaveQueue = async () => {
+    const clinicId = localStorage.getItem('selectedClinicId')
+    const entryId = queueEntry?.id
+
+    if (!clinicId || !entryId) {
+      setActionError('Could not find your queue entry.')
+      return
+    }
+
+    try {
+      setActionLoading(true)
+      setActionError(null)
+      setActionSuccess(null)
+
+      const res = await fetch(`${API_BASE}/api/queue/${clinicId}/entry/${entryId}`, {
+        method: 'DELETE',
+      })
+
+      const data = await res.json().catch(() => null)
+
+      if (!res.ok) {
+        throw new Error(data?.error ?? `Failed to leave queue (HTTP ${res.status})`)
+      }
+
+      localStorage.removeItem('selectedClinicId')
+      setQueueEntry(null)
+      setActionSuccess('You have been removed from the queue.')
+    } catch (err) {
+      setActionError(err.message)
+    } finally {
+      setActionLoading(false)
+    }
   }
 
   return (
@@ -546,7 +602,6 @@ export default function QueuePage() {
                 <hr className="q-position-divider" aria-hidden="true" />
                 <address className="q-position-info">
                   <h2>{queueEntry.clinic_name ?? 'Clinic'}</h2>
-                  <p>{queueEntry.clinic_address ?? 'Address unavailable'}</p>
                 </address>
               </section>
             )}
@@ -555,7 +610,6 @@ export default function QueuePage() {
               <section className="q-position-hero">
                 <address className="q-position-info">
                   <h2>{queueEntry.clinic_name ?? 'Clinic'}</h2>
-                  <p>{queueEntry.clinic_address ?? 'Address unavailable'}</p>
                 </address>
               </section>
             )}
@@ -586,11 +640,6 @@ export default function QueuePage() {
                   <dd className="q-detail-val">{queueEntry.estimated_wait_minutes} min</dd>
                 </span>
               )}
-
-              <span className="q-detail-row">
-                <dt className="q-detail-key">Queue reference</dt>
-                <dd className="q-detail-val">{queueEntry.reference ?? queueEntry.id}</dd>
-              </span>
             </dl>
           </article>
         )}
@@ -599,8 +648,16 @@ export default function QueuePage() {
           <p className="q-refresh-hint">Updates automatically every 5 seconds.</p>
         )}
 
-        {!loadingQueue && !fetchError && (
-          <QueueNotifications />
+        {!loadingQueue && queueEntry && ['Waiting', 'Called'].includes(queueEntry.status) && (
+          <div style={{ marginTop: '12px', textAlign: 'center' }}>
+            <button
+              className="q-btn q-btn-danger"
+              onClick={handleLeaveQueue}
+              disabled={actionLoading}
+            >
+              {actionLoading ? 'Leaving…' : 'Leave Queue'}
+            </button>
+          </div>
         )}
       </main>
 
@@ -619,6 +676,13 @@ export default function QueuePage() {
             <p className="q-modal-subtitle" id="q-modal-desc">
               You are about to join the queue at the following clinic. You can leave the queue at any time.
             </p>
+
+            {actionError && (
+              <p className="q-alert q-alert-error" role="alert">
+                <span className="q-alert-icon">⚠</span>
+                {actionError}
+              </p>
+            )}
 
             <address className="q-modal-clinic">
               <strong>{pendingClinic.name}</strong>
