@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-
+import getApiBase from '../lib/getAPIBase'
 // ─── Styles ──────────────────────────────────────────────────────────────────
 const styles = `
   .q-page {
@@ -321,8 +321,8 @@ const STATUS_LABEL = {
 export default function QueuePage() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
-
+  //const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
+  const API_BASE = getApiBase()
   const [queueEntry, setQueueEntry] = useState(null)
   const [loadingQueue, setLoadingQueue] = useState(true)
   const [fetchError, setFetchError] = useState(null)

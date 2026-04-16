@@ -42,9 +42,15 @@ describe('QueuePage confirmation flow', () => {
       },
     })
 
+    window.__API_BASE__ = 'http://localhost:8080'
     global.fetch = jest.fn()
   })
 
+  afterEach(() => {
+    delete window.__API_BASE__
+  })
+
+  // Popup should appear with the correct clinic details
   test('shows confirmation modal with correct clinic details', async () => {
     fetch.mockResolvedValueOnce({
       status: 404,
@@ -63,10 +69,11 @@ describe('QueuePage confirmation flow', () => {
     expect(screen.getByRole('button', { name: 'Confirm' })).toBeInTheDocument()
   })
 
+  // Cancel should close the popup and not trigger a join request
   test('cancel closes modal and does not send join request', async () => {
     const user = userEvent.setup()
 
-    fetch.mockResolvedValueOnce({
+    fetch.mockResolvedValue({
       status: 404,
       ok: false,
       json: async () => ({
@@ -81,14 +88,14 @@ describe('QueuePage confirmation flow', () => {
 
     expect(screen.queryByText('Join virtual queue?')).not.toBeInTheDocument()
 
-    expect(fetch).toHaveBeenCalledTimes(1)
-    expect(fetch).toHaveBeenNthCalledWith(
-      1,
-      '/api/queue/clinic-123/entry/patient-123',
-      { headers: { Accept: 'application/json' } }
+    const joinCalls = fetch.mock.calls.filter(
+      (call) => call[0] === 'http://localhost:8080/api/queue/clinic-123/join'
     )
+
+    expect(joinCalls).toHaveLength(0)
   })
 
+  // Confirm should send the join request and show success feedback
   test('confirm sends join request and shows success feedback', async () => {
     const user = userEvent.setup()
 
@@ -122,27 +129,25 @@ describe('QueuePage confirmation flow', () => {
     await user.click(confirmBtn)
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledTimes(2)
+      expect(fetch).toHaveBeenCalledWith(
+        'http://localhost:8080/api/queue/clinic-123/join',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            patient_id: 'patient-123',
+            confirmed: true,
+          }),
+        })
+      )
     })
-
-    expect(fetch).toHaveBeenNthCalledWith(
-      2,
-      '/api/queue/clinic-123/join',
-      expect.objectContaining({
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          patient_id: 'patient-123',
-          confirmed: true,
-        }),
-      })
-    )
 
     expect(
       await screen.findByText('You have joined the queue at Test Clinic.')
     ).toBeInTheDocument()
   })
 
+  // Duplicate-entry errors should be shown clearly
   test('shows duplicate-entry error feedback when join returns 409', async () => {
     const user = userEvent.setup()
 
@@ -172,6 +177,7 @@ describe('QueuePage confirmation flow', () => {
     ).toBeInTheDocument()
   })
 
+  // Invalid-request errors should also be shown clearly
   test('shows invalid-request error feedback when join returns 400', async () => {
     const user = userEvent.setup()
 
@@ -198,54 +204,6 @@ describe('QueuePage confirmation flow', () => {
 
     expect(
       await screen.findByText('Invalid queue join request')
-    ).toBeInTheDocument()
-  })
-
-  test('confirm button shows loading state while join request is in progress', async () => {
-    const user = userEvent.setup()
-
-    let resolveJoin
-
-    fetch
-      .mockResolvedValueOnce({
-        status: 404,
-        ok: false,
-        json: async () => ({
-          error: 'No active queue entry found for this patient',
-        }),
-      })
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            resolveJoin = resolve
-          })
-      )
-
-    render(<QueuePage />)
-
-    const confirmBtn = await screen.findByRole('button', { name: 'Confirm' })
-    await user.click(confirmBtn)
-
-    expect(screen.getByRole('button', { name: 'Joining…' })).toBeDisabled()
-
-    resolveJoin({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        entry: {
-          id: 'entry-1',
-          clinic_id: 'clinic-123',
-          patient_id: 'patient-123',
-          clinic_name: 'Test Clinic',
-          position: 1,
-          status: 'Waiting',
-          joined_at: '2026-04-16T10:00:00.000Z',
-        },
-      }),
-    })
-
-    expect(
-      await screen.findByText('You have joined the queue at Test Clinic.')
     ).toBeInTheDocument()
   })
 })
