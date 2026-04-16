@@ -5,6 +5,7 @@ const POSITION_NOTIFICATION_TYPES = {
 }
 
 const NOTIFIABLE_STATUSES = new Set(['Waiting', 'Called'])
+const CONSULTATION_STATUS = 'In Consultation'
 
 let supabase = null
 
@@ -35,6 +36,19 @@ function getPositionNotification(oldEntry, newEntry) {
   }
 }
 
+function getStatusNotification(oldEntry, newEntry) {
+  if (oldEntry?.status === CONSULTATION_STATUS) return null
+  if (newEntry?.status !== CONSULTATION_STATUS) return null
+
+  return {
+    queue_entry_id: newEntry.id,
+    patient_id: newEntry.patient_id,
+    clinic_id: newEntry.clinic_id,
+    type: 'IN_CONSULTATION',
+    position: null,
+  }
+}
+
 function getQueueNotificationRows(oldQueue, newQueue) {
   const oldEntriesById = new Map(
     (oldQueue || [])
@@ -44,9 +58,11 @@ function getQueueNotificationRows(oldQueue, newQueue) {
 
   return (newQueue || []).reduce((notifications, newEntry) => {
     const oldEntry = oldEntriesById.get(newEntry?.id)
-    const notification = getPositionNotification(oldEntry, newEntry)
+    const positionNotification = getPositionNotification(oldEntry, newEntry)
+    const statusNotification = getStatusNotification(oldEntry, newEntry)
 
-    if (notification) notifications.push(notification)
+    if (positionNotification) notifications.push(positionNotification)
+    if (statusNotification) notifications.push(statusNotification)
     return notifications
   }, [])
 }
@@ -77,19 +93,6 @@ async function checkAndTriggerNotifications(oldQueue, newQueue) {
 async function createNotification(notification) {
   if (!supabase) {
     throw new Error('Queue notification service is not configured')
-  }
-
-  const { data: existingNotification, error: fetchError } = await supabase
-    .from('queue_notifications')
-    .select('id')
-    .eq('queue_entry_id', notification.queue_entry_id)
-    .eq('type', notification.type)
-    .maybeSingle()
-
-  if (fetchError) throw fetchError
-
-  if (existingNotification) {
-    return null
   }
 
   const { data, error } = await supabase

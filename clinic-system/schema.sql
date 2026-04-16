@@ -134,11 +134,10 @@ create table queue_notifications (
   patient_id uuid not null references users(id) on delete cascade,
   clinic_id uuid not null references clinics(id) on delete cascade,
   type text not null check (
-    type in ('POSITION_3', 'POSITION_2', 'POSITION_1')
+    type in ('POSITION_3', 'POSITION_2', 'POSITION_1', 'IN_CONSULTATION')
   ),
-  position integer not null check (position in (1, 2, 3)),
-  created_at timestamp default now(),
-  unique (queue_entry_id, type)
+  position integer check (position is null or position in (1, 2, 3)),
+  created_at timestamp default now()
 );
 
 create index idx_queue_notifications_patient_created_at
