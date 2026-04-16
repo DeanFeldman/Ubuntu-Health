@@ -585,6 +585,26 @@ app.patch('/api/queue/:clinicId/entry/:entryId/status', async (req, res) => {
 
     if (updateError) throw updateError
 
+    // Insert notification for the patient on status change
+    const notificationMessages = {
+      'Called': 'You are being called — please make your way to the consultation room.',
+      'In Consultation': 'Your consultation has started.',
+      'Complete': 'Your visit is complete. Thank you for using Ubuntu Health.'
+    }
+
+    if (notificationMessages[status]) {
+      await supabase
+        .from('notifications')
+        .insert({
+          user_id: updatedEntry.patient_id,
+          type: 'queue_alert',
+          channel: 'push',
+          message: notificationMessages[status],
+          sent_at: new Date().toISOString(),
+          delivered: false
+        })
+    }
+
     res.json({ entry: updatedEntry })
   } catch (err) {
     console.error(err)
