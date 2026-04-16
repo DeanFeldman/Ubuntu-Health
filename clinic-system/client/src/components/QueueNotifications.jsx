@@ -97,7 +97,7 @@ function triggerBrowserNotification(notification) {
 
   if (Notification.permission !== 'granted') {
     console.log('[QueueNotifications] Browser notification skipped: permission is not granted', {
-      permission: Notification.permission,
+      permission: Notification.permission
     })
     return
   }
@@ -134,7 +134,7 @@ export default function QueueNotifications() {
   const [error, setError] = useState('')
   const [popup, setPopup] = useState(null)
   const previousLatestId = useRef(null)
-  const hasLoaded = useRef(false)
+  
 
   useEffect(() => {
     console.log('[QueueNotifications] Notification permission check on mount', {
@@ -169,7 +169,7 @@ export default function QueueNotifications() {
     if (!user?.id) {
       setNotifications([])
       previousLatestId.current = null
-      hasLoaded.current = false
+      
       return
     }
 
@@ -191,11 +191,17 @@ export default function QueueNotifications() {
 
       setNotifications(nextNotifications)
 
-      if (
-        hasLoaded.current &&
+      /*const isInitialLoad =
+  previousLatestId.current === null && latestNotification?.id
+      const isNewNotification =
         latestNotification?.id &&
         latestNotification.id !== previousLatestId.current
-      ) {
+
+      if (isInitialLoad) {
+        console.log('[QueueNotifications] Browser notification skipped: initial load', {
+          latestNotificationId: latestNotification?.id || null,
+        })
+      } else if (isNewNotification) {
         console.log('[QueueNotifications] New queue notification detected', {
           latestNotification,
           previousLatestId: previousLatestId.current,
@@ -210,10 +216,37 @@ export default function QueueNotifications() {
           hasLoaded: hasLoaded.current,
           notificationCount: nextNotifications.length,
         })
-      }
+      }*/
+     //start
+     if (latestNotification?.id) {
+  // First time seeing a notification → set baseline ONLY
+  if (previousLatestId.current === null) {
+    console.log('[QueueNotifications] Initial load — storing baseline ID', {
+      latestNotificationId: latestNotification.id,
+    })
 
-      previousLatestId.current = latestNotification?.id || null
-      hasLoaded.current = true
+    previousLatestId.current = latestNotification.id
+    return
+  }
+
+  // New notification detected
+  if (latestNotification.id !== previousLatestId.current) {
+    console.log('[QueueNotifications] New queue notification detected', {
+      latestNotification,
+      previousLatestId: previousLatestId.current,
+    })
+
+    setPopup(latestNotification)
+    triggerBrowserNotification(latestNotification)
+  }
+
+  // Always update latest seen ID
+  previousLatestId.current = latestNotification.id
+}
+     
+//end
+     
+      
     } catch (err) {
       setError(err.message || 'Could not load queue notifications.')
     } finally {

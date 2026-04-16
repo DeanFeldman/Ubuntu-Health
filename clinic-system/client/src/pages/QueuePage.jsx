@@ -416,7 +416,7 @@ export default function QueuePage() {
   }, [fetchQueue])
 
   useEffect(() => {
-    const id = setInterval(fetchQueue, 5000)
+    const id = setInterval(fetchQueue, 50000)
     return () => clearInterval(id)
   }, [fetchQueue])
 
@@ -648,11 +648,9 @@ export default function QueuePage() {
           <p className="q-refresh-hint">Updates automatically every 5 seconds.</p>
         )}
 
-       {!loadingQueue && !fetchError && (
-  <>
-    <QueueNotifications />
+        <QueueNotifications />
 
-    {queueEntry && ['Waiting', 'Called'].includes(queueEntry.status) && (
+        {!loadingQueue && !fetchError && queueEntry && ['Waiting', 'Called'].includes(queueEntry.status) && (
       <div style={{ marginTop: '12px', textAlign: 'center' }}>
         <button
           className="q-btn q-btn-danger"
@@ -663,8 +661,6 @@ export default function QueuePage() {
         </button>
       </div>
     )}
-  </>
-)}
       </main>
 
       {pendingClinic && !queueEntry && (
