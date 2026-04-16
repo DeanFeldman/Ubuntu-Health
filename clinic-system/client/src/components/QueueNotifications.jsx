@@ -134,7 +134,7 @@ export default function QueueNotifications() {
   const [error, setError] = useState('')
   const [popup, setPopup] = useState(null)
   const previousLatestId = useRef(null)
-  const hasLoaded = useRef(false)
+  
 
   useEffect(() => {
     console.log('[QueueNotifications] Notification permission check on mount', {
@@ -169,7 +169,7 @@ export default function QueueNotifications() {
     if (!user?.id) {
       setNotifications([])
       previousLatestId.current = null
-      hasLoaded.current = false
+      
       return
     }
 
@@ -245,8 +245,8 @@ export default function QueueNotifications() {
 }
      
 //end
-      previousLatestId.current = latestNotification?.id || null
-      hasLoaded.current = true
+     
+      
     } catch (err) {
       setError(err.message || 'Could not load queue notifications.')
     } finally {
