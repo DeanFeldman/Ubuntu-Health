@@ -393,10 +393,9 @@ export default function QueuePage() {
   }, [fetchQueue])
 
   useEffect(() => {
-    if (!queueEntry || !['Waiting', 'Called'].includes(queueEntry.status)) return
-    const id = setInterval(fetchQueue, 30_000)
+    const id = setInterval(fetchQueue, 5000)
     return () => clearInterval(id)
-  }, [queueEntry, fetchQueue])
+  }, [fetchQueue])
 
   const handleConfirmJoin = async () => {
     const clinicId = pendingClinic?.id
@@ -596,7 +595,7 @@ export default function QueuePage() {
         )}
 
         {!loadingQueue && queueEntry && ['Waiting', 'Called'].includes(queueEntry.status) && (
-          <p className="q-refresh-hint">Updates automatically every 30 seconds.</p>
+          <p className="q-refresh-hint">Updates automatically every 5 seconds.</p>
         )}
       </main>
 

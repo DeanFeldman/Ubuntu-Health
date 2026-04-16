@@ -19,6 +19,41 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey)
 
+async function resequenceQueue(clinicId) {
+  const { data: activeEntries, error: fetchError } = await supabase
+    .from('queue_entries')
+    .select('id, patient_id, joined_at')
+    .eq('clinic_id', clinicId)
+    .in('status', ['Waiting', 'Called', 'In Consultation'])
+    .order('joined_at', { ascending: true })
+
+  if (fetchError) throw fetchError
+
+  for (let i = 0; i < activeEntries.length; i += 1) {
+    const entry = activeEntries[i]
+    const newPosition = i + 1
+
+    const { error: updateError } = await supabase
+      .from('queue_entries')
+      .update({ position: newPosition })
+      .eq('id', entry.id)
+      .eq('clinic_id', clinicId)
+
+    if (updateError) throw updateError
+  }
+
+  const { data: checkRows, error: checkError } = await supabase
+    .from('queue_entries')
+    .select('id, patient_id, position, status')
+    .eq('clinic_id', clinicId)
+    .in('status', ['Waiting', 'Called', 'In Consultation'])
+    .order('position', { ascending: true })
+
+  if (checkError) throw checkError
+
+  console.log('QUEUE AFTER RESEQUENCE:', checkRows)
+}
+
 // API health check
 app.get('/api', (req, res) => {
   res.json({ message: 'Ubuntu Health API running' })
@@ -626,6 +661,14 @@ app.patch('/api/queue/:clinicId/entry/:entryId/status', async (req, res) => {
 
     if (updateError) throw updateError
 
+    if (status === 'Complete') {
+      const { error: resequenceError } = await supabase.rpc('resequence_queue', {
+        clinic: clinicId,
+      })
+
+      if (resequenceError) throw resequenceError    
+    }
+
     // Insert notification for the patient on status change
     const notificationMessages = {
       'Called': 'You are being called — please make your way to the consultation room.',
@@ -680,6 +723,12 @@ app.delete('/api/queue/:clinicId/entry/:entryId', async (req, res) => {
       .eq('clinic_id', clinicId)
 
     if (deleteError) throw deleteError
+
+    const { error: resequenceError } = await supabase.rpc('resequence_queue', {
+      clinic: clinicId,
+    })
+
+    if (resequenceError) throw resequenceError
 
     res.json({ message: 'Patient removed from queue successfully' })
   } catch (err) {
