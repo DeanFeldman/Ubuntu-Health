@@ -307,9 +307,17 @@ export default function StaffDashboard() {
       }
 
       setQueue(current =>
-        current.map(item => (item.id === entry.id ? data.entry : item))
+        current.map(item =>
+          item.id === entry.id
+            ? {
+                ...item,
+                ...data.entry,
+                patient: data.entry.patient || item.patient,
+              }
+            : item
+        )
       )
-
+      
       showToast(`${getDisplayName(entry)} marked as ${nextStatus}.`, 'success')
     } catch (err) {
       showToast(err.message, 'error')
