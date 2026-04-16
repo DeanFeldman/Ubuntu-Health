@@ -180,10 +180,13 @@ export default function Layout() {
                 <li><NavLink to="/staff">Staff</NavLink></li>
               )}
               {canAccess(role, 'clinic') && (
-                <li><NavLink to="/clinic">Patient</NavLink></li>
+                <li><NavLink to="/clinic">Clinic</NavLink></li>
+              )}
+              {user && (
+                <li><NavLink to="/queue">Queue</NavLink></li>
               )}
             </ul>
-
+            
             {user && (
               <menu className="uh-nav-actions">
                 {isQueuePage && (
