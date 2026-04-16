@@ -105,3 +105,60 @@ test('GET /api/queue/:clinicId/status/:patientId with valid ids returns status p
     expect(res.body).toHaveProperty('joined_at')
   }
 }, 15000)
+
+describe('Queue staff action endpoints', () => {
+  const validEntryId = '00000000-0000-0000-0000-000000000003'
+
+  test('PATCH /api/queue/:clinicId/entry/:entryId/status with invalid clinic id returns 400', async () => {
+    const res = await request(app)
+      .patch(`/api/queue/${invalidId}/entry/${validEntryId}/status`)
+      .send({ status: 'In Consultation' })
+    expect(res.statusCode).toBe(400)
+  })
+
+  test('PATCH /api/queue/:clinicId/entry/:entryId/status with invalid entry id returns 400', async () => {
+    const res = await request(app)
+      .patch(`/api/queue/${validClinicId}/entry/${invalidId}/status`)
+      .send({ status: 'In Consultation' })
+    expect(res.statusCode).toBe(400)
+  })
+
+  test('PATCH /api/queue/:clinicId/entry/:entryId/status with invalid status returns 400', async () => {
+    const res = await request(app)
+      .patch(`/api/queue/${validClinicId}/entry/${validEntryId}/status`)
+      .send({ status: 'InvalidStatus' })
+    expect(res.statusCode).toBe(400)
+  })
+
+  test('PATCH /api/queue/:clinicId/entry/:entryId/status with no status returns 400', async () => {
+    const res = await request(app)
+      .patch(`/api/queue/${validClinicId}/entry/${validEntryId}/status`)
+      .send({})
+    expect(res.statusCode).toBe(400)
+  })
+
+  test('PATCH /api/queue/:clinicId/entry/:entryId/status with valid data returns 200, 404 or 409', async () => {
+    const res = await request(app)
+      .patch(`/api/queue/${validClinicId}/entry/${validEntryId}/status`)
+      .send({ status: 'In Consultation' })
+    expect([200, 404, 409]).toContain(res.statusCode)
+  }, 15000)
+
+  test('DELETE /api/queue/:clinicId/entry/:entryId with invalid clinic id returns 400', async () => {
+    const res = await request(app)
+      .delete(`/api/queue/${invalidId}/entry/${validEntryId}`)
+    expect(res.statusCode).toBe(400)
+  })
+
+  test('DELETE /api/queue/:clinicId/entry/:entryId with invalid entry id returns 400', async () => {
+    const res = await request(app)
+      .delete(`/api/queue/${validClinicId}/entry/${invalidId}`)
+    expect(res.statusCode).toBe(400)
+  })
+
+  test('DELETE /api/queue/:clinicId/entry/:entryId with valid ids returns 200 or 404', async () => {
+    const res = await request(app)
+      .delete(`/api/queue/${validClinicId}/entry/${validEntryId}`)
+    expect([200, 404]).toContain(res.statusCode)
+  }, 15000)
+})

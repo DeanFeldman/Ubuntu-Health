@@ -147,3 +147,21 @@ create table visit_notes (
   note text check (char_length(note) <= 500),
   created_at timestamp default now()
 );
+
+-- Role Requests
+-- Records requests made by users to change their role (e.g. Patient → Staff)
+-- Admins can approve or reject requests via the admin dashboard
+-- Status transitions: pending → approved or rejected
+-- A user can only have one pending request per role at a time (enforced by unique index)
+create table role_requests (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid not null references users(id) on delete cascade,
+  requested_role text not null check (requested_role in ('Patient', 'Staff', 'Admin')),
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  created_at timestamp with time zone default now()
+);
+
+-- Prevents duplicate pending requests for the same role per user
+create unique index role_requests_one_pending_per_role
+  on role_requests (user_id, requested_role)
+  where status = 'pending';
