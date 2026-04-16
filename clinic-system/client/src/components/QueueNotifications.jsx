@@ -51,13 +51,14 @@ const styles = `
   .queue-notification-popup {
     background: #111827;
     border-radius: 8px;
-    bottom: 20px;
     box-shadow: 0 16px 36px rgba(17, 24, 39, 0.22);
     color: white;
+    left: 50%;
     max-width: min(360px, calc(100vw - 32px));
     padding: 14px 16px;
     position: fixed;
-    right: 16px;
+    top: 84px;
+    transform: translateX(-50%);
     z-index: 50;
   }
 
@@ -115,6 +116,39 @@ function triggerBrowserNotification(notification) {
     })
   } catch (err) {
     console.error('[QueueNotifications] Browser notification failed', err)
+  }
+}
+
+function playNotificationSound() {
+  const AudioContext = window.AudioContext || window.webkitAudioContext
+
+  if (!AudioContext) return
+
+  try {
+    const audioContext = new AudioContext()
+    const gainNode = audioContext.createGain()
+
+    gainNode.connect(audioContext.destination)
+    gainNode.gain.setValueAtTime(0.001, audioContext.currentTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.18, audioContext.currentTime + 0.02)
+    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.42)
+
+    ;[880, 1175].forEach((frequency, index) => {
+      const oscillator = audioContext.createOscillator()
+      const startTime = audioContext.currentTime + index * 0.12
+
+      oscillator.type = 'sine'
+      oscillator.frequency.setValueAtTime(frequency, startTime)
+      oscillator.connect(gainNode)
+      oscillator.start(startTime)
+      oscillator.stop(startTime + 0.18)
+    })
+
+    setTimeout(() => {
+      audioContext.close()
+    }, 600)
+  } catch (err) {
+    console.error('[QueueNotifications] Notification sound failed', err)
   }
 }
 
@@ -237,6 +271,7 @@ export default function QueueNotifications() {
     })
 
     setPopup(latestNotification)
+    playNotificationSound()
     triggerBrowserNotification(latestNotification)
   }
 
