@@ -5,10 +5,13 @@ import getApiBase from '../lib/getApiBase'
 const API_BASE =  getApiBase()
 
 const NOTIFICATION_MESSAGES = {
-  POSITION_3: 'You are now 3rd in the queue.',
-  POSITION_2: 'You are now 2nd in the queue.',
-  POSITION_1: 'You are next in the queue.',
+  POSITION_3: 'You are now 3rd in the queue',
+  POSITION_2: 'You are now 2nd in the queue',
+  POSITION_1: 'You are next in line',
+  IN_CONSULTATION: 'Please proceed to consultation',
 }
+
+const BROWSER_NOTIFICATION_TITLE = 'Ubuntu Health queue update'
 
 const styles = `
   .queue-notifications {
@@ -69,7 +72,16 @@ const styles = `
 `
 
 function getNotificationMessage(type) {
-  return NOTIFICATION_MESSAGES[type] || 'Queue update available.'
+  return NOTIFICATION_MESSAGES[type] || 'Queue update available'
+}
+
+function triggerBrowserNotification(notification) {
+  if (!notification || !('Notification' in window)) return
+  if (Notification.permission !== 'granted') return
+
+  new Notification(BROWSER_NOTIFICATION_TITLE, {
+    body: getNotificationMessage(notification.type),
+  })
 }
 
 function formatNotificationTime(createdAt) {
@@ -89,6 +101,13 @@ export default function QueueNotifications() {
   const [popup, setPopup] = useState(null)
   const previousLatestId = useRef(null)
   const hasLoaded = useRef(false)
+
+  useEffect(() => {
+    if (!('Notification' in window)) return
+    if (Notification.permission !== 'default') return
+
+    Notification.requestPermission()
+  }, [])
 
   const fetchNotifications = useCallback(async ({ showLoading = false } = {}) => {
     if (!user?.id) {
@@ -122,6 +141,7 @@ export default function QueueNotifications() {
         latestNotification.id !== previousLatestId.current
       ) {
         setPopup(latestNotification)
+        triggerBrowserNotification(latestNotification)
       }
 
       previousLatestId.current = latestNotification?.id || null
