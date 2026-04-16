@@ -77,34 +77,45 @@ describe('queue notification transition detection', () => {
     expect(rows).toEqual([])
   })
 
-  test('does not notify completed or in-consultation entries', () => {
+  test('does not notify completed entries', () => {
     const rows = getQueueNotificationRows(
       [
         { ...baseEntry, id: 'complete', position: 4 },
-        { ...baseEntry, id: 'consultation', position: 4 },
       ],
       [
         { ...baseEntry, id: 'complete', position: 3, status: 'Complete' },
-        { ...baseEntry, id: 'consultation', position: 3, status: 'In Consultation' },
       ]
     )
 
     expect(rows).toEqual([])
   })
+
+  test('detects status transition into consultation', () => {
+    const rows = getQueueNotificationRows(
+      [{ ...baseEntry, id: 'entry-1', position: 4, status: 'Waiting' }],
+      [{ ...baseEntry, id: 'entry-1', position: 4, status: 'In Consultation' }]
+    )
+
+    expect(rows).toEqual([
+      {
+        queue_entry_id: 'entry-1',
+        patient_id: 'patient-1',
+        clinic_id: 'clinic-1',
+        type: 'IN_CONSULTATION',
+        position: null,
+      },
+    ])
+  })
 })
 
 describe('checkAndTriggerNotifications', () => {
   test('creates detected queue notification rows', async () => {
-    const maybeSingle = jest.fn().mockResolvedValue({ data: null, error: null })
     const single = jest.fn().mockResolvedValue({
       data: { id: 'notification-1' },
       error: null,
     })
     const insert = jest.fn(() => ({ select: () => ({ single }) }))
     const builder = {
-      select: jest.fn(() => builder),
-      eq: jest.fn(() => builder),
-      maybeSingle,
       insert,
     }
     const from = jest.fn(() => builder)
@@ -127,31 +138,31 @@ describe('checkAndTriggerNotifications', () => {
     expect(rows).toEqual([{ id: 'notification-1' }])
   })
 
-  test('does not insert when the notification already exists', async () => {
-    const maybeSingle = jest.fn().mockResolvedValue({
-      data: { id: 'existing-notification' },
-      error: null,
-    })
-    const insert = jest.fn()
+  test('always inserts a new notification row for each event', async () => {
+    const single = jest
+      .fn()
+      .mockResolvedValueOnce({ data: { id: 'notification-1' }, error: null })
+      .mockResolvedValueOnce({ data: { id: 'notification-2' }, error: null })
+    const insert = jest.fn(() => ({ select: () => ({ single }) }))
     const builder = {
-      select: jest.fn(() => builder),
-      eq: jest.fn(() => builder),
-      maybeSingle,
       insert,
     }
     const from = jest.fn(() => builder)
 
     configureQueueNotificationService({ from })
 
-    const created = await createNotification({
+    const notification = {
       queue_entry_id: 'entry-1',
       patient_id: 'patient-1',
       clinic_id: 'clinic-1',
       type: 'POSITION_3',
       position: 3,
-    })
+    }
+    const firstCreated = await createNotification(notification)
+    const secondCreated = await createNotification(notification)
 
-    expect(created).toBeNull()
-    expect(insert).not.toHaveBeenCalled()
+    expect(firstCreated).toEqual({ id: 'notification-1' })
+    expect(secondCreated).toEqual({ id: 'notification-2' })
+    expect(insert).toHaveBeenCalledTimes(2)
   })
 })
