@@ -69,6 +69,25 @@ describe('Queue join validation helpers', () => {
     expect(validateQueueJoin('patient-1', activeQueues, true)).toBe(false)
   })
 
+  // Allows rejoining after completion
+  test('allows a patient to join again if their previous queue entry is Complete', () => {
+    const activeQueues = [
+      { patient_id: 'patient-1', clinic_id: 'clinic-a', status: 'Complete' },
+    ]
+
+    expect(canJoinQueue('patient-1', activeQueues)).toBe(true)
+    expect(validateQueueJoin('patient-1', activeQueues, true)).toBe(true)
+  })
+
+  // Another patient's active queue should not block join
+  test('allows join when another patient has an active queue entry', () => {
+    const activeQueues = [
+      { patient_id: 'patient-2', clinic_id: 'clinic-a', status: 'Waiting' },
+    ]
+
+    expect(validateQueueJoin('patient-1', activeQueues, true)).toBe(true)
+  })
+
   // Valid join scenario
   test('allows queue join when the action is confirmed and there is no active queue entry', () => {
     expect(validateQueueJoin('patient-1', [], true)).toBe(true)
@@ -99,6 +118,11 @@ describe('Queue status transition validation', () => {
   // Invalid direct transition
   test('rejects invalid direct transition from Waiting to Complete', () => {
     expect(isValidStatusTransition('Waiting', 'Complete')).toBe(false)
+  })
+
+  // Invalid transition from complete
+  test('rejects Complete moving to In Consultation', () => {
+    expect(isValidStatusTransition('Complete', 'In Consultation')).toBe(false)
   })
 
   // Unknown status handling
