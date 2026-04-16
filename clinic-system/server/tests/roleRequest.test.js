@@ -1,14 +1,95 @@
 const request = require('supertest')
-const app = require('../src/app')
+
+let app
+let mockSupabase
+let scenario
+let createdBuilders = []
+
+// Pull next mocked response for a specific table + method
+function getNextResponse(bucket, table, fallback = { data: null, error: null }) {
+  if (!bucket[table] || bucket[table].length === 0) {
+    return fallback
+  }
+  return bucket[table].shift()
+}
+
+// Create a chainable mock query builder
+function makeBuilder(table) {
+  const builder = {
+    table,
+
+    select: jest.fn(function () {
+      return this
+    }),
+
+    eq: jest.fn(function () {
+      return this
+    }),
+
+    order: jest.fn(function () {
+      return this
+    }),
+
+    insert: jest.fn(function () {
+      return this
+    }),
+
+    update: jest.fn(function () {
+      return this
+    }),
+
+    maybeSingle: jest.fn(function () {
+      return Promise.resolve(getNextResponse(scenario.maybeSingle, table))
+    }),
+
+    single: jest.fn(function () {
+      return Promise.resolve(getNextResponse(scenario.single, table))
+    }),
+
+    then(resolve, reject) {
+      return Promise.resolve(getNextResponse(scenario.thenable, table)).then(
+        resolve,
+        reject
+      )
+    },
+  }
+
+  createdBuilders.push(builder)
+  return builder
+}
+
+jest.mock('@supabase/supabase-js', () => ({
+  createClient: jest.fn(() => mockSupabase),
+}))
 
 // Predefined IDs used across tests (UUID format for validity)
 const validUserId = '00000000-0000-0000-0000-000000000010'
 const secondValidUserId = '00000000-0000-0000-0000-000000000011'
 const validAdminId = '00000000-0000-0000-0000-000000000012'
 const nonAdminUserId = '00000000-0000-0000-0000-000000000013'
+const validRequestId = '00000000-0000-0000-0000-000000000014'
 const invalidId = 'invalid-id'
 
-//Tests validation and submission logic
+beforeEach(() => {
+  jest.resetModules()
+  createdBuilders = []
+
+  scenario = {
+    maybeSingle: {},
+    single: {},
+    thenable: {},
+  }
+
+  mockSupabase = {
+    from: jest.fn((table) => makeBuilder(table)),
+  }
+
+  app = require('../src/app')
+})
+
+
+
+// Tests validation and submission logic
 describe('Role request POST endpoint', () => {
 
   // Missing required fields -> should fail
@@ -18,7 +99,9 @@ describe('Role request POST endpoint', () => {
       .send({})
 
     expect(res.statusCode).toBe(400)
-    expect(res.body).toHaveProperty('error')
+    expect(res.body).toEqual({
+      error: 'user_id and requested_role are required'
+    })
   })
 
   // Invalid UUID format -> should fail validation
@@ -31,7 +114,9 @@ describe('Role request POST endpoint', () => {
       })
 
     expect(res.statusCode).toBe(400)
-    expect(res.body).toHaveProperty('error')
+    expect(res.body).toEqual({
+      error: 'Invalid user ID format'
+    })
   })
 
   // Invalid role (not allowed system roles)
@@ -44,11 +129,36 @@ describe('Role request POST endpoint', () => {
       })
 
     expect(res.statusCode).toBe(400)
-    expect(res.body).toHaveProperty('error')
+    expect(res.body).toEqual({
+      error: 'Invalid requested role'
+    })
   })
 
-  // Valid format but user likely doesn't exist in DB
-  test('returns 404 or 500 for unknown user', async () => {
+  // Database lookup failure when checking user
+  test('returns 500 when user lookup fails', async () => {
+    scenario.maybeSingle.users = [
+      { data: null, error: new Error('User lookup failed') },
+    ]
+
+    const res = await request(app)
+      .post('/api/role-requests')
+      .send({
+        user_id: validUserId,
+        requested_role: 'Staff',
+      })
+
+    expect(res.statusCode).toBe(500)
+    expect(res.body).toEqual({
+      error: 'Failed to submit role request'
+    })
+  })
+
+  // Valid format but user does not exist in DB
+  test('returns 404 for unknown user', async () => {
+    scenario.maybeSingle.users = [
+      { data: null, error: null },
+    ]
+
     const res = await request(app)
       .post('/api/role-requests')
       .send({
@@ -56,11 +166,103 @@ describe('Role request POST endpoint', () => {
         requested_role: 'Staff',
       })
 
-    expect([404, 500]).toContain(res.statusCode)
-  }, 15000)
+    expect(res.statusCode).toBe(404)
+    expect(res.body).toEqual({
+      error: 'User not found'
+    })
+  })
 
-  // General success / fallback behaviour (DB dependent)
-  test('returns valid response for correct input', async () => {
+  // Reject same-role request
+  test('returns 400 when user already has the requested role', async () => {
+    scenario.maybeSingle.users = [
+      {
+        data: { id: validUserId, role: 'Patient' },
+        error: null,
+      },
+    ]
+
+    const res = await request(app)
+      .post('/api/role-requests')
+      .send({
+        user_id: validUserId,
+        requested_role: 'Patient',
+      })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body).toEqual({
+      error: 'User already has this role'
+    })
+  })
+
+  // Existing pending request lookup fails
+  test('returns 500 when duplicate pending request lookup fails', async () => {
+    scenario.maybeSingle.users = [
+      {
+        data: { id: validUserId, role: 'Patient' },
+        error: null,
+      },
+    ]
+
+    scenario.maybeSingle.role_requests = [
+      { data: null, error: new Error('Pending lookup failed') },
+    ]
+
+    const res = await request(app)
+      .post('/api/role-requests')
+      .send({
+        user_id: validUserId,
+        requested_role: 'Admin',
+      })
+
+    expect(res.statusCode).toBe(500)
+    expect(res.body).toEqual({
+      error: 'Failed to submit role request'
+    })
+  })
+
+  // Duplicate submission scenario
+  test('prevents duplicate role requests', async () => {
+    scenario.maybeSingle.users = [
+      {
+        data: { id: validUserId, role: 'Patient' },
+        error: null,
+      },
+    ]
+
+    scenario.maybeSingle.role_requests = [
+      { data: { id: validRequestId }, error: null },
+    ]
+
+    const res = await request(app)
+      .post('/api/role-requests')
+      .send({
+        user_id: validUserId,
+        requested_role: 'Admin',
+      })
+
+    expect(res.statusCode).toBe(409)
+    expect(res.body).toEqual({
+      error: 'A pending request for this role already exists'
+    })
+  })
+
+  // Insert failure on otherwise valid request
+  test('returns 500 when inserting a valid role request fails', async () => {
+    scenario.maybeSingle.users = [
+      {
+        data: { id: validUserId, role: 'Patient' },
+        error: null,
+      },
+    ]
+
+    scenario.maybeSingle.role_requests = [
+      { data: null, error: null },
+    ]
+
+    scenario.single.role_requests = [
+      { data: null, error: new Error('Insert failed') },
+    ]
+
     const res = await request(app)
       .post('/api/role-requests')
       .send({
@@ -68,51 +270,56 @@ describe('Role request POST endpoint', () => {
         requested_role: 'Staff',
       })
 
-    expect([201, 400, 404, 409, 500]).toContain(res.statusCode)
-
-    // Only validate structure if actually successful
-    if (res.statusCode === 201) {
-      expect(res.body).toHaveProperty('request')
-      expect(res.body.request).toHaveProperty('user_id')
-      expect(res.body.request).toHaveProperty('requested_role')
-      expect(res.body.request).toHaveProperty('status')
-      expect(res.body.request.user_id).toBe(validUserId)
-      expect(res.body.request.requested_role).toBe('Staff')
-      expect(res.body.request.status).toBe('pending')
-    }
-  }, 15000)
-
-  // Duplicate submission scenario
-  test('prevents duplicate role requests', async () => {
-    const firstRes = await request(app)
-      .post('/api/role-requests')
-      .send({
-        user_id: validUserId,
-        requested_role: 'Admin',
-      })
-
-    expect([201, 400, 404, 409, 500]).toContain(firstRes.statusCode)
-
-    const secondRes = await request(app)
-      .post('/api/role-requests')
-      .send({
-        user_id: validUserId,
-        requested_role: 'Admin',
-      })
-
-    expect([400, 404, 409, 500]).toContain(secondRes.statusCode)
-  }, 15000)
-  test('POST /api/role-requests rejects request when user already has the requested role', async () => {
-  const res = await request(app)
-    .post('/api/role-requests')
-    .send({
-      user_id: validUserId,
-      requested_role: 'Patient',
+    expect(res.statusCode).toBe(500)
+    expect(res.body).toEqual({
+      error: 'Failed to submit role request'
     })
+  })
 
-  expect([400, 404, 500]).toContain(res.statusCode)
-}, 15000)
-  //force edge case to hit error handling / catch blocks
+  // Successful role request submission
+  test('returns 201 for valid role request submission', async () => {
+    scenario.maybeSingle.users = [
+      {
+        data: { id: validUserId, role: 'Patient' },
+        error: null,
+      },
+    ]
+
+    scenario.maybeSingle.role_requests = [
+      { data: null, error: null },
+    ]
+
+    scenario.single.role_requests = [
+      {
+        data: {
+          id: validRequestId,
+          user_id: validUserId,
+          requested_role: 'Staff',
+          status: 'pending',
+        },
+        error: null,
+      },
+    ]
+
+    const res = await request(app)
+      .post('/api/role-requests')
+      .send({
+        user_id: validUserId,
+        requested_role: 'Staff',
+      })
+
+    expect(res.statusCode).toBe(201)
+    expect(res.body).toEqual({
+      request: {
+        id: validRequestId,
+        user_id: validUserId,
+        requested_role: 'Staff',
+        status: 'pending',
+      },
+    })
+  })
+
+  // Force edge case to hit required-fields validation cleanly
   test('handles completely invalid input safely (edge case)', async () => {
     const res = await request(app)
       .post('/api/role-requests')
@@ -121,12 +328,16 @@ describe('Role request POST endpoint', () => {
         requested_role: null,
       })
 
-    expect([400, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(400)
+    expect(res.body).toEqual({
+      error: 'user_id and requested_role are required'
+    })
   })
 })
 
 
-//Tests admin access + retrieval logic
+
+// Tests admin access + retrieval logic
 describe('Role request GET endpoint', () => {
 
   // Missing query parameter
@@ -134,7 +345,9 @@ describe('Role request GET endpoint', () => {
     const res = await request(app).get('/api/role-requests')
 
     expect(res.statusCode).toBe(400)
-    expect(res.body).toHaveProperty('error')
+    expect(res.body).toEqual({
+      error: 'admin_id is required'
+    })
   })
 
   // Invalid UUID format
@@ -143,78 +356,170 @@ describe('Role request GET endpoint', () => {
       .get(`/api/role-requests?admin_id=${invalidId}`)
 
     expect(res.statusCode).toBe(400)
-    expect(res.body).toHaveProperty('error')
+    expect(res.body).toEqual({
+      error: 'Invalid admin ID format'
+    })
   })
 
-  // Admin does not exist
-  test('returns 404 or 500 for unknown admin', async () => {
-    const res = await request(app)
-      .get(`/api/role-requests?admin_id=${secondValidUserId}`)
+  // Admin lookup failure
+  test('returns 500 when admin lookup fails', async () => {
+    scenario.maybeSingle.users = [
+      { data: null, error: new Error('Admin lookup failed') },
+    ]
 
-    expect([404, 500]).toContain(res.statusCode)
-  }, 15000)
-
-  // Not an admin (authorization failure)
-  test('returns 403, 404, or 500 for non-admin user', async () => {
-    const res = await request(app)
-      .get(`/api/role-requests?admin_id=${nonAdminUserId}`)
-
-    expect([403, 404, 500]).toContain(res.statusCode)
-  }, 15000)
-
-  // Valid admin request
-  test('returns role requests for valid admin', async () => {
     const res = await request(app)
       .get(`/api/role-requests?admin_id=${validAdminId}`)
 
-    expect([200, 404, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(500)
+    expect(res.body).toEqual({
+      error: 'Failed to fetch role requests'
+    })
+  })
 
-    if (res.statusCode === 200) {
-      expect(res.body).toHaveProperty('requests')
-      expect(Array.isArray(res.body.requests)).toBe(true)
-    }
-  }, 15000)
+  // Admin does not exist
+  test('returns 404 for unknown admin', async () => {
+    scenario.maybeSingle.users = [
+      { data: null, error: null },
+    ]
+
+    const res = await request(app)
+      .get(`/api/role-requests?admin_id=${secondValidUserId}`)
+
+    expect(res.statusCode).toBe(404)
+    expect(res.body).toEqual({
+      error: 'Admin user not found'
+    })
+  })
+
+  // Not an admin (authorization failure)
+  test('returns 403 for non-admin user', async () => {
+    scenario.maybeSingle.users = [
+      {
+        data: { id: nonAdminUserId, role: 'Patient' },
+        error: null,
+      },
+    ]
+
+    const res = await request(app)
+      .get(`/api/role-requests?admin_id=${nonAdminUserId}`)
+
+    expect(res.statusCode).toBe(403)
+    expect(res.body).toEqual({
+      error: 'Only admins can access role requests'
+    })
+  })
+
+  // Query failure after valid admin check
+  test('returns 500 when role request query fails', async () => {
+    scenario.maybeSingle.users = [
+      {
+        data: { id: validAdminId, role: 'Admin' },
+        error: null,
+      },
+    ]
+
+    scenario.thenable.role_requests = [
+      { data: null, error: new Error('Role request query failed') },
+    ]
+
+    const res = await request(app)
+      .get(`/api/role-requests?admin_id=${validAdminId}`)
+
+    expect(res.statusCode).toBe(500)
+    expect(res.body).toEqual({
+      error: 'Failed to fetch role requests'
+    })
+  })
+
+  // Valid admin request
+  test('returns role requests for valid admin', async () => {
+    scenario.maybeSingle.users = [
+      {
+        data: { id: validAdminId, role: 'Admin' },
+        error: null,
+      },
+    ]
+
+    scenario.thenable.role_requests = [
+      {
+        data: [
+          {
+            id: validRequestId,
+            user_id: validUserId,
+            requested_role: 'Staff',
+            status: 'pending',
+            created_at: '2026-04-16T10:00:00.000Z',
+            users: {
+              full_name: 'Test User',
+              email: 'test@example.com',
+              role: 'Patient',
+            },
+          },
+        ],
+        error: null,
+      },
+    ]
+
+    const res = await request(app)
+      .get(`/api/role-requests?admin_id=${validAdminId}`)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body).toHaveProperty('requests')
+    expect(Array.isArray(res.body.requests)).toBe(true)
+    expect(res.body.requests).toHaveLength(1)
+    expect(res.body.requests[0]).toHaveProperty('requested_role', 'Staff')
+  })
 
   // Filtered requests
   test('supports filtering by status', async () => {
+    scenario.maybeSingle.users = [
+      {
+        data: { id: validAdminId, role: 'Admin' },
+        error: null,
+      },
+    ]
+
+    scenario.thenable.role_requests = [
+      {
+        data: [],
+        error: null,
+      },
+    ]
+
     const res = await request(app)
       .get(`/api/role-requests?admin_id=${validAdminId}&status=pending`)
 
-    expect([200, 404, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
+    expect(res.body).toEqual({ requests: [] })
 
-    if (res.statusCode === 200) {
-      expect(res.body).toHaveProperty('requests')
-      expect(Array.isArray(res.body.requests)).toBe(true)
-    }
-  }, 15000)
-  test('GET /api/role-requests returns requests array structure when successful', async () => {
-  const res = await request(app)
-    .get(`/api/role-requests?admin_id=${validAdminId}`)
+    const roleRequestBuilder = createdBuilders.find(
+      (builder) => builder.table === 'role_requests'
+    )
 
-  expect([200, 404, 500]).toContain(res.statusCode)
+    expect(roleRequestBuilder).toBeDefined()
+    expect(roleRequestBuilder.eq).toHaveBeenCalledWith('status', 'pending')
+  })
 
-  if (res.statusCode === 200) {
-    expect(res.body).toHaveProperty('requests')
-    expect(Array.isArray(res.body.requests)).toBe(true)
-  }
-}, 15000)
-test('GET role requests with invalid status filter handled safely', async () => {
-  const res = await request(app).get(
-    `/api/role-requests?admin_id=${validAdminId}&status=invalid`
-  )
-
-  expect([200, 400, 404, 500]).toContain(res.statusCode)
-
-  if (res.statusCode === 200) {
-    expect(res.body).toHaveProperty('requests')
-    expect(Array.isArray(res.body.requests)).toBe(true)
-  }
-})
-  // weird query input (helps branch coverage)
+  // Weird query input (helps branch coverage)
   test('handles unexpected query values safely', async () => {
+    scenario.maybeSingle.users = [
+      {
+        data: { id: validAdminId, role: 'Admin' },
+        error: null,
+      },
+    ]
+
+    scenario.thenable.role_requests = [
+      {
+        data: [],
+        error: null,
+      },
+    ]
+
     const res = await request(app)
       .get(`/api/role-requests?admin_id=${validAdminId}&status=INVALID_STATUS`)
 
-    expect([200, 400, 404, 500]).toContain(res.statusCode)
-  }, 15000)
+    expect(res.statusCode).toBe(200)
+    expect(res.body).toEqual({ requests: [] })
+  })
 })
