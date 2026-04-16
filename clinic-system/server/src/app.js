@@ -5,6 +5,10 @@ const { createClient } = require('@supabase/supabase-js')
 require('dotenv').config()
 
 const app = express()
+const {
+  checkAndTriggerNotifications,
+  configureQueueNotificationService,
+} = require('./queueNotificationService')
 
 app.use(cors())
 app.use(express.json())
@@ -18,6 +22,58 @@ if (!supabaseUrl || !supabaseKey) {
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey)
+configureQueueNotificationService(supabase)
+
+async function fetchActiveQueueSnapshot(clinicId) {
+  const { data, error } = await supabase
+    .from('queue_entries')
+    .select('id, clinic_id, patient_id, position, status')
+    .eq('clinic_id', clinicId)
+    .in('status', ['Waiting', 'Called', 'In Consultation'])
+    .order('position', { ascending: true })
+
+  if (error) throw error
+
+  return data || []
+}
+
+async function tryFetchActiveQueueSnapshot(clinicId) {
+  try {
+    return await fetchActiveQueueSnapshot(clinicId)
+  } catch (err) {
+    console.error('Failed to fetch queue snapshot for notifications:', err)
+    return []
+  }
+}
+
+async function triggerQueueNotificationsForClinicSafely(clinicId, oldQueue) {
+  try {
+    const newQueue = await fetchActiveQueueSnapshot(clinicId)
+    const createdNotifications = await checkAndTriggerNotifications(oldQueue, newQueue)
+
+    console.log('QUEUE NOTIFICATION CHECK:', {
+      clinicId,
+      oldQueue: oldQueue.map(({ id, patient_id, position, status }) => ({
+        id,
+        patient_id,
+        position,
+        status,
+      })),
+      newQueue: newQueue.map(({ id, patient_id, position, status }) => ({
+        id,
+        patient_id,
+        position,
+        status,
+      })),
+      createdNotifications,
+    })
+
+    return createdNotifications
+  } catch (err) {
+    console.error('Failed to trigger queue notifications:', err)
+    return []
+  }
+}
 
 async function resequenceQueue(clinicId) {
   const { data: activeEntries, error: fetchError } = await supabase
@@ -583,6 +639,8 @@ app.post('/api/queue/:clinicId/join', async (req, res) => {
       return res.status(409).json({ error: 'Patient already has an active queue entry' })
     }
 
+    const oldQueue = await tryFetchActiveQueueSnapshot(clinicId)
+
     // Calculate next position in this clinic's queue
     const { data: queueData, error: queueError } = await supabase
       .from('queue_entries')
@@ -618,7 +676,9 @@ app.post('/api/queue/:clinicId/join', async (req, res) => {
   }
     //if (insertError) throw insertError
 
-    res.status(201).json({ entry: newEntry })
+    const queueNotifications = await triggerQueueNotificationsForClinicSafely(clinicId, oldQueue)
+
+    res.status(201).json({ entry: newEntry, queue_notifications: queueNotifications })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to join queue' })
@@ -658,6 +718,8 @@ app.patch('/api/queue/:clinicId/entry/:entryId/status', async (req, res) => {
       return res.status(409).json({ error: `Invalid status transition from ${currentEntry.status} to ${status}` })
     }
 
+    const oldQueue = await tryFetchActiveQueueSnapshot(clinicId)
+
     const updateData = { status }
     if (status === 'In Consultation') updateData.called_at = new Date().toISOString()
     if (status === 'Complete') updateData.completed_at = new Date().toISOString()
@@ -680,10 +742,11 @@ app.patch('/api/queue/:clinicId/entry/:entryId/status', async (req, res) => {
       if (resequenceError) throw resequenceError    
     }
 
+    const queueNotifications = await triggerQueueNotificationsForClinicSafely(clinicId, oldQueue)
+
     // Insert notification for the patient on status change
     const notificationMessages = {
       'Called': 'You are being called — please make your way to the consultation room.',
-      'In Consultation': 'Your consultation has started.',
       'Complete': 'Your visit is complete. Thank you for using Ubuntu Health.'
     }
 
@@ -700,7 +763,7 @@ app.patch('/api/queue/:clinicId/entry/:entryId/status', async (req, res) => {
         })
     }
 
-    res.json({ entry: updatedEntry })
+    res.json({ entry: updatedEntry, queue_notifications: queueNotifications })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to update queue status' })
@@ -716,6 +779,8 @@ app.delete('/api/queue/:clinicId/entry/:entryId', async (req, res) => {
     if (!uuidRegex.test(clinicId) || !uuidRegex.test(entryId)) {
       return res.status(400).json({ error: 'Invalid ID format' })
     }
+
+    const oldQueue = await tryFetchActiveQueueSnapshot(clinicId)
 
     const { data: existingEntry, error: fetchError } = await supabase
       .from('queue_entries')
@@ -741,10 +806,41 @@ app.delete('/api/queue/:clinicId/entry/:entryId', async (req, res) => {
 
     if (resequenceError) throw resequenceError
 
-    res.json({ message: 'Patient removed from queue successfully' })
+    const queueNotifications = await triggerQueueNotificationsForClinicSafely(clinicId, oldQueue)
+
+    res.json({
+      message: 'Patient removed from queue successfully',
+      queue_notifications: queueNotifications,
+    })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to remove patient from queue' })
+  }
+})
+
+// GET /api/queue-notifications/:patientId — patient fetches queue position alerts
+app.get('/api/queue-notifications/:patientId', async (req, res) => {
+  try {
+    const { patientId } = req.params
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(patientId)) {
+      return res.status(400).json({ error: 'Invalid patient ID format' })
+    }
+
+    const { data, error } = await supabase
+      .from('queue_notifications')
+      .select('id, type, position, created_at')
+      .eq('patient_id', patientId)
+      .order('created_at', { ascending: false })
+      .limit(10)
+
+    if (error) throw error
+
+    res.json({ notifications: data || [] })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to fetch queue notifications' })
   }
 })
 

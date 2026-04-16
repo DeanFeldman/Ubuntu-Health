@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import QueueNotifications from '../components/QueueNotifications'
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 const styles = `
@@ -596,6 +597,10 @@ export default function QueuePage() {
 
         {!loadingQueue && queueEntry && ['Waiting', 'Called'].includes(queueEntry.status) && (
           <p className="q-refresh-hint">Updates automatically every 5 seconds.</p>
+        )}
+
+        {!loadingQueue && !fetchError && (
+          <QueueNotifications />
         )}
       </main>
 
