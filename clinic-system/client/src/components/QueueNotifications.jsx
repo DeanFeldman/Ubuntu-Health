@@ -6,9 +6,6 @@ import getApiBase from '../lib/getApiBase'
 const API_BASE = getApiBase()
 
 const NOTIFICATION_MESSAGES = {
-  POSITION_3: 'You are now 3rd in the queue.',
-  POSITION_2: 'You are now 2nd in the queue.',
-  POSITION_1: 'You are next in the queue.',
   POSITION_3: 'You are now 3rd in the queue',
   POSITION_2: 'You are now 2nd in the queue',
   POSITION_1: 'You are next in line',
@@ -80,12 +77,45 @@ function getNotificationMessage(type) {
 }
 
 function triggerBrowserNotification(notification) {
-  if (!notification || !('Notification' in window)) return
-  if (Notification.permission !== 'granted') return
-
-  new Notification(BROWSER_NOTIFICATION_TITLE, {
-    body: getNotificationMessage(notification.type),
+  console.log('[QueueNotifications] Browser notification requested', {
+    notification,
+    notificationSupported: 'Notification' in window,
+    permission: 'Notification' in window ? Notification.permission : 'unsupported',
+    isSecureContext: window.isSecureContext,
+    visibilityState: document.visibilityState,
   })
+
+  if (!notification) {
+    console.log('[QueueNotifications] Browser notification skipped: missing notification')
+    return
+  }
+
+  if (!('Notification' in window)) {
+    console.log('[QueueNotifications] Browser notification skipped: Notification API not supported')
+    return
+  }
+
+  if (Notification.permission !== 'granted') {
+    console.log('[QueueNotifications] Browser notification skipped: permission is not granted', {
+      permission: Notification.permission,
+    })
+    return
+  }
+
+  try {
+    const browserNotification = new Notification(BROWSER_NOTIFICATION_TITLE, {
+      body: getNotificationMessage(notification.type),
+    })
+
+    console.log('[QueueNotifications] Browser notification created', {
+      title: BROWSER_NOTIFICATION_TITLE,
+      body: getNotificationMessage(notification.type),
+      notificationId: notification.id,
+      browserNotification,
+    })
+  } catch (err) {
+    console.error('[QueueNotifications] Browser notification failed', err)
+  }
 }
 
 function formatNotificationTime(createdAt) {
@@ -107,10 +137,32 @@ export default function QueueNotifications() {
   const hasLoaded = useRef(false)
 
   useEffect(() => {
-    if (!('Notification' in window)) return
-    if (Notification.permission !== 'default') return
+    console.log('[QueueNotifications] Notification permission check on mount', {
+      notificationSupported: 'Notification' in window,
+      permission: 'Notification' in window ? Notification.permission : 'unsupported',
+      isSecureContext: window.isSecureContext,
+      visibilityState: document.visibilityState,
+    })
+
+    if (!('Notification' in window)) {
+      console.log('[QueueNotifications] Permission request skipped: Notification API not supported')
+      return
+    }
+
+    if (Notification.permission !== 'default') {
+      console.log('[QueueNotifications] Permission request skipped: existing permission state', {
+        permission: Notification.permission,
+      })
+      return
+    }
 
     Notification.requestPermission()
+      .then((permission) => {
+        console.log('[QueueNotifications] Permission request resolved', { permission })
+      })
+      .catch((err) => {
+        console.error('[QueueNotifications] Permission request failed', err)
+      })
   }, [])
 
   const fetchNotifications = useCallback(async ({ showLoading = false } = {}) => {
@@ -144,8 +196,20 @@ export default function QueueNotifications() {
         latestNotification?.id &&
         latestNotification.id !== previousLatestId.current
       ) {
+        console.log('[QueueNotifications] New queue notification detected', {
+          latestNotification,
+          previousLatestId: previousLatestId.current,
+          hasLoaded: hasLoaded.current,
+        })
         setPopup(latestNotification)
         triggerBrowserNotification(latestNotification)
+      } else {
+        console.log('[QueueNotifications] No new browser notification triggered', {
+          latestNotificationId: latestNotification?.id || null,
+          previousLatestId: previousLatestId.current,
+          hasLoaded: hasLoaded.current,
+          notificationCount: nextNotifications.length,
+        })
       }
 
       previousLatestId.current = latestNotification?.id || null
