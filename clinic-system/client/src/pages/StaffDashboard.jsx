@@ -325,7 +325,7 @@ export default function StaffDashboard() {
             : item
         )
       )
-      
+      await fetchQueue()
       showToast(`${getDisplayName(entry)} marked as ${nextStatus}.`, 'success')
     } catch (err) {
       showToast(err.message, 'error')
@@ -349,6 +349,7 @@ export default function StaffDashboard() {
       }
 
       setQueue(current => current.filter(item => item.id !== entry.id))
+      await fetchQueue()
       showToast(`${getDisplayName(entry)} removed from the queue.`, 'success')
     } catch (err) {
       showToast(err.message, 'error')
@@ -425,7 +426,15 @@ export default function StaffDashboard() {
                 <tbody>
                   {queue.map((entry, index) => (
                     <tr key={entry.id}>
-                      <td className="sd-pos">{entry.position ?? index + 1}</td>
+                      <td className="sd-pos">
+                        {entry.status === 'In Consultation'
+                          ? 0
+                          : queue.filter(
+                              item =>
+                                item.status !== 'In Consultation' &&
+                                (item.position ?? 999999) < (entry.position ?? 999999)
+                            ).length + 1}
+                      </td>
                       <td>{getDisplayName(entry)}</td>
                       <td>{entry.patient?.email}</td>
                       <td>
