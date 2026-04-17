@@ -416,7 +416,7 @@ export default function QueuePage() {
   }, [fetchQueue])
 
   useEffect(() => {
-    const id = setInterval(fetchQueue, 50000)
+    const id = setInterval(fetchQueue, 30000)
     return () => clearInterval(id)
   }, [fetchQueue])
 
@@ -646,7 +646,7 @@ export default function QueuePage() {
         )}
 
         {!loadingQueue && queueEntry && ['Waiting', 'Called'].includes(queueEntry.status) && (
-          <p className="q-refresh-hint">Updates automatically every 5 seconds.</p>
+          <p className="q-refresh-hint">Updates automatically every 30 seconds.</p>
         )}
 
         <QueueNotifications />

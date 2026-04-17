@@ -277,6 +277,14 @@ export default function StaffDashboard() {
     fetchQueue()
   }, [fetchQueue])
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchQueue()
+    }, 30000) // 30 seconds
+
+    return () => clearInterval(interval)
+  }, [fetchQueue])
+
   const handleStatusUpdate = async entry => {
     const currentIndex = STATUS_SEQUENCE.indexOf(entry.status)
     const nextStatus =
@@ -409,7 +417,7 @@ export default function StaffDashboard() {
                   <tr>
                     <th className="sd-pos">#</th>
                     <th>Patient</th>
-                    <th>Patient ID</th>
+                    <th>Patient Email</th>
                     <th>Status</th>
                     <th>Actions</th>
                   </tr>
@@ -419,7 +427,7 @@ export default function StaffDashboard() {
                     <tr key={entry.id}>
                       <td className="sd-pos">{entry.position ?? index + 1}</td>
                       <td>{getDisplayName(entry)}</td>
-                      <td>{entry.patient_id}</td>
+                      <td>{entry.patient?.email}</td>
                       <td>
                         <span className={`sd-badge ${BADGE_CLASS[entry.status] ?? ''}`}>
                           {entry.status}
