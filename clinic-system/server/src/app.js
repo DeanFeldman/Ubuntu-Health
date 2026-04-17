@@ -80,7 +80,7 @@ async function resequenceQueue(clinicId) {
     .from('queue_entries')
     .select('id, patient_id, joined_at')
     .eq('clinic_id', clinicId)
-    .in('status', ['Waiting', 'Called', 'In Consultation'])
+    .in('status', ['Waiting', 'Called'])
     .order('joined_at', { ascending: true })
 
   if (fetchError) throw fetchError
@@ -721,8 +721,15 @@ app.patch('/api/queue/:clinicId/entry/:entryId/status', async (req, res) => {
     const oldQueue = await tryFetchActiveQueueSnapshot(clinicId)
 
     const updateData = { status }
-    if (status === 'In Consultation') updateData.called_at = new Date().toISOString()
-    if (status === 'Complete') updateData.completed_at = new Date().toISOString()
+
+    if (status === 'In Consultation') {
+      updateData.called_at = new Date().toISOString()
+      updateData.position = 0
+    }
+
+    if (status === 'Complete') {
+      updateData.completed_at = new Date().toISOString()
+    }
 
     const { data: updatedEntry, error: updateError } = await supabase
       .from('queue_entries')
@@ -734,12 +741,8 @@ app.patch('/api/queue/:clinicId/entry/:entryId/status', async (req, res) => {
 
     if (updateError) throw updateError
 
-    if (status === 'Complete') {
-      const { error: resequenceError } = await supabase.rpc('resequence_queue', {
-        clinic: clinicId,
-      })
-
-      if (resequenceError) throw resequenceError    
+    if (status === 'In Consultation' || status === 'Complete') {
+      await resequenceQueue(clinicId)
     }
 
     const queueNotifications = await triggerQueueNotificationsForClinicSafely(clinicId, oldQueue)
