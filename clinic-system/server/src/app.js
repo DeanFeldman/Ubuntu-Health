@@ -847,6 +847,351 @@ app.get('/api/queue-notifications/:patientId', async (req, res) => {
   }
 })
 
+app.get('/api/clinic-requests', async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' })
+    }
+
+    const { admin_id, status } = req.query
+
+    if (!admin_id) {
+      return res.status(400).json({ error: 'admin_id is required' })
+    }
+
+    const uuidRegex = /^[0-9a-f-]{36}$/i
+    if (!uuidRegex.test(admin_id)) {
+      return res.status(400).json({ error: 'Invalid admin ID format' })
+    }
+
+    const { data: admin, error: adminError } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('id', admin_id)
+      .single()
+
+    if (adminError || !admin) {
+      return res.status(404).json({ error: 'Admin user not found' })
+    }
+
+    if (admin.role !== 'Admin') {
+      return res.status(403).json({ error: 'Only admins can view clinic requests' })
+    }
+
+    let query = supabase
+      .from('clinic_requests')
+      .select(`
+        *,
+        users:staff_user_id ( id, full_name, email, role ),
+        clinics:clinic_id ( id, name, facility_type, province )
+      `)
+      .order('created_at', { ascending: true })
+
+    if (status) {
+      query = query.eq('status', status)
+    }
+
+    const { data, error } = await query
+
+    if (error) throw error
+
+    return res.json({ requests: data || [] })
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: 'Failed to load clinic requests' })
+  }
+})
+
+// GET /api/clinic-requests?admin_id=...&status=pending
+app.get('/api/clinic-requests', async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' })
+    }
+
+    const { admin_id, status } = req.query
+
+    if (!admin_id) {
+      return res.status(400).json({ error: 'admin_id is required' })
+    }
+
+    const uuidRegex = /^[0-9a-f-]{36}$/i
+    if (!uuidRegex.test(admin_id)) {
+      return res.status(400).json({ error: 'Invalid admin ID format' })
+    }
+
+    const { data: admin, error: adminError } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('id', admin_id)
+      .single()
+
+    if (adminError || !admin) {
+      return res.status(404).json({ error: 'Admin user not found' })
+    }
+
+    if (admin.role !== 'Admin') {
+      return res.status(403).json({ error: 'Only admins can view clinic requests' })
+    }
+
+    let query = supabase
+      .from('clinic_requests')
+      .select(`
+        *,
+        users:staff_user_id ( id, full_name, email, role ),
+        clinics:clinic_id ( id, name, facility_type, province )
+      `)
+      .order('created_at', { ascending: true })
+
+    if (status) {
+      query = query.eq('status', status)
+    }
+
+    const { data, error } = await query
+
+    if (error) throw error
+
+    return res.json({ requests: data || [] })
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: 'Failed to load clinic requests' })
+  }
+})
+
+// PATCH /api/clinic-requests/:id/approve
+app.patch('/api/clinic-requests/:id/approve', async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' })
+    }
+
+    const { id } = req.params
+    const { admin_id } = req.body
+
+    if (!admin_id) {
+      return res.status(400).json({ error: 'admin_id is required' })
+    }
+
+    const uuidRegex = /^[0-9a-f-]{36}$/i
+    if (!uuidRegex.test(id) || !uuidRegex.test(admin_id)) {
+      return res.status(400).json({ error: 'Invalid request or admin ID format' })
+    }
+
+    const { data: admin, error: adminError } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('id', admin_id)
+      .single()
+
+    if (adminError || !admin) {
+      return res.status(404).json({ error: 'Admin user not found' })
+    }
+
+    if (admin.role !== 'Admin') {
+      return res.status(403).json({ error: 'Only admins can approve clinic requests' })
+    }
+
+    const { data: request, error: requestError } = await supabase
+      .from('clinic_requests')
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (requestError || !request) {
+      return res.status(404).json({ error: 'Clinic request not found' })
+    }
+
+    if (request.status !== 'pending') {
+      return res.status(400).json({ error: 'Only pending requests can be approved' })
+    }
+
+    const { error: assignError } = await supabase
+      .from('users')
+      .update({ clinic_id: request.clinic_id })
+      .eq('id', request.staff_user_id)
+
+    if (assignError) throw assignError
+
+    const { data, error } = await supabase
+      .from('clinic_requests')
+      .update({
+        status: 'approved',
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: admin_id,
+      })
+      .eq('id', id)
+      .select(`
+        *,
+        users:staff_user_id ( id, full_name, email, role, clinic_id ),
+        clinics:clinic_id ( id, name, facility_type, province )
+      `)
+      .single()
+
+    if (error) throw error
+
+    return res.json({
+      message: 'Clinic request approved',
+      request: data,
+    })
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: 'Failed to approve clinic request' })
+  }
+})
+
+// PATCH /api/clinic-requests/:id/reject
+app.patch('/api/clinic-requests/:id/reject', async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' })
+    }
+
+    const { id } = req.params
+    const { admin_id } = req.body
+
+    if (!admin_id) {
+      return res.status(400).json({ error: 'admin_id is required' })
+    }
+
+    const uuidRegex = /^[0-9a-f-]{36}$/i
+    if (!uuidRegex.test(id) || !uuidRegex.test(admin_id)) {
+      return res.status(400).json({ error: 'Invalid request or admin ID format' })
+    }
+
+    const { data: admin, error: adminError } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('id', admin_id)
+      .single()
+
+    if (adminError || !admin) {
+      return res.status(404).json({ error: 'Admin user not found' })
+    }
+
+    if (admin.role !== 'Admin') {
+      return res.status(403).json({ error: 'Only admins can reject clinic requests' })
+    }
+
+    const { data: request, error: requestError } = await supabase
+      .from('clinic_requests')
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (requestError || !request) {
+      return res.status(404).json({ error: 'Clinic request not found' })
+    }
+
+    if (request.status !== 'pending') {
+      return res.status(400).json({ error: 'Only pending requests can be rejected' })
+    }
+
+    const { data, error } = await supabase
+      .from('clinic_requests')
+      .update({
+        status: 'rejected',
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: admin_id,
+      })
+      .eq('id', id)
+      .select(`
+        *,
+        users:staff_user_id ( id, full_name, email, role ),
+        clinics:clinic_id ( id, name, facility_type, province )
+      `)
+      .single()
+
+    if (error) throw error
+
+    return res.json({
+      message: 'Clinic request rejected',
+      request: data,
+    })
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: 'Failed to reject clinic request' })
+  }
+})
+
+app.post('/api/clinic-requests', async (req, res) => {
+  try {
+    const { staff_user_id, clinic_id } = req.body
+
+    if (!staff_user_id || !clinic_id) {
+      return res.status(400).json({ error: 'staff_user_id and clinic_id are required' })
+    }
+
+    const uuidRegex = /^[0-9a-f-]{36}$/i
+    if (!uuidRegex.test(staff_user_id) || !uuidRegex.test(clinic_id)) {
+      return res.status(400).json({ error: 'Invalid user or clinic ID format' })
+    }
+
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('id', staff_user_id)
+      .single()
+
+    if (userError || !user) {
+      return res.status(404).json({ error: 'Staff user not found' })
+    }
+
+    if (!['Staff', 'Admin', 'Clinic Staff'].includes(user.role)) {
+      return res.status(403).json({ error: 'Only staff or admins can submit clinic requests' })
+    }
+
+    const { data: clinic, error: clinicError } = await supabase
+      .from('clinics')
+      .select('id, name')
+      .eq('id', clinic_id)
+      .single()
+
+    if (clinicError || !clinic) {
+      return res.status(404).json({ error: 'Clinic not found' })
+    }
+
+    const { data: existingRequest, error: existingError } = await supabase
+      .from('clinic_requests')
+      .select('id')
+      .eq('staff_user_id', staff_user_id)
+      .eq('clinic_id', clinic_id)
+      .eq('status', 'pending')
+      .maybeSingle()
+
+    if (existingError) throw existingError
+
+    if (existingRequest) {
+      return res.status(409).json({ error: 'You already have a pending request for this clinic' })
+    }
+
+    const { data, error } = await supabase
+      .from('clinic_requests')
+      .insert([
+        {
+          staff_user_id,
+          clinic_id,
+          status: 'pending',
+        },
+      ])
+      .select(`
+        *,
+        users:staff_user_id ( id, full_name, email, role ),
+        clinics:clinic_id ( id, name, facility_type, province )
+      `)
+      .single()
+
+    if (error) throw error
+
+    return res.status(201).json({
+      message: 'Clinic request submitted successfully',
+      request: data,
+    })
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: 'Failed to submit clinic request' })
+  }
+})
+
 // Serve built frontend
 const publicPath = path.join(__dirname, '..', 'public')
 app.use(express.static(publicPath))
