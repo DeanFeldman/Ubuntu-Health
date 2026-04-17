@@ -128,13 +128,14 @@ describe('checkAndTriggerNotifications', () => {
     )
 
     expect(from).toHaveBeenCalledWith('queue_notifications')
-    expect(insert).toHaveBeenCalledWith({
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({
       queue_entry_id: 'entry-1',
       patient_id: 'patient-1',
       clinic_id: 'clinic-1',
       type: 'POSITION_3',
       position: 3,
-    })
+    }))
+    expect(insert.mock.calls[0][0].created_at).toEqual(expect.any(String))
     expect(rows).toEqual([{ id: 'notification-1' }])
   })
 
