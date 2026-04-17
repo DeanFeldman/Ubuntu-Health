@@ -221,6 +221,14 @@ export default function QueueNotifications() {
       const nextNotifications = Array.isArray(data.notifications)
         ? data.notifications
         : []
+
+      if (nextNotifications.length === 0) {
+        setNotifications([])
+        setPopup(null)
+        previousLatestId.current = null
+        return
+      }
+
       const latestNotification = nextNotifications[0]
 
       setNotifications(nextNotifications)
