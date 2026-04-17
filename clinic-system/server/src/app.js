@@ -4,6 +4,9 @@ const path = require('path')
 const { createClient } = require('@supabase/supabase-js')
 require('dotenv').config()
 
+const http = require('http')
+const { Server } = require('socket.io')
+
 const app = express()
 const {
   checkAndTriggerNotifications,
@@ -12,6 +15,19 @@ const {
 
 app.use(cors())
 app.use(express.json())
+
+const server = http.createServer(app)
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+  },
+})
+
+io.on('connection', (socket) => {
+  socket.on('joinClinicRoom', (clinicId) => {
+    socket.join(clinicId)
+  })
+})
 
 const supabaseUrl = process.env.SUPABASE_URL
 const supabaseKey =
@@ -165,7 +181,7 @@ app.get('/api/clinics/:id', async (req, res) => {
   }
 })
 
-// GET /api/queue/:clinicId — retrieve full queue for a clinic for staff only
+// GET /api/queue/:clinicId
 app.get('/api/queue/:clinicId', async (req, res) => {
   try {
     const { clinicId } = req.params
@@ -199,7 +215,7 @@ app.get('/api/queue/:clinicId', async (req, res) => {
     if (patientIds.length > 0) {
       const { data: users, error: usersError } = await supabase
         .from('users')
-        .select('id, full_name')
+        .select('id, full_name, email')
         .in('id', patientIds)
 
       if (usersError) throw usersError
@@ -210,8 +226,11 @@ app.get('/api/queue/:clinicId', async (req, res) => {
     const queueWithNames = (queueData || []).map(entry => ({
       ...entry,
       patient: usersById[entry.patient_id]
-        ? { full_name: usersById[entry.patient_id].full_name }
-        : null,
+      ? {
+          full_name: usersById[entry.patient_id].full_name,
+          email: usersById[entry.patient_id].email,
+        }
+      : null,
     }))
 
     res.json({
@@ -224,8 +243,7 @@ app.get('/api/queue/:clinicId', async (req, res) => {
   }
 })
 
-
-// GET /api/queue/:clinicId/position/:patientId — retrieve a patient's position in the queue
+// GET /api/queue/:clinicId/position/:patientId
 app.get('/api/queue/:clinicId/position/:patientId', async (req, res) => {
   try {
     const { clinicId, patientId } = req.params
@@ -253,7 +271,7 @@ app.get('/api/queue/:clinicId/position/:patientId', async (req, res) => {
   }
 })
 
-// GET /api/queue/:clinicId/entry/:patientId — retrieve a patient's full active queue entry
+// GET /api/queue/:clinicId/entry/:patientId
 app.get('/api/queue/:clinicId/entry/:patientId', async (req, res) => {
   try {
     const { clinicId, patientId } = req.params
@@ -280,17 +298,23 @@ app.get('/api/queue/:clinicId/entry/:patientId', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch queue entry' })
   }
 })
-// POST /api/role-requests — submit a new role request
+
 const {
-  hasRequiredRoleRequestFields,isValidUuid,isValidRequestedRole, isDifferentFromCurrentRole,doesUserExist, 
-  hasDuplicatePendingRoleRequest,} = require('./roleRequestValidation')
+  hasRequiredRoleRequestFields,
+  isValidUuid,
+  isValidRequestedRole,
+  isDifferentFromCurrentRole,
+  doesUserExist,
+  hasDuplicatePendingRoleRequest,
+} = require('./roleRequestValidation')
+
 app.post('/api/role-requests', async (req, res) => {
   try {
     const { user_id, requested_role } = req.body
 
     if (!hasRequiredRoleRequestFields(user_id, requested_role)) {
       return res.status(400).json({
-        error: 'user_id and requested_role are required'
+        error: 'user_id and requested_role are required',
       })
     }
 
@@ -330,7 +354,7 @@ app.post('/api/role-requests', async (req, res) => {
 
     if (hasDuplicatePendingRoleRequest(existingRequest)) {
       return res.status(409).json({
-        error: 'A pending request for this role already exists'
+        error: 'A pending request for this role already exists',
       })
     }
 
@@ -339,7 +363,7 @@ app.post('/api/role-requests', async (req, res) => {
       .insert({
         user_id,
         requested_role,
-        status: 'pending'
+        status: 'pending',
       })
       .select()
       .single()
@@ -353,7 +377,6 @@ app.post('/api/role-requests', async (req, res) => {
   }
 })
 
-// GET /api/role-requests — admin fetches role requests
 app.get('/api/role-requests', async (req, res) => {
   try {
     const { admin_id, status } = req.query
@@ -415,7 +438,7 @@ app.get('/api/role-requests', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch role requests' })
   }
 })
-// GET /api/queue/:clinicId/status/:patientId — retrieve just the status of a patient's queue entry
+
 app.get('/api/queue/:clinicId/status/:patientId', async (req, res) => {
   try {
     const { clinicId, patientId } = req.params
@@ -442,7 +465,7 @@ app.get('/api/queue/:clinicId/status/:patientId', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch queue status' })
   }
 })
-// PATCH /api/role-requests/:id/approve — admin approves a pending role request
+
 app.patch('/api/role-requests/:id/approve', async (req, res) => {
   try {
     const { id } = req.params
@@ -540,7 +563,6 @@ app.patch('/api/role-requests/:id/approve', async (req, res) => {
   }
 })
 
-// PATCH /api/role-requests/:id/reject — admin rejects a pending role request
 app.patch('/api/role-requests/:id/reject', async (req, res) => {
   try {
     const { id } = req.params
@@ -598,9 +620,9 @@ app.patch('/api/role-requests/:id/reject', async (req, res) => {
   }
 })
 
-// POST /api/queue/:clinicId/join — patient joins the virtual queue
-const { validateQueueJoin } = require('./queueValidation')
+const { validateQueueJoin, isValidStatusTransition } = require('./queueValidation')
 
+// POST /api/queue/:clinicId/join
 app.post('/api/queue/:clinicId/join', async (req, res) => {
   try {
     const { clinicId } = req.params
@@ -622,7 +644,6 @@ app.post('/api/queue/:clinicId/join', async (req, res) => {
       return res.status(404).json({ error: 'Clinic not found' })
     }
 
-    // Fetch all active queue entries for this patient across all clinics
     const { data: activeQueues, error: activeError } = await supabase
       .from('queue_entries')
       .select('patient_id, status, clinic_id')
@@ -631,7 +652,6 @@ app.post('/api/queue/:clinicId/join', async (req, res) => {
 
     if (activeError) throw activeError
 
-    // Use validation helper — checks confirmed and no active queue
     if (!validateQueueJoin(patient_id, activeQueues, confirmed)) {
       if (!confirmed) {
         return res.status(400).json({ error: 'Queue join must be confirmed by the patient' })
@@ -641,7 +661,6 @@ app.post('/api/queue/:clinicId/join', async (req, res) => {
 
     const oldQueue = await tryFetchActiveQueueSnapshot(clinicId)
 
-    // Calculate next position in this clinic's queue
     const { data: queueData, error: queueError } = await supabase
       .from('queue_entries')
       .select('position')
@@ -654,29 +673,30 @@ app.post('/api/queue/:clinicId/join', async (req, res) => {
 
     const nextPosition = queueData.length > 0 ? queueData[0].position + 1 : 1
 
-    // Insert new queue entry
     const { data: newEntry, error: insertError } = await supabase
       .from('queue_entries')
       .insert({
         clinic_id: clinicId,
-        patient_id: patient_id,
+        patient_id,
         position: nextPosition,
         status: 'Waiting',
-        joined_at: new Date().toISOString()
+        joined_at: new Date().toISOString(),
       })
       .select()
       .single()
+
     if (insertError) {
       if (insertError.code === '23505') {
         return res.status(409).json({
-        error: 'Patient already has an active queue entry'
-      })
-    }
+          error: 'Patient already has an active queue entry',
+        })
+      }
       throw insertError
-  }
-    //if (insertError) throw insertError
+    }
 
     const queueNotifications = await triggerQueueNotificationsForClinicSafely(clinicId, oldQueue)
+
+    io.to(clinicId).emit('queueUpdated')
 
     res.status(201).json({ entry: newEntry, queue_notifications: queueNotifications })
   } catch (err) {
@@ -685,9 +705,7 @@ app.post('/api/queue/:clinicId/join', async (req, res) => {
   }
 })
 
-// PATCH /api/queue/:clinicId/entry/:entryId/status — staff updates a patient's queue status
-const { isValidStatusTransition } = require('./queueValidation')
-
+// PATCH /api/queue/:clinicId/entry/:entryId/status
 app.patch('/api/queue/:clinicId/entry/:entryId/status', async (req, res) => {
   try {
     const { clinicId, entryId } = req.params
@@ -703,7 +721,6 @@ app.patch('/api/queue/:clinicId/entry/:entryId/status', async (req, res) => {
       return res.status(400).json({ error: 'Invalid status value' })
     }
 
-    // Fetch current entry to validate transition
     const { data: currentEntry, error: fetchError } = await supabase
       .from('queue_entries')
       .select('status')
@@ -739,15 +756,14 @@ app.patch('/api/queue/:clinicId/entry/:entryId/status', async (req, res) => {
         clinic: clinicId,
       })
 
-      if (resequenceError) throw resequenceError    
+      if (resequenceError) throw resequenceError
     }
 
     const queueNotifications = await triggerQueueNotificationsForClinicSafely(clinicId, oldQueue)
 
-    // Insert notification for the patient on status change
     const notificationMessages = {
-      'Called': 'You are being called — please make your way to the consultation room.',
-      'Complete': 'Your visit is complete. Thank you for using Ubuntu Health.'
+      Called: 'You are being called — please make your way to the consultation room.',
+      Complete: 'Your visit is complete. Thank you for using Ubuntu Health.',
     }
 
     if (notificationMessages[status]) {
@@ -759,9 +775,11 @@ app.patch('/api/queue/:clinicId/entry/:entryId/status', async (req, res) => {
           channel: 'push',
           message: notificationMessages[status],
           sent_at: new Date().toISOString(),
-          delivered: false
+          delivered: false,
         })
     }
+
+    io.to(clinicId).emit('queueUpdated')
 
     res.json({ entry: updatedEntry, queue_notifications: queueNotifications })
   } catch (err) {
@@ -770,7 +788,7 @@ app.patch('/api/queue/:clinicId/entry/:entryId/status', async (req, res) => {
   }
 })
 
-// DELETE /api/queue/:clinicId/entry/:entryId — staff removes a patient from the queue
+// DELETE /api/queue/:clinicId/entry/:entryId
 app.delete('/api/queue/:clinicId/entry/:entryId', async (req, res) => {
   try {
     const { clinicId, entryId } = req.params
@@ -808,6 +826,8 @@ app.delete('/api/queue/:clinicId/entry/:entryId', async (req, res) => {
 
     const queueNotifications = await triggerQueueNotificationsForClinicSafely(clinicId, oldQueue)
 
+    io.to(clinicId).emit('queueUpdated')
+
     res.json({
       message: 'Patient removed from queue successfully',
       queue_notifications: queueNotifications,
@@ -818,7 +838,6 @@ app.delete('/api/queue/:clinicId/entry/:entryId', async (req, res) => {
   }
 })
 
-// GET /api/queue-notifications/:patientId — patient fetches queue position alerts
 app.get('/api/queue-notifications/:patientId', async (req, res) => {
   try {
     const { patientId } = req.params
@@ -844,13 +863,11 @@ app.get('/api/queue-notifications/:patientId', async (req, res) => {
   }
 })
 
-// Serve built frontend
 const publicPath = path.join(__dirname, '..', 'public')
 app.use(express.static(publicPath))
 
-// React catch-all — must come LAST, after all API routes
 app.get('/{*any}', (req, res) => {
   res.sendFile(path.join(publicPath, 'index.html'))
 })
 
-module.exports = app
+module.exports = server
