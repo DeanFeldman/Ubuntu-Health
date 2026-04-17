@@ -97,11 +97,21 @@ async function createNotification(notification) {
 
   const { data, error } = await supabase
     .from('queue_notifications')
-    .insert(notification)
+    .insert({
+      queue_entry_id: notification.queue_entry_id,
+      patient_id: notification.patient_id,
+      clinic_id: notification.clinic_id,
+      type: notification.type,
+      position: notification.position,
+      created_at: new Date().toISOString(),
+    })
     .select()
     .single()
 
-  if (error) throw error
+  if (error) {
+    console.error('Failed to insert queue notification:', error)
+    throw error
+  }
 
   return data || notification
 }
