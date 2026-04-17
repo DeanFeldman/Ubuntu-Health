@@ -619,7 +619,7 @@ export default function QueuePage() {
                 <dt className="q-detail-key">Joined at</dt>
                 <dd className="q-detail-val">
                   {queueEntry.joined_at
-                    ? new Date(queueEntry.joined_at).toLocaleTimeString('en-ZA', {
+                    ? new Date(queueEntry.joined_at + 'Z').toLocaleTimeString('en-ZA', {
                         hour: '2-digit',
                         minute: '2-digit',
                         timeZone: 'Africa/Johannesburg',
