@@ -17,7 +17,7 @@ function toPosition(value) {
   const position = Number(value)
   return Number.isInteger(position) ? position : null
 }
-
+/*
 function getPositionNotification(oldEntry, newEntry) {
   const oldPosition = toPosition(oldEntry?.position)
   const newPosition = toPosition(newEntry?.position)
@@ -34,7 +34,36 @@ function getPositionNotification(oldEntry, newEntry) {
     type,
     position: newPosition,
   }
+}*/
+function getPositionNotification(oldEntry, newEntry) {
+  const oldPosition = toPosition(oldEntry?.position)
+  const newPosition = toPosition(newEntry?.position)
+
+
+  if (![1, 2, 3].includes(newPosition)) return null
+
+  
+  if (!oldEntry) return null
+
+  
+  if (oldPosition === null || newPosition === null) return null
+
+  
+  if (newPosition >= oldPosition) return null
+
+
+  if (newEntry.status === 'Complete') return null
+
+  return {
+    queue_entry_id: newEntry.id,
+    patient_id: newEntry.patient_id,
+    clinic_id: newEntry.clinic_id,
+    type: `POSITION_${newPosition}`,
+    position: newPosition,
+  }
 }
+
+//
 
 function getStatusNotification(oldEntry, newEntry) {
   if (oldEntry?.status === CONSULTATION_STATUS) return null
