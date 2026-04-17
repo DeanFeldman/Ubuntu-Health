@@ -39,13 +39,20 @@ function getPositionNotification(oldEntry, newEntry) {
   const oldPosition = toPosition(oldEntry?.position)
   const newPosition = toPosition(newEntry?.position)
 
-  
+
   if (![1, 2, 3].includes(newPosition)) return null
 
- 
-  if (oldPosition === null || newPosition === null) return null
-  if (oldPosition === newPosition) return null
+  
+  if (!oldEntry) return null
 
+  
+  if (oldPosition === null || newPosition === null) return null
+
+  
+  if (newPosition >= oldPosition) return null
+
+
+  if (newEntry.status === 'Complete') return null
 
   return {
     queue_entry_id: newEntry.id,
