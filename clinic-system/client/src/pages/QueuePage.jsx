@@ -664,7 +664,7 @@ export default function QueuePage() {
     )}
       </main>
 
-      {pendingClinic && !queueEntry && (
+    {pendingClinic && !queueEntry && !loadingQueue && (
         <aside
           className="q-overlay"
           role="dialog"
