@@ -346,6 +346,50 @@ export default function QueuePage() {
   const [actionError, setActionError] = useState(null)
   const [actionSuccess, setActionSuccess] = useState(null)
 
+  const [clinicRequestLoading, setClinicRequestLoading] = useState(false)
+  const [clinicRequestSuccess, setClinicRequestSuccess] = useState(null)
+ 
+  
+  async function handleRequestClinicAccess() {
+    const clinicId = pendingClinic?.id || localStorage.getItem('selectedClinicId')
+    const clinicName = pendingClinic?.name || queueEntry?.clinic_name || 'this clinic'
+
+    if (!clinicId || !user?.id) {
+      setActionError('Missing clinic or user details')
+      return
+    }
+
+    try {
+      setClinicRequestLoading(true)
+      setActionError(null)
+      setClinicRequestSuccess(null)
+
+      const res = await fetch(`${API_BASE}/api/clinic-requests`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          staff_user_id: user.id,
+          clinic_id: clinicId,
+        }),
+      })
+
+      const data = await res.json().catch(() => null)
+
+      if (!res.ok) {
+        throw new Error(data?.error || 'Failed to submit clinic access request')
+      }
+
+      setClinicRequestSuccess(`Clinic access request sent for ${clinicName}.`)
+    } catch (err) {
+      setActionError(err.message || 'Failed to submit clinic access request')
+    } finally {
+      setClinicRequestLoading(false)
+    }
+  }
+
   const fetchQueue = useCallback(async () => {
     try {
       setLoadingQueue(true)
@@ -518,6 +562,9 @@ export default function QueuePage() {
     }
   }
 
+    const canRequestClinicAccess =
+      ['Staff', 'Admin', 'Clinic Staff'].includes(user?.role) &&
+      !!pendingClinic?.id
   return (
     <>
       <style>{styles}</style>
@@ -691,6 +738,25 @@ export default function QueuePage() {
               <strong>{pendingClinic.name}</strong>
               <span>{pendingClinic.municipality}, {pendingClinic.district}</span>
             </address>
+              
+            {clinicRequestSuccess && (
+              <p className="q-alert q-alert-success" role="status">
+                <span className="q-alert-icon">✓</span>
+                {clinicRequestSuccess}
+              </p>
+            )}
+
+            {canRequestClinicAccess && (
+              <button
+                className="q-btn q-btn-ghost"
+                onClick={handleRequestClinicAccess}
+                disabled={clinicRequestLoading}
+                type="button"
+                style={{ width: '100%', marginBottom: '12px' }}
+              >
+                {clinicRequestLoading ? 'Sending request…' : 'Request staff access for this clinic'}
+              </button>
+            )}
 
             <footer className="q-modal-actions">
               <button
