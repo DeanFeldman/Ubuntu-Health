@@ -1,5 +1,3 @@
-
-
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import QueuePage from '../pages/QueuePage'
@@ -9,6 +7,10 @@ jest.mock('../context/AuthContext', () => ({
   useAuth: jest.fn(),
 }))
 
+jest.mock('../components/QueueNotifications', () => () => null)
+
+jest.mock('../lib/getApiBase', () => jest.fn(() => 'http://localhost:8080'))
+
 const mockNavigate = jest.fn()
 
 jest.mock('react-router-dom', () => ({
@@ -16,21 +18,16 @@ jest.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }))
 
-test('placeholder test', () => {
-  expect(true).toBe(true)
-})
-
-/*
-
-describe('QueuePage confirmation flow', () => {
+describe('QueuePage join flow', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    localStorage.clear()
+    sessionStorage.clear()
 
     useAuth.mockReturnValue({
       user: { id: 'patient-123' },
     })
 
-    localStorage.clear()
     localStorage.setItem('selectedClinicId', 'clinic-123')
 
     Object.defineProperty(window, 'history', {
@@ -50,16 +47,10 @@ describe('QueuePage confirmation flow', () => {
       },
     })
 
-    window.__API_BASE__ = 'http://localhost:8080'
     global.fetch = jest.fn()
   })
 
-  afterEach(() => {
-    delete window.__API_BASE__
-  })
-
-  // Popup should appear with the correct clinic details
-  test('shows confirmation modal with correct clinic details', async () => {
+  test('popup appears with correct clinic details', async () => {
     fetch.mockResolvedValueOnce({
       status: 404,
       ok: false,
@@ -77,11 +68,10 @@ describe('QueuePage confirmation flow', () => {
     expect(screen.getByRole('button', { name: 'Confirm' })).toBeInTheDocument()
   })
 
-  // Cancel should close the popup and not trigger a join request
-  test('cancel closes modal and does not send join request', async () => {
+  test('cancel closes popup and prevents join request', async () => {
     const user = userEvent.setup()
 
-    fetch.mockResolvedValue({
+    fetch.mockResolvedValueOnce({
       status: 404,
       ok: false,
       json: async () => ({
@@ -91,20 +81,21 @@ describe('QueuePage confirmation flow', () => {
 
     render(<QueuePage />)
 
-    const cancelBtn = await screen.findByRole('button', { name: 'Cancel' })
-    await user.click(cancelBtn)
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
 
     expect(screen.queryByText('Join virtual queue?')).not.toBeInTheDocument()
 
-    const joinCalls = fetch.mock.calls.filter(
-      (call) => call[0] === 'http://localhost:8080/api/queue/clinic-123/join'
-    )
+    const joinCalls = fetch.mock.calls.filter(([url, options]) => {
+      return (
+        String(url).includes('/api/queue/clinic-123/join') &&
+        options?.method === 'POST'
+      )
+    })
 
     expect(joinCalls).toHaveLength(0)
   })
 
-  // Confirm should send the join request and show success feedback
-  test('confirm sends join request and shows success feedback', async () => {
+  test('confirm joins correct clinic and shows success feedback', async () => {
     const user = userEvent.setup()
 
     fetch
@@ -133,12 +124,11 @@ describe('QueuePage confirmation flow', () => {
 
     render(<QueuePage />)
 
-    const confirmBtn = await screen.findByRole('button', { name: 'Confirm' })
-    await user.click(confirmBtn)
+    await user.click(await screen.findByRole('button', { name: 'Confirm' }))
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith(
-        'http://localhost:8080/api/queue/clinic-123/join',
+        expect.stringContaining('/api/queue/clinic-123/join'),
         expect.objectContaining({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -155,64 +145,15 @@ describe('QueuePage confirmation flow', () => {
     ).toBeInTheDocument()
   })
 
-  // Duplicate-entry errors should be shown clearly
-  test('shows duplicate-entry error feedback when join returns 409', async () => {
-    const user = userEvent.setup()
-
-    fetch
-      .mockResolvedValueOnce({
-        status: 404,
-        ok: false,
-        json: async () => ({
-          error: 'No active queue entry found for this patient',
-        }),
-      })
-      .mockResolvedValueOnce({
-        status: 409,
-        ok: false,
-        json: async () => ({
-          error: 'Patient already has an active queue entry',
-        }),
-      })
+  test('empty state shows when no active queue and no pending clinic', async () => {
+    window.history.state = { usr: {} }
+    localStorage.removeItem('selectedClinicId')
 
     render(<QueuePage />)
 
-    const confirmBtn = await screen.findByRole('button', { name: 'Confirm' })
-    await user.click(confirmBtn)
-
+    expect(await screen.findByText('Queue is empty')).toBeInTheDocument()
     expect(
-      await screen.findByText('Patient already has an active queue entry')
-    ).toBeInTheDocument()
-  })
-
-  // Invalid-request errors should also be shown clearly
-  test('shows invalid-request error feedback when join returns 400', async () => {
-    const user = userEvent.setup()
-
-    fetch
-      .mockResolvedValueOnce({
-        status: 404,
-        ok: false,
-        json: async () => ({
-          error: 'No active queue entry found for this patient',
-        }),
-      })
-      .mockResolvedValueOnce({
-        status: 400,
-        ok: false,
-        json: async () => ({
-          error: 'Invalid queue join request',
-        }),
-      })
-
-    render(<QueuePage />)
-
-    const confirmBtn = await screen.findByRole('button', { name: 'Confirm' })
-    await user.click(confirmBtn)
-
-    expect(
-      await screen.findByText('Invalid queue join request')
+      screen.getByRole('button', { name: 'Browse clinics' })
     ).toBeInTheDocument()
   })
 })
-*/
