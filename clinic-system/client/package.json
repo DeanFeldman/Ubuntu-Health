@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "jest --coverage --runInBand --all"
+    "test": "jest --coverage --runInBand --all",
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.101.1",
