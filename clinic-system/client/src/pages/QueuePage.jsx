@@ -351,7 +351,7 @@ export default function QueuePage() {
  
   
   async function handleRequestClinicAccess() {
-    const clinicId = pendingClinic?.id || localStorage.getItem('selectedClinicId')
+    const clinicId = localStorage.getItem('selectedClinicId')
     const clinicName = pendingClinic?.name || queueEntry?.clinic_name || 'this clinic'
 
     if (!clinicId || !user?.id) {
@@ -412,7 +412,6 @@ export default function QueuePage() {
 
       if (res.status === 404) {
         setFetchError(null)
-        setActionError(null)
         setQueueEntry(null)
         return
       }
@@ -723,7 +722,7 @@ export default function QueuePage() {
     )}
       </main>
 
-      {pendingClinic && !localStorage.getItem('selectedClinicId') && !queueEntry && !loadingQueue && (
+      {pendingClinic && !loadingQueue && (
         <aside
           className="q-overlay"
           role="dialog"
