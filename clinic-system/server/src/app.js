@@ -283,6 +283,7 @@ app.get('/api/queue/:clinicId/entry/:patientId', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch queue entry' })
   }
 })
+
 // POST /api/role-requests — submit a new role request
 const {
   hasRequiredRoleRequestFields,isValidUuid,isValidRequestedRole, isDifferentFromCurrentRole,doesUserExist, 
@@ -1116,84 +1117,84 @@ app.patch('/api/clinic-requests/:id/reject', async (req, res) => {
   }
 })
 
-app.post('/api/clinic-requests', async (req, res) => {
-  try {
-    const { staff_user_id, clinic_id } = req.body
+// app.post('/api/clinic-requests', async (req, res) => {
+//   try {
+//     const { staff_user_id, clinic_id } = req.body
 
-    if (!staff_user_id || !clinic_id) {
-      return res.status(400).json({ error: 'staff_user_id and clinic_id are required' })
-    }
+//     if (!staff_user_id || !clinic_id) {
+//       return res.status(400).json({ error: 'staff_user_id and clinic_id are required' })
+//     }
 
-    const uuidRegex = /^[0-9a-f-]{36}$/i
-    if (!uuidRegex.test(staff_user_id) || !uuidRegex.test(clinic_id)) {
-      return res.status(400).json({ error: 'Invalid user or clinic ID format' })
-    }
+//     const uuidRegex = /^[0-9a-f-]{36}$/i
+//     if (!uuidRegex.test(staff_user_id) || !uuidRegex.test(clinic_id)) {
+//       return res.status(400).json({ error: 'Invalid user or clinic ID format' })
+//     }
 
-    const { data: user, error: userError } = await supabase
-      .from('users')
-      .select('id, role')
-      .eq('id', staff_user_id)
-      .single()
+//     const { data: user, error: userError } = await supabase
+//       .from('users')
+//       .select('id, role')
+//       .eq('id', staff_user_id)
+//       .single()
 
-    if (userError || !user) {
-      return res.status(404).json({ error: 'Staff user not found' })
-    }
+//     if (userError || !user) {
+//       return res.status(404).json({ error: 'Staff user not found' })
+//     }
 
-    if (!['Staff', 'Admin', 'Clinic Staff'].includes(user.role)) {
-      return res.status(403).json({ error: 'Only staff or admins can submit clinic requests' })
-    }
+//     if (!['Staff', 'Admin', 'Clinic Staff'].includes(user.role)) {
+//       return res.status(403).json({ error: 'Only staff or admins can submit clinic requests' })
+//     }
 
-    const { data: clinic, error: clinicError } = await supabase
-      .from('clinics')
-      .select('id, name')
-      .eq('id', clinic_id)
-      .single()
+//     const { data: clinic, error: clinicError } = await supabase
+//       .from('clinics')
+//       .select('id, name')
+//       .eq('id', clinic_id)
+//       .single()
 
-    if (clinicError || !clinic) {
-      return res.status(404).json({ error: 'Clinic not found' })
-    }
+//     if (clinicError || !clinic) {
+//       return res.status(404).json({ error: 'Clinic not found' })
+//     }
 
-    const { data: existingRequest, error: existingError } = await supabase
-      .from('clinic_requests')
-      .select('id')
-      .eq('staff_user_id', staff_user_id)
-      .eq('clinic_id', clinic_id)
-      .eq('status', 'pending')
-      .maybeSingle()
+//     const { data: existingRequest, error: existingError } = await supabase
+//       .from('clinic_requests')
+//       .select('id')
+//       .eq('staff_user_id', staff_user_id)
+//       .eq('clinic_id', clinic_id)
+//       .eq('status', 'pending')
+//       .maybeSingle()
 
-    if (existingError) throw existingError
+//     if (existingError) throw existingError
 
-    if (existingRequest) {
-      return res.status(409).json({ error: 'You already have a pending request for this clinic' })
-    }
+//     if (existingRequest) {
+//       return res.status(409).json({ error: 'You already have a pending request for this clinic' })
+//     }
 
-    const { data, error } = await supabase
-      .from('clinic_requests')
-      .insert([
-        {
-          staff_user_id,
-          clinic_id,
-          status: 'pending',
-        },
-      ])
-      .select(`
-        *,
-        users:staff_user_id ( id, full_name, email, role ),
-        clinics:clinic_id ( id, name, facility_type, province )
-      `)
-      .single()
+//     const { data, error } = await supabase
+//       .from('clinic_requests')
+//       .insert([
+//         {
+//           staff_user_id,
+//           clinic_id,
+//           status: 'pending',
+//         },
+//       ])
+//       .select(`
+//         *,
+//         users:staff_user_id ( id, full_name, email, role ),
+//         clinics:clinic_id ( id, name, facility_type, province )
+//       `)
+//       .single()
 
-    if (error) throw error
+//     if (error) throw error
 
-    return res.status(201).json({
-      message: 'Clinic request submitted successfully',
-      request: data,
-    })
-  } catch (err) {
-    console.error(err)
-    return res.status(500).json({ error: 'Failed to submit clinic request' })
-  }
-})
+//     return res.status(201).json({
+//       message: 'Clinic request submitted successfully',
+//       request: data,
+//     })
+//   } catch (err) {
+//     console.error(err)
+//     return res.status(500).json({ error: 'Failed to submit clinic request' })
+//   }
+// })
 
 // GET /api/queue/:clinicId/completed-count — retrieve completed count for a clinic
 app.get('/api/queue/:clinicId/completed-count', async (req, res) => {
@@ -1217,6 +1218,93 @@ app.get('/api/queue/:clinicId/completed-count', async (req, res) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to fetch completed count' })
+  }
+})
+
+app.get('/api/users/patients', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, full_name, email')
+      .eq('role', 'Patient')
+      .order('full_name', { ascending: true })
+
+    if (error) throw error
+
+    res.json({ users: data || [] })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to fetch patients' })
+  }
+})
+
+
+app.post('/api/queue/:clinicId/add-patient', async (req, res) => {
+  try {
+    const { clinicId } = req.params
+    const { patient_id } = req.body
+
+    const uuidRegex = /^[0-9a-f-]{36}$/i
+    if (!uuidRegex.test(clinicId) || !uuidRegex.test(patient_id)) {
+      return res.status(400).json({ error: 'Invalid ID format' })
+    }
+
+    // check patient not already in queue (same as join logic)
+    const { data: activeQueues, error: activeError } = await supabase
+      .from('queue_entries')
+      .select('patient_id, status')
+      .eq('patient_id', patient_id)
+      .neq('status', 'Complete')
+
+    if (activeError) throw activeError
+
+    if (activeQueues.length > 0) {
+      return res.status(409).json({
+        error: 'Patient already has an active queue entry',
+      })
+    }
+
+    const oldQueue = await tryFetchActiveQueueSnapshot(clinicId)
+
+    // get next position
+    const { data: queueData, error: queueError } = await supabase
+      .from('queue_entries')
+      .select('position')
+      .eq('clinic_id', clinicId)
+      .eq('status', 'Waiting')
+      .order('position', { ascending: false })
+      .limit(1)
+
+    if (queueError) throw queueError
+
+    const nextPosition =
+      queueData.length > 0 ? queueData[0].position + 1 : 1
+
+    // insert
+    const { data: newEntry, error: insertError } = await supabase
+      .from('queue_entries')
+      .insert({
+        clinic_id: clinicId,
+        patient_id,
+        position: nextPosition,
+        status: 'Waiting',
+        joined_at: new Date().toISOString(),
+      })
+      .select()
+      .single()
+
+    if (insertError) throw insertError
+
+    const queueNotifications =
+      await triggerQueueNotificationsForClinicSafely(clinicId, oldQueue)
+
+    res.status(201).json({
+      entry: newEntry,
+      queue_notifications: queueNotifications,
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to add patient to queue' })
   }
 })
 

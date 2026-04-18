@@ -234,6 +234,11 @@ export default function StaffDashboard() {
   const [toast, setToast] = useState({ message: '', type: '', visible: false })
   const [completedCount, setCompletedCount] = useState(0)
 
+
+  const [allPatients, setAllPatients] = useState([])
+  const [selectedPatientId, setSelectedPatientId] = useState('')
+  const [addPatientLoading, setAddPatientLoading] = useState(false)
+
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type, visible: true })
     setTimeout(() => {
@@ -294,10 +299,33 @@ const fetchCompletedCount = useCallback(async () => {
   }
 }, [authLoading, resolvedClinicId, API_BASE])
 
+const fetchPatients = useCallback(async () => {
+  if (authLoading) return
+
+  try {
+    const res = await fetch(`${API_BASE}/api/users/patients`, {
+      headers: { Accept: 'application/json' },
+      credentials: 'include',
+    })
+
+    const data = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to load patients.')
+    }
+
+    setAllPatients(Array.isArray(data.users) ? data.users : [])
+  } catch (err) {
+    console.error('Failed to fetch patients:', err.message)
+  }
+}, [authLoading, API_BASE])
+
+
 useEffect(() => {
-    fetchQueue()
-    fetchCompletedCount()
-  }, [fetchQueue, fetchCompletedCount])
+  fetchQueue()
+  fetchCompletedCount()
+  fetchPatients()
+}, [fetchQueue, fetchCompletedCount, fetchPatients])
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -382,6 +410,43 @@ useEffect(() => {
       setRemoveLoading(null)
     }
   }
+  
+const handleAddPatientToQueue = async () => {
+  if (!selectedPatientId) {
+    showToast('Please select a patient first.', 'error')
+    return
+  }
+
+  setAddPatientLoading(true)
+
+  try {
+    const res = await fetch(`${API_BASE}/api/queue/${resolvedClinicId}/add-patient`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({ patient_id: selectedPatientId }),
+    })
+
+    const data = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Could not add patient to queue.')
+    }
+
+    await fetchQueue()
+    await fetchCompletedCount()
+    setSelectedPatientId('')
+    showToast('Patient added to queue.', 'success')
+  } catch (err) {
+    showToast(err.message, 'error')
+  } finally {
+    setAddPatientLoading(false)
+  }
+}
+  
 
   const stats = {
     total: queue.length,
@@ -415,6 +480,46 @@ useEffect(() => {
         <section className="sd-panel">
           <header className="sd-panel-header">
             <h2 className="sd-panel-title">Patients</h2>
+
+            <form
+              onSubmit={e => {
+                e.preventDefault()
+                handleAddPatientToQueue()
+              }}
+              style={{
+                display: 'flex',
+                gap: '8px',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+              }}
+            >
+              <label htmlFor="patientSelect" className="sr-only">
+                Select patient
+              </label>
+
+              <select
+                id="patientSelect"
+                value={selectedPatientId}
+                onChange={e => setSelectedPatientId(e.target.value)}
+                className="sd-act-btn"
+                style={{ minWidth: '240px', background: 'white' }}
+              >
+                <option value="">Select a patient</option>
+                {allPatients.map(patient => (
+                  <option key={patient.id} value={patient.id}>
+                    {patient.full_name} {patient.email ? `(${patient.email})` : ''}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="submit"
+                className="sd-act-btn"
+                disabled={addPatientLoading || !selectedPatientId}
+              >
+                {addPatientLoading ? 'Adding…' : 'Add to queue'}
+              </button>
+            </form>
           </header>
 
           {fetchLoading && <p className="sd-empty">Loading queue…</p>}
