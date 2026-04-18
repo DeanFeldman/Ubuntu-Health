@@ -1143,12 +1143,11 @@ app.get('/api/queue/:clinicId/completed-count', async (req, res) => {
   }
 })
 
-app.get('/api/users/patients', async (req, res) => {
+app.get('/api/users', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('users')
-      .select('id, full_name, email')
-      .eq('role', 'Patient')
+      .select('id, full_name, phone, role, clinic_id')
       .order('full_name', { ascending: true })
 
     if (error) throw error
@@ -1156,7 +1155,7 @@ app.get('/api/users/patients', async (req, res) => {
     res.json({ users: data || [] })
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Failed to fetch patients' })
+    res.status(500).json({ error: 'Failed to fetch users' })
   }
 })
 

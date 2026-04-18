@@ -303,7 +303,7 @@ const fetchPatients = useCallback(async () => {
   if (authLoading) return
 
   try {
-    const res = await fetch(`${API_BASE}/api/users/patients`, {
+    const res = await fetch(`${API_BASE}/api/users`, {
       headers: { Accept: 'application/json' },
       credentials: 'include',
     })
@@ -507,7 +507,7 @@ const handleAddPatientToQueue = async () => {
                 <option value="">Select a patient</option>
                 {allPatients.map(patient => (
                   <option key={patient.id} value={patient.id}>
-                    {patient.full_name} {patient.email ? `(${patient.email})` : ''}
+                    {patient.full_name} ({patient.role})
                   </option>
                 ))}
               </select>
