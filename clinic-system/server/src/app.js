@@ -199,7 +199,7 @@ app.get('/api/queue/:clinicId', async (req, res) => {
     if (patientIds.length > 0) {
       const { data: users, error: usersError } = await supabase
         .from('users')
-        .select('id, full_name')
+        .select('id, full_name, emails')
         .in('id', patientIds)
 
       if (usersError) throw usersError
@@ -210,7 +210,10 @@ app.get('/api/queue/:clinicId', async (req, res) => {
     const queueWithNames = (queueData || []).map(entry => ({
       ...entry,
       patient: usersById[entry.patient_id]
-        ? { full_name: usersById[entry.patient_id].full_name }
+        ? {
+            full_name: usersById[entry.patient_id].full_name,
+            email: usersById[entry.patient_id].email,
+          }
         : null,
     }))
 
