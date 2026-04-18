@@ -304,71 +304,8 @@ export default function AdminDashboard() {
     }
   }
 
-  async function approveClinicRequest(request) {
-    setProcessingClinicRequestId(request.id)
-    setClinicFeedback('')
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/clinic-requests/${request.id}/approve`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({
-          admin_id: user.id,
-        }),
-      })
-
-      const body = await readApiResponse(response)
-
-      if (!response.ok) {
-        throw new Error(body.error || 'Failed to approve clinic request')
-      }
-
-      setClinicRequests((currentRequests) =>
-        currentRequests.filter((currentRequest) => currentRequest.id !== request.id)
-      )
-      setClinicFeedback('Clinic request approved.')
-    } catch (err) {
-      setClinicFeedback(err.message || 'Failed to approve clinic request')
-    } finally {
-      setProcessingClinicRequestId('')
-    }
-  }
-
-  async function rejectClinicRequest(request) {
-    setProcessingClinicRequestId(request.id)
-    setClinicFeedback('')
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/clinic-requests/${request.id}/reject`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({
-          admin_id: user.id,
-        }),
-      })
-
-      const body = await readApiResponse(response)
-
-      if (!response.ok) {
-        throw new Error(body.error || 'Failed to reject clinic request')
-      }
-
-      setClinicRequests((currentRequests) =>
-        currentRequests.filter((currentRequest) => currentRequest.id !== request.id)
-      )
-      setClinicFeedback('Clinic request rejected.')
-    } catch (err) {
-      setClinicFeedback(err.message || 'Failed to reject clinic request')
-    } finally {
-      setProcessingClinicRequestId('')
-    }
-  }
+  // for the clinic requests, we can have similar approveClinicRequest and rejectClinicRequest functions that call the respective API endpoints and update the clinicRequests state accordingly
+  
 
   return (
     <section>
@@ -455,80 +392,7 @@ export default function AdminDashboard() {
           )}
         </section>
 
-        <section className="admin-panel" aria-labelledby="clinic-requests-heading">
-          <header className="admin-panel-header">
-            <h2 id="clinic-requests-heading">Pending clinic access requests</h2>
-            <span>{clinicRequests.length} pending</span>
-          </header>
-
-          {clinicError && (
-            <p className="admin-message admin-error" role="alert">
-              {clinicError}
-            </p>
-          )}
-
-          {clinicFeedback && (
-            <p className="admin-message admin-feedback" role="status">
-              {clinicFeedback}
-            </p>
-          )}
-
-          {loadingClinicRequests ? (
-            <p className="admin-message">Loading clinic requests...</p>
-          ) : clinicRequests.length === 0 ? (
-            <p className="admin-message">No pending clinic access requests.</p>
-          ) : (
-            <section className="admin-table-wrap">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Staff member</th>
-                    <th>Email</th>
-                    <th>Current role</th>
-                    <th>Requested clinic</th>
-                    <th>Requested</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {clinicRequests.map((request) => (
-                    <tr key={request.id}>
-                      <td>{request.users?.full_name || 'Unknown user'}</td>
-                      <td>{request.users?.email || 'No email'}</td>
-                      <td>{request.users?.role || 'Unknown'}</td>
-                      <td>{request.clinics?.name || 'Unknown clinic'}</td>
-                      <td>{new Date(request.created_at).toLocaleDateString('en-GB')}</td>
-                      <td>
-                        <menu className="admin-actions">
-                          <li>
-                            <button
-                              className="admin-btn admin-btn-approve"
-                              disabled={processingClinicRequestId === request.id}
-                              onClick={() => approveClinicRequest(request)}
-                              type="button"
-                            >
-                              Approve
-                            </button>
-                          </li>
-                          <li>
-                            <button
-                              className="admin-btn admin-btn-reject"
-                              disabled={processingClinicRequestId === request.id}
-                              onClick={() => rejectClinicRequest(request)}
-                              type="button"
-                            >
-                              Reject
-                            </button>
-                          </li>
-                        </menu>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </section>
-          )}
-        </section>
+       {/* add the clinic requests panel here, similar to the role requests panel, using the clinicRequests state and related functions */}
       </section>
     </section>
   )
