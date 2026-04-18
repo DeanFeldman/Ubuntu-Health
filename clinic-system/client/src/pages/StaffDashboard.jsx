@@ -232,6 +232,7 @@ export default function StaffDashboard() {
   const [statusLoading, setStatusLoading] = useState(null)
   const [removeLoading, setRemoveLoading] = useState(null)
   const [toast, setToast] = useState({ message: '', type: '', visible: false })
+  const [completedCount, setCompletedCount] = useState(0)
 
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type, visible: true })
@@ -273,17 +274,39 @@ export default function StaffDashboard() {
     }
   }, [authLoading, resolvedClinicId])
 
-  useEffect(() => {
+const fetchCompletedCount = useCallback(async () => {
+  if (authLoading || !resolvedClinicId) return
+
+  try {
+    const res = await fetch(`${API_BASE}/api/queue/${resolvedClinicId}/completed-count`, {
+      headers: { Accept: 'application/json' },
+    })
+
+    const data = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to load completed count.')
+    }
+
+    setCompletedCount(data.completedCount || 0)
+  } catch (err) {
+    console.error('Failed to fetch completed count:', err.message)
+  }
+}, [authLoading, resolvedClinicId, API_BASE])
+
+useEffect(() => {
     fetchQueue()
-  }, [fetchQueue])
+    fetchCompletedCount()
+  }, [fetchQueue, fetchCompletedCount])
 
   useEffect(() => {
     const interval = setInterval(() => {
       fetchQueue()
-    }, 30000) // 30 seconds
+      fetchCompletedCount()
+    }, 30000)
 
     return () => clearInterval(interval)
-  }, [fetchQueue])
+  }, [fetchQueue, fetchCompletedCount])
 
   const handleStatusUpdate = async entry => {
     const currentIndex = STATUS_SEQUENCE.indexOf(entry.status)
@@ -326,6 +349,7 @@ export default function StaffDashboard() {
         )
       )
       await fetchQueue()
+      await fetchCompletedCount()
       showToast(`${getDisplayName(entry)} marked as ${nextStatus}.`, 'success')
     } catch (err) {
       showToast(err.message, 'error')
@@ -350,6 +374,7 @@ export default function StaffDashboard() {
 
       setQueue(current => current.filter(item => item.id !== entry.id))
       await fetchQueue()
+      await fetchCompletedCount()
       showToast(`${getDisplayName(entry)} removed from the queue.`, 'success')
     } catch (err) {
       showToast(err.message, 'error')
@@ -362,7 +387,7 @@ export default function StaffDashboard() {
     total: queue.length,
     waiting: queue.filter(entry => entry.status === 'Waiting').length,
     consultation: queue.filter(entry => entry.status === 'In Consultation').length,
-    complete: queue.filter(entry => entry.status === 'Complete').length,
+    complete: completedCount,  
   }
 
   return (
