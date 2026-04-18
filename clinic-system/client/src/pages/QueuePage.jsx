@@ -526,6 +526,7 @@ export default function QueuePage() {
   const handleCancelJoin = () => {
     setPendingClinic(null)
     setActionError(null)
+    window.history.replaceState({}, '')
   }
 
   const handleLeaveQueue = async () => {
@@ -554,6 +555,7 @@ export default function QueuePage() {
 
       localStorage.removeItem('selectedClinicId')
       setQueueEntry(null)
+      setPendingClinic(null)
       setActionSuccess('You have been removed from the queue.')
     } catch (err) {
       setActionError(err.message)
@@ -562,9 +564,19 @@ export default function QueuePage() {
     }
   }
 
-    const canRequestClinicAccess =
-      ['Staff', 'Admin', 'Clinic Staff'].includes(user?.role) &&
-      !!pendingClinic?.id
+  useEffect(() => {
+    if (!pendingClinic) return
+
+    window.history.replaceState(
+      { ...(window.history.state || {}), usr: { ...(window.history.state?.usr || {}), clinic: null } },
+      ''
+    )
+  }, [pendingClinic])
+
+  const canRequestClinicAccess =
+    ['Staff', 'Admin', 'Clinic Staff'].includes(user?.role) &&
+    !!pendingClinic?.id
+    
   return (
     <>
       <style>{styles}</style>
@@ -696,8 +708,8 @@ export default function QueuePage() {
           <p className="q-refresh-hint">Updates automatically every 30 seconds.</p>
         )}
 
-        <QueueNotifications />
-
+        {queueEntry && <QueueNotifications />}
+        
         {!loadingQueue && !fetchError && queueEntry && ['Waiting', 'Called'].includes(queueEntry.status) && (
       <div style={{ marginTop: '12px', textAlign: 'center' }}>
         <button
@@ -711,7 +723,7 @@ export default function QueuePage() {
     )}
       </main>
 
-    {pendingClinic && !queueEntry && !loadingQueue && (
+      {pendingClinic && !localStorage.getItem('selectedClinicId') && !queueEntry && !loadingQueue && (
         <aside
           className="q-overlay"
           role="dialog"
