@@ -305,7 +305,6 @@ const fetchPatients = useCallback(async () => {
   try {
     const res = await fetch(`${API_BASE}/api/users`, {
       headers: { Accept: 'application/json' },
-      credentials: 'include',
     })
 
     const data = await res.json().catch(() => ({}))
