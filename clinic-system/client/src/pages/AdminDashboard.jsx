@@ -422,7 +422,7 @@ export default function AdminDashboard() {
                       <td>{request.users?.email || 'No email'}</td>
                       <td>{request.users?.role || 'Unknown'}</td>
                       <td>{request.requested_role}</td>
-                      <td>{new Date(request.created_at).toLocaleDateString()}</td>
+                      <td>{new Date(request.created_at).toLocaleDateString('en-GB')}</td>
                       <td>
                         <menu className="admin-actions">
                           <li>
@@ -497,7 +497,7 @@ export default function AdminDashboard() {
                       <td>{request.users?.email || 'No email'}</td>
                       <td>{request.users?.role || 'Unknown'}</td>
                       <td>{request.clinics?.name || 'Unknown clinic'}</td>
-                      <td>{new Date(request.created_at).toLocaleDateString()}</td>
+                      <td>{new Date(request.created_at).toLocaleDateString('en-GB')}</td>
                       <td>
                         <menu className="admin-actions">
                           <li>
