@@ -1192,6 +1192,31 @@ app.post('/api/clinic-requests', async (req, res) => {
   }
 })
 
+// GET /api/queue/:clinicId/completed-count — retrieve completed count for a clinic
+app.get('/api/queue/:clinicId/completed-count', async (req, res) => {
+  try {
+    const { clinicId } = req.params
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(clinicId)) {
+      return res.status(400).json({ error: 'Invalid clinic ID format' })
+    }
+
+    const { count, error } = await supabase
+      .from('queue_entries')
+      .select('*', { count: 'exact', head: true })
+      .eq('clinic_id', clinicId)
+      .eq('status', 'Complete')
+
+    if (error) throw error
+
+    res.json({ completedCount: count || 0 })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to fetch completed count' })
+  }
+})
+
 // Serve built frontend
 const publicPath = path.join(__dirname, '..', 'public')
 app.use(express.static(publicPath))
