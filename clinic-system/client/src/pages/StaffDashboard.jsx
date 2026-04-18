@@ -411,28 +411,27 @@ useEffect(() => {
   }
   
 const handleAddPatientToQueue = async () => {
-  if (!selectedPatientId) {
-    showToast('Please select a patient first.', 'error')
-    return
-  }
+  if (!resolvedClinicId || !selectedPatientId) return
 
   setAddPatientLoading(true)
 
   try {
-    const res = await fetch(`${API_BASE}/api/queue/${resolvedClinicId}/add-patient`, {
+    const response = await fetch(`${API_BASE}/api/queue/${resolvedClinicId}/join`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
-      credentials: 'include',
-      body: JSON.stringify({ patient_id: selectedPatientId }),
+      body: JSON.stringify({
+        patient_id: selectedPatientId,
+        confirmed: true,
+      }),
     })
 
-    const data = await res.json().catch(() => ({}))
+    const body = await response.json().catch(() => ({}))
 
-    if (!res.ok) {
-      throw new Error(data.error || 'Could not add patient to queue.')
+    if (!response.ok) {
+      throw new Error(body.error || 'Failed to add patient to queue')
     }
 
     await fetchQueue()
@@ -440,12 +439,11 @@ const handleAddPatientToQueue = async () => {
     setSelectedPatientId('')
     showToast('Patient added to queue.', 'success')
   } catch (err) {
-    showToast(err.message, 'error')
+    showToast(err.message || 'Failed to add patient to queue', 'error')
   } finally {
     setAddPatientLoading(false)
   }
-}
-  
+}  
 
   const stats = {
     total: queue.length,
