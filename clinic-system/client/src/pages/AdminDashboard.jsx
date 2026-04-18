@@ -304,71 +304,71 @@ export default function AdminDashboard() {
     }
   }
 
-  async function approveClinicRequest(request) {
-    setProcessingClinicRequestId(request.id)
-    setClinicFeedback('')
+  // async function approveClinicRequest(request) {
+  //   setProcessingClinicRequestId(request.id)
+  //   setClinicFeedback('')
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/clinic-requests/${request.id}/approve`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({
-          admin_id: user.id,
-        }),
-      })
+  //   try {
+  //     const response = await fetch(`${API_BASE_URL}/api/clinic-requests/${request.id}/approve`, {
+  //       method: 'PATCH',
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //         Accept: 'application/json',
+  //       },
+  //       body: JSON.stringify({
+  //         admin_id: user.id,
+  //       }),
+  //     })
 
-      const body = await readApiResponse(response)
+  //     const body = await readApiResponse(response)
 
-      if (!response.ok) {
-        throw new Error(body.error || 'Failed to approve clinic request')
-      }
+  //     if (!response.ok) {
+  //       throw new Error(body.error || 'Failed to approve clinic request')
+  //     }
 
-      setClinicRequests((currentRequests) =>
-        currentRequests.filter((currentRequest) => currentRequest.id !== request.id)
-      )
-      setClinicFeedback('Clinic request approved.')
-    } catch (err) {
-      setClinicFeedback(err.message || 'Failed to approve clinic request')
-    } finally {
-      setProcessingClinicRequestId('')
-    }
-  }
+  //     setClinicRequests((currentRequests) =>
+  //       currentRequests.filter((currentRequest) => currentRequest.id !== request.id)
+  //     )
+  //     setClinicFeedback('Clinic request approved.')
+  //   } catch (err) {
+  //     setClinicFeedback(err.message || 'Failed to approve clinic request')
+  //   } finally {
+  //     setProcessingClinicRequestId('')
+  //   }
+  // }
 
-  async function rejectClinicRequest(request) {
-    setProcessingClinicRequestId(request.id)
-    setClinicFeedback('')
+  // async function rejectClinicRequest(request) {
+  //   setProcessingClinicRequestId(request.id)
+  //   setClinicFeedback('')
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/clinic-requests/${request.id}/reject`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({
-          admin_id: user.id,
-        }),
-      })
+  //   try {
+  //     const response = await fetch(`${API_BASE_URL}/api/clinic-requests/${request.id}/reject`, {
+  //       method: 'PATCH',
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //         Accept: 'application/json',
+  //       },
+  //       body: JSON.stringify({
+  //         admin_id: user.id,
+  //       }),
+  //     })
 
-      const body = await readApiResponse(response)
+  //     const body = await readApiResponse(response)
 
-      if (!response.ok) {
-        throw new Error(body.error || 'Failed to reject clinic request')
-      }
+  //     if (!response.ok) {
+  //       throw new Error(body.error || 'Failed to reject clinic request')
+  //     }
 
-      setClinicRequests((currentRequests) =>
-        currentRequests.filter((currentRequest) => currentRequest.id !== request.id)
-      )
-      setClinicFeedback('Clinic request rejected.')
-    } catch (err) {
-      setClinicFeedback(err.message || 'Failed to reject clinic request')
-    } finally {
-      setProcessingClinicRequestId('')
-    }
-  }
+  //     setClinicRequests((currentRequests) =>
+  //       currentRequests.filter((currentRequest) => currentRequest.id !== request.id)
+  //     )
+  //     setClinicFeedback('Clinic request rejected.')
+  //   } catch (err) {
+  //     setClinicFeedback(err.message || 'Failed to reject clinic request')
+  //   } finally {
+  //     setProcessingClinicRequestId('')
+  //   }
+  // }
 
   return (
     <section>
@@ -455,7 +455,7 @@ export default function AdminDashboard() {
           )}
         </section>
 
-        <section className="admin-panel" aria-labelledby="clinic-requests-heading">
+        {/* <section className="admin-panel" aria-labelledby="clinic-requests-heading">
           <header className="admin-panel-header">
             <h2 id="clinic-requests-heading">Pending clinic access requests</h2>
             <span>{clinicRequests.length} pending</span>
@@ -528,7 +528,7 @@ export default function AdminDashboard() {
               </table>
             </section>
           )}
-        </section>
+        </section> */}
       </section>
     </section>
   )
