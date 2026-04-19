@@ -156,11 +156,7 @@ function playNotificationSound() {
 function formatNotificationTime(createdAt) {
   if (!createdAt) return 'Time unavailable'
 
-  const timestamp = /(?:Z|[+-]\d{2}:\d{2})$/.test(createdAt)
-    ? createdAt
-    : `${createdAt}Z`
-
-  return new Date(timestamp).toLocaleTimeString('en-ZA', {
+  return new Date(`${createdAt}Z`).toLocaleTimeString('en-ZA', {
     hour: '2-digit',
     minute: '2-digit',
     timeZone: 'Africa/Johannesburg',
