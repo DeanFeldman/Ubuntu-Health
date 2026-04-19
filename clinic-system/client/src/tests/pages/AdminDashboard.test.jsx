@@ -7,7 +7,7 @@ jest.mock('../../context/AuthContext', () => ({
   useAuth: jest.fn(),
 }))
 
-jest.mock('../../lib/getApiBase', () => jest.fn(() => 'http://localhost:8080'))
+jest.mock('../../lib/adminApiBase', () => jest.fn(() => 'http://localhost:8080'))
 
 
 //Safe fetch mock for admin endpoints
