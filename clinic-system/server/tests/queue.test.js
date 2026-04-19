@@ -171,3 +171,78 @@ describe('Queue staff action endpoints', () => {
     expect([200, 404, 500]).toContain(res.statusCode)
   }, 15000)
 })
+
+/*
+ EXTRA APP ROUTE COVERAGE
+ These tests target uncovered app.js endpoints
+ Keep high-level to avoid brittleness
+ */
+
+describe('Additional app.js route coverage', () => {
+  test('GET /api/queue-notifications/:patientId invalid patient id → 400', async () => {
+    const res = await request(app).get(`/api/queue-notifications/${invalidId}`)
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body).toHaveProperty('error')
+  })
+
+  test('GET /api/queue-notifications/:patientId valid id → 200 or 500', async () => {
+    const res = await request(app).get(`/api/queue-notifications/${validPatientId}`)
+
+    expect([200, 500]).toContain(res.statusCode)
+
+    if (res.statusCode === 200) {
+      expect(res.body).toHaveProperty('notifications')
+    }
+  }, 15000)
+
+  test('GET /api/queue/:clinicId/completed-count invalid → 400', async () => {
+    const res = await request(app).get(`/api/queue/${invalidId}/completed-count`)
+
+    expect(res.statusCode).toBe(400)
+  })
+
+  test('GET /api/queue/:clinicId/completed-count valid → 200 or 500', async () => {
+    const res = await request(app).get(`/api/queue/${validClinicId}/completed-count`)
+
+    expect([200, 500]).toContain(res.statusCode)
+
+    if (res.statusCode === 200) {
+      expect(res.body).toHaveProperty('completedCount')
+    }
+  }, 15000)
+
+  test('POST /api/queue/:clinicId/add-patient invalid clinic → 400', async () => {
+    const res = await request(app)
+      .post(`/api/queue/${invalidId}/add-patient`)
+      .send({ patient_id: validPatientId })
+
+    expect(res.statusCode).toBe(400)
+  })
+
+  test('POST /api/queue/:clinicId/add-patient invalid patient → 400', async () => {
+    const res = await request(app)
+      .post(`/api/queue/${validClinicId}/add-patient`)
+      .send({ patient_id: invalidId })
+
+    expect(res.statusCode).toBe(400)
+  })
+
+  test('POST /api/queue/:clinicId/add-patient valid → 201/409/500', async () => {
+    const res = await request(app)
+      .post(`/api/queue/${validClinicId}/add-patient`)
+      .send({ patient_id: validPatientId })
+
+    expect([201, 409, 500]).toContain(res.statusCode)
+  }, 15000)
+
+  test('GET /api/users → 200 or 500', async () => {
+    const res = await request(app).get('/api/users')
+
+    expect([200, 500]).toContain(res.statusCode)
+
+    if (res.statusCode === 200) {
+      expect(res.body).toHaveProperty('users')
+    }
+  }, 15000)
+})

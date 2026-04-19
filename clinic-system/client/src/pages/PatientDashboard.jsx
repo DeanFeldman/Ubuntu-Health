@@ -49,7 +49,6 @@ const styles = `
     width: 38px;
     height: 38px;
     border-radius: 10px;
-    background: var(--uh-primary);
     display: grid;
     place-items: center;
     color: #fff;
