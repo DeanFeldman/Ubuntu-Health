@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import getApiBase from '../lib/getApiBase'
 
-const API_BASE_URL =
+/*const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ||
-  (window.location.hostname === 'localhost' ? 'http://localhost:8080' : '')
+  (window.location.hostname === 'localhost' ? 'http://localhost:8080' : '')*/
   /*const API_BASE_URL = getApiBase()*/
   /*const API_BASE_URL =
   getApiBase() ||
@@ -152,6 +152,7 @@ async function readApiResponse(response) {
 
 export default function AdminDashboard() {
   const { user } = useAuth()
+  const API_BASE_URL = getApiBase()
 
   const [roleRequests, setRoleRequests] = useState([])
   const [clinicRequests, setClinicRequests] = useState([])
