@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
+import getApiBase from '../lib/getApiBase'
 
 const styles = `
   .sd-page {
@@ -224,7 +225,7 @@ function getDisplayName(entry) {
 export default function StaffDashboard() {
   const { user, clinicId, loading: authLoading } = useAuth()
   const resolvedClinicId = clinicId || user?.clinic_id || null
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
+  const API_BASE = getApiBase()
 
   const [queue, setQueue] = useState([])
   const [fetchLoading, setFetchLoading] = useState(true)
