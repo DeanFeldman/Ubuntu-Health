@@ -13,6 +13,7 @@ const NOTIFICATION_MESSAGES = {
 }
 
 const BROWSER_NOTIFICATION_TITLE = 'Ubuntu Health queue update'
+const DISPLAYED_NOTIFICATIONS_KEY_PREFIX = 'queueNotificationsDisplayed'
 
 const styles = `
   .queue-notifications {
@@ -161,6 +162,36 @@ function formatNotificationTime(createdAt) {
   })
 }
 
+function getDisplayedNotificationsKey(queueEntryId) {
+  return `${DISPLAYED_NOTIFICATIONS_KEY_PREFIX}:${queueEntryId}`
+}
+
+function getDisplayedNotificationIds(queueEntryId) {
+  if (!queueEntryId) return new Set()
+
+  try {
+    const storedIds = JSON.parse(localStorage.getItem(getDisplayedNotificationsKey(queueEntryId)) || '[]')
+    return new Set(Array.isArray(storedIds) ? storedIds : [])
+  } catch {
+    return new Set()
+  }
+}
+
+function markNotificationDisplayed(queueEntryId, notificationId) {
+  if (!queueEntryId || !notificationId) return
+
+  try {
+    const displayedIds = getDisplayedNotificationIds(queueEntryId)
+    displayedIds.add(notificationId)
+    localStorage.setItem(
+      getDisplayedNotificationsKey(queueEntryId),
+      JSON.stringify([...displayedIds].slice(-20))
+    )
+  } catch {
+    // Non-fatal. In-memory duplicate protection still works until reload.
+  }
+}
+
 export default function QueueNotifications({ queueEntry }) {
   const { user } = useAuth()
   const [notifications, setNotifications] = useState([])
@@ -244,7 +275,13 @@ export default function QueueNotifications({ queueEntry }) {
       setNotifications(nextNotifications)
 
       if (latestNotification?.id) {
-        if (latestNotification.id !== previousLatestId.current) {
+        const displayedIds = getDisplayedNotificationIds(queueEntry.id)
+        const hasAlreadyDisplayed = displayedIds.has(latestNotification.id)
+
+        if (
+          latestNotification.id !== previousLatestId.current &&
+          !hasAlreadyDisplayed
+        ) {
           console.log('[QueueNotifications] New queue notification detected', {
             latestNotification,
             previousLatestId: previousLatestId.current,
@@ -253,6 +290,7 @@ export default function QueueNotifications({ queueEntry }) {
           setPopup(latestNotification)
           playNotificationSound()
           triggerBrowserNotification(latestNotification)
+          markNotificationDisplayed(queueEntry.id, latestNotification.id)
         }
 
         previousLatestId.current = latestNotification.id
