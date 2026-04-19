@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import QueueNotifications from '../components/QueueNotifications'
 import getApiBase from '../lib/getApiBase'
-// ─── Styles ──────────────────────────────────────────────────────────────────
+// Page-local styles keep the queue view portable across the current Vite/Jest setup.
 const styles = `
   .q-page {
     max-width: 680px;
@@ -417,6 +417,7 @@ const fetchQueue = useCallback(async () => {
       throw new Error(data?.error || 'Failed to load queue')
     }
 
+    // QueueNotifications uses the resulting queueEntry id to poll patient-specific alerts.
     const fullQueue = Array.isArray(data?.queue) ? data.queue : []
 
     const myEntry = fullQueue.find(entry => entry.patient_id === patientId)
@@ -426,6 +427,7 @@ const fetchQueue = useCallback(async () => {
       return
     }
 
+    // Display position is recalculated from active rows so completed/skipped patients do not count.
     const visibleQueue = fullQueue
       .filter(entry => ['Waiting', 'Called', 'In Consultation'].includes(entry.status))
       .sort((a, b) => (a.position ?? 999999) - (b.position ?? 999999))
@@ -438,6 +440,7 @@ const fetchQueue = useCallback(async () => {
     let peopleAhead = 0
 
     if (myEntry.status === 'In Consultation') {
+      // Consultation is shown as position 0 because the patient is no longer waiting.
       displayPosition = 0
       peopleAhead = 0
     } else {
@@ -449,6 +452,7 @@ const fetchQueue = useCallback(async () => {
     let clinicName = myEntry.clinic_name || pendingClinic?.name || null
 
     if (!clinicName) {
+      // Older queue payloads may omit clinic_name; fetch it once so notifications retain context.
       try {
         const clinicRes = await fetch(`${API_BASE}/api/clinics/${clinicId}`, {
           headers: { Accept: 'application/json' },
@@ -480,6 +484,7 @@ const fetchQueue = useCallback(async () => {
   }, [fetchQueue])
 
   useEffect(() => {
+    // Polling refreshes queue state; backend transition detection creates notification rows.
     const id = setInterval(fetchQueue, 30000)
     return () => clearInterval(id)
   }, [fetchQueue])
@@ -735,7 +740,8 @@ const fetchQueue = useCallback(async () => {
           <p className="q-refresh-hint">Updates automatically every 30 seconds.</p>
         )}
 
-{queueEntry && <QueueNotifications queueEntry={queueEntry} />}
+        {/* QueueNotifications polls persisted events for this entry and handles duplicate suppression. */}
+        {queueEntry && <QueueNotifications queueEntry={queueEntry} />}
         {!loadingQueue && !fetchError && queueEntry && ['Waiting', 'Called'].includes(queueEntry.status) && (
       <div style={{ marginTop: '12px', textAlign: 'center' }}>
         <button
