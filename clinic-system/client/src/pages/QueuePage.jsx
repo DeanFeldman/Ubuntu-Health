@@ -648,7 +648,7 @@ export default function QueuePage() {
           <p className="q-refresh-hint">Updates automatically every 5 seconds.</p>
         )}
 
-        <QueueNotifications />
+        <QueueNotifications queueEntry={queueEntry} />
 
         {!loadingQueue && !fetchError && queueEntry && ['Waiting', 'Called'].includes(queueEntry.status) && (
       <div style={{ marginTop: '12px', textAlign: 'center' }}>
