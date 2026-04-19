@@ -98,6 +98,7 @@ function triggerBrowserNotification(notification) {
   }
 
   if (Notification.permission !== 'granted') {
+    // Browser notifications must stay opt-in; the in-app popup still covers denied permissions.
     console.log('[QueueNotifications] Browser notification skipped: permission is not granted', {
       permission: Notification.permission
     })
@@ -123,6 +124,7 @@ function triggerBrowserNotification(notification) {
 function playNotificationSound() {
   const AudioContext = window.AudioContext || window.webkitAudioContext
 
+  // Audio is best-effort because browser autoplay and device policies vary.
   if (!AudioContext) return
 
   try {
@@ -156,7 +158,12 @@ function playNotificationSound() {
 function formatNotificationTime(createdAt) {
   if (!createdAt) return 'Time unavailable'
 
-  return new Date(`${createdAt}Z`).toLocaleTimeString('en-ZA', {
+  // Supabase timestamps may arrive without an offset; treat those values as UTC for local display.
+  const normalizedTimestamp = /(?:Z|[+-]\d{2}:\d{2})$/.test(createdAt)
+    ? createdAt
+    : `${createdAt}Z`
+
+  return new Date(normalizedTimestamp).toLocaleTimeString('en-ZA', {
     hour: '2-digit',
     minute: '2-digit',
     timeZone: 'Africa/Johannesburg',
@@ -171,6 +178,7 @@ function getDisplayedNotificationIds(queueEntryId) {
   if (!queueEntryId) return new Set()
 
   try {
+    // Stored ids prevent reloads from replaying notifications the user has already seen.
     const storedIds = JSON.parse(localStorage.getItem(getDisplayedNotificationsKey(queueEntryId)) || '[]')
     return new Set(Array.isArray(storedIds) ? storedIds : [])
   } catch {
@@ -202,6 +210,7 @@ export default function QueueNotifications({ queueEntry }) {
   const previousLatestId = useRef(null)
   
   useEffect(() => {
+    // A new queue entry is a new notification context; old ids must not suppress new events.
     setNotifications([])
     setPopup(null)
     previousLatestId.current = null
@@ -265,6 +274,7 @@ export default function QueueNotifications({ queueEntry }) {
         : []
 
       if (nextNotifications.length === 0) {
+        // Empty results usually mean a queue reset or new entry with no events yet.
         setNotifications([])
         setPopup(null)
         previousLatestId.current = null
@@ -279,6 +289,7 @@ export default function QueueNotifications({ queueEntry }) {
         const displayedIds = getDisplayedNotificationIds(queueEntry.id)
         const hasAlreadyDisplayed = displayedIds.has(latestNotification.id)
 
+        // Combine in-session and persisted guards so polling and reloads do not replay alerts.
         if (
           latestNotification.id !== previousLatestId.current &&
           !hasAlreadyDisplayed
@@ -308,6 +319,7 @@ export default function QueueNotifications({ queueEntry }) {
   useEffect(() => {
     fetchNotifications({ showLoading: true })
 
+    // Polling keeps the patient view current when staff update the queue from another session.
     const intervalId = setInterval(() => {
       fetchNotifications()
     }, 5000)
