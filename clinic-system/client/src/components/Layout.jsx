@@ -1,6 +1,7 @@
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { canAccess } from '../Utils/Permissions'
+import logo from '../assets/LOGO (2).png'
 
 const styles = `
   :root {
@@ -51,19 +52,12 @@ const styles = `
     color: var(--uh-text);
   }
 
-  .uh-brand-logo {
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
-    background: var(--uh-primary);
-    display: grid;
-    place-items: center;
-    color: #fff;
-    font-weight: 800;
-    font-size: 13px;
-    flex-shrink: 0;
-    text-decoration: none;
-  }
+.uh-brand-logo {
+  height: 60px;
+  width: 60px;
+  object-fit: cover;
+  transform: scale(2);  
+}
 
   .uh-nav-links {
     display: flex;
@@ -168,7 +162,11 @@ export default function Layout() {
         <header className="uh-navbar">
           <nav className="uh-navbar-inner" aria-label="Primary navigation">
             <NavLink to="/" className="uh-brand">
-              <abbr className="uh-brand-logo" title="Ubuntu Health">UH</abbr>
+                <img
+                src={logo}
+                alt="Ubuntu Health logo"
+                className="uh-brand-logo"
+              />
               Ubuntu Health
             </NavLink>
 
