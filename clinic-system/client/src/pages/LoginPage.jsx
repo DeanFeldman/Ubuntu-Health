@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { canAccess } from '../Utils/Permissions'
+import logo from '../assets/logo.png'
 
 export default function LoginPage() {
   // Get auth-related data and functions from context
@@ -49,7 +50,7 @@ export default function LoginPage() {
       {/* Html Page contents */}
       <section style={styles.card}>
         <header style={styles.header}>
-          <span style={styles.logo}>UH</span>
+          <img src={logo} alt="Ubuntu Health" style={styles.logoImg} />
           <h1 style={styles.title}>Ubuntu Health</h1>
           <p style={styles.subtitle}>
             Sign in to manage your clinic visits and queue
@@ -118,6 +119,14 @@ const styles = {
 
   header: {
     marginBottom: '1.5rem',
+  },
+
+  logoImg: {
+    width: '70px',
+    height: '70px',
+    objectFit: 'contain',
+    marginBottom: '12px',
+    transform: 'scale(3)',   
   },
 
   logo: {

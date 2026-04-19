@@ -314,15 +314,19 @@ const styles = `
 const STATUS_DOT = {
   Waiting: 'waiting',
   Called: 'called',
+  'In Consultation': 'called',
   Served: 'served',
   Skipped: 'skipped',
+  Complete: 'served',
 }
 
 const STATUS_LABEL = {
   Waiting: 'Waiting',
   Called: 'Called — please proceed',
+  'In Consultation': 'In Consultation',
   Served: 'Served',
   Skipped: 'Skipped',
+  Complete: 'Complete',
 }
 
 export default function QueuePage() {
@@ -390,69 +394,86 @@ export default function QueuePage() {
     }
   }
 
-  const fetchQueue = useCallback(async () => {
-    try {
-      setLoadingQueue(true)
-      setFetchError(null)
+const fetchQueue = useCallback(async () => {
+  try {
+    setLoadingQueue(true)
+    setFetchError(null)
 
-      const clinicId = pendingClinic?.id || localStorage.getItem('selectedClinicId')
-      const patientId = user?.id
+    const clinicId = pendingClinic?.id || localStorage.getItem('selectedClinicId')
+    const patientId = user?.id
 
-      if (!patientId || !clinicId) {
-        setQueueEntry(null)
-        return
-      }
-
-      const res = await fetch(
-        `${API_BASE}/api/queue/${clinicId}/entry/${patientId}`,
-        {
-          headers: { Accept: 'application/json' },
-        }
-      )
-
-      if (res.status === 404) {
-        setFetchError(null)
-        setQueueEntry(null)
-        return
-      }
-
-      const data = await res.json().catch(() => null)
-
-      if (!res.ok) {
-        if (res.status === 409) {
-          setActionError(data?.error ?? 'Patient already has an active queue entry')
-          setPendingClinic(null)
-        } else if (res.status === 400) {
-          setActionError(data?.error ?? 'Invalid queue join request')
-        } else {
-          throw new Error(data?.error ?? `Failed to join queue (HTTP ${res.status})`)
-        }
-        return
-      }
-
-      const entry = data?.entry ?? null
-
-      if (entry && !entry.clinic_name) {
-        try {
-          const clinicRes = await fetch(`${API_BASE}/api/clinics/${clinicId}`, {
-            headers: { Accept: 'application/json' },
-          })
-          if (clinicRes.ok) {
-            const clinicData = await clinicRes.json().catch(() => null)
-            entry.clinic_name = clinicData?.name ?? clinicData?.clinic?.name ?? null
-          }
-        } catch {
-          // Non-fatal — clinic name just won't show
-        }
-      }
-
-      setQueueEntry(entry)
-    } catch (err) {
-      setFetchError(err.message)
-    } finally {
-      setLoadingQueue(false)
+    if (!patientId || !clinicId) {
+      setQueueEntry(null)
+      return
     }
-  }, [API_BASE, pendingClinic?.id, user?.id])
+
+    const res = await fetch(`${API_BASE}/api/queue/${clinicId}`, {
+      headers: { Accept: 'application/json' },
+    })
+
+    const data = await res.json().catch(() => null)
+
+    if (!res.ok) {
+      throw new Error(data?.error || 'Failed to load queue')
+    }
+
+    const fullQueue = Array.isArray(data?.queue) ? data.queue : []
+
+    const myEntry = fullQueue.find(entry => entry.patient_id === patientId)
+
+    if (!myEntry) {
+      setQueueEntry(null)
+      return
+    }
+
+    const visibleQueue = fullQueue
+      .filter(entry => ['Waiting', 'Called', 'In Consultation'].includes(entry.status))
+      .sort((a, b) => (a.position ?? 999999) - (b.position ?? 999999))
+
+    const waitingQueue = visibleQueue.filter(
+      entry => entry.status === 'Waiting' || entry.status === 'Called'
+    )
+
+    let displayPosition = null
+    let peopleAhead = 0
+
+    if (myEntry.status === 'In Consultation') {
+      displayPosition = 0
+      peopleAhead = 0
+    } else {
+      const waitingIndex = waitingQueue.findIndex(entry => entry.id === myEntry.id)
+      displayPosition = waitingIndex >= 0 ? waitingIndex + 1 : myEntry.position
+      peopleAhead = waitingIndex >= 0 ? waitingIndex : 0
+    }
+
+    let clinicName = myEntry.clinic_name || pendingClinic?.name || null
+
+    if (!clinicName) {
+      try {
+        const clinicRes = await fetch(`${API_BASE}/api/clinics/${clinicId}`, {
+          headers: { Accept: 'application/json' },
+        })
+        if (clinicRes.ok) {
+          const clinicData = await clinicRes.json().catch(() => null)
+          clinicName = clinicData?.clinic?.name ?? null
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    setQueueEntry({
+      ...myEntry,
+      position: displayPosition,
+      people_ahead: peopleAhead,
+      clinic_name: clinicName,
+    })
+  } catch (err) {
+    setFetchError(err.message)
+  } finally {
+    setLoadingQueue(false)
+  }
+}, [API_BASE, pendingClinic?.id, pendingClinic?.name, user?.id])
 
   useEffect(() => {
     fetchQueue()
@@ -649,17 +670,24 @@ export default function QueuePage() {
               </span>
             </header>
 
-            {['Waiting', 'Called'].includes(queueEntry.status) && (
+            {['Waiting', 'Called', 'In Consultation'].includes(queueEntry.status) && (
               <section className="q-position-hero">
                 <figure style={{ margin: 0 }}>
-                  <p className="q-position-number" aria-label={`Queue position ${queueEntry.position}`}>
-                    {queueEntry.position}
+                  <p className="q-position-number">
+                    {queueEntry.status === 'In Consultation' ? 0 : queueEntry.position}
                   </p>
-                  <figcaption className="q-position-label">Position</figcaption>
+                  <figcaption className="q-position-label">
+                    {queueEntry.status === 'In Consultation' ? 'In Consultation' : 'Position'}
+                  </figcaption>
                 </figure>
                 <hr className="q-position-divider" aria-hidden="true" />
                 <address className="q-position-info">
                   <h2>{queueEntry.clinic_name ?? 'Clinic'}</h2>
+                  <p>
+                    {queueEntry.status === 'In Consultation'
+                      ? 'You are currently being seen.'
+                      : 'Track your live queue position.'}
+                  </p>
                 </address>
               </section>
             )}
