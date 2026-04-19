@@ -8,5 +8,15 @@ module.exports = {
   moduleNameMapper: {
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
   },
-  testMatch: ['<rootDir>/src/tests/**/*.test.jsx']
+  testMatch: ['<rootDir>/src/tests/**/*.test.jsx'],
+
+  collectCoverage: true,
+  collectCoverageFrom: [
+    'src/**/*.{js,jsx}',
+    '!src/main.jsx',
+    '!src/tests/**',
+    '!src/**/*.test.{js,jsx}',
+  ],
+  coverageDirectory: 'coverage',
+  coverageReporters: ['text', 'lcov', 'html'],
 }

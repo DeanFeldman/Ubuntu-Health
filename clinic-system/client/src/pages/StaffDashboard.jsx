@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
+import getApiBase from '../lib/getApiBase'
 
 const styles = `
   .sd-page {
@@ -224,7 +225,7 @@ function getDisplayName(entry) {
 export default function StaffDashboard() {
   const { user, clinicId, loading: authLoading } = useAuth()
   const resolvedClinicId = clinicId || user?.clinic_id || null
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
+  const API_BASE = getApiBase()
 
   const [queue, setQueue] = useState([])
   const [fetchLoading, setFetchLoading] = useState(true)
@@ -232,6 +233,12 @@ export default function StaffDashboard() {
   const [statusLoading, setStatusLoading] = useState(null)
   const [removeLoading, setRemoveLoading] = useState(null)
   const [toast, setToast] = useState({ message: '', type: '', visible: false })
+  const [completedCount, setCompletedCount] = useState(0)
+
+
+  const [allPatients, setAllPatients] = useState([])
+  const [selectedPatientId, setSelectedPatientId] = useState('')
+  const [addPatientLoading, setAddPatientLoading] = useState(false)
 
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type, visible: true })
@@ -273,9 +280,61 @@ export default function StaffDashboard() {
     }
   }, [authLoading, resolvedClinicId])
 
+const fetchCompletedCount = useCallback(async () => {
+  if (authLoading || !resolvedClinicId) return
+
+  try {
+    const res = await fetch(`${API_BASE}/api/queue/${resolvedClinicId}/completed-count`, {
+      headers: { Accept: 'application/json' },
+    })
+
+    const data = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to load completed count.')
+    }
+
+    setCompletedCount(data.completedCount || 0)
+  } catch (err) {
+    console.error('Failed to fetch completed count:', err.message)
+  }
+}, [authLoading, resolvedClinicId, API_BASE])
+
+const fetchPatients = useCallback(async () => {
+  if (authLoading) return
+
+  try {
+    const res = await fetch(`${API_BASE}/api/users`, {
+      headers: { Accept: 'application/json' },
+    })
+
+    const data = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to load patients.')
+    }
+
+    setAllPatients(Array.isArray(data.users) ? data.users : [])
+  } catch (err) {
+    console.error('Failed to fetch patients:', err.message)
+  }
+}, [authLoading, API_BASE])
+
+
+useEffect(() => {
+  fetchQueue()
+  fetchCompletedCount()
+  fetchPatients()
+}, [fetchQueue, fetchCompletedCount, fetchPatients])
+
   useEffect(() => {
-    fetchQueue()
-  }, [fetchQueue])
+    const interval = setInterval(() => {
+      fetchQueue()
+      fetchCompletedCount()
+    }, 30000)
+
+    return () => clearInterval(interval)
+  }, [fetchQueue, fetchCompletedCount])
 
   const handleStatusUpdate = async entry => {
     const currentIndex = STATUS_SEQUENCE.indexOf(entry.status)
@@ -317,7 +376,8 @@ export default function StaffDashboard() {
             : item
         )
       )
-      
+      await fetchQueue()
+      await fetchCompletedCount()
       showToast(`${getDisplayName(entry)} marked as ${nextStatus}.`, 'success')
     } catch (err) {
       showToast(err.message, 'error')
@@ -341,6 +401,8 @@ export default function StaffDashboard() {
       }
 
       setQueue(current => current.filter(item => item.id !== entry.id))
+      await fetchQueue()
+      await fetchCompletedCount()
       showToast(`${getDisplayName(entry)} removed from the queue.`, 'success')
     } catch (err) {
       showToast(err.message, 'error')
@@ -348,12 +410,47 @@ export default function StaffDashboard() {
       setRemoveLoading(null)
     }
   }
+  
+const handleAddPatientToQueue = async () => {
+  if (!resolvedClinicId || !selectedPatientId) return
+
+  setAddPatientLoading(true)
+
+  try {
+    const response = await fetch(`${API_BASE}/api/queue/${resolvedClinicId}/join`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        patient_id: selectedPatientId,
+        confirmed: true,
+      }),
+    })
+
+    const body = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      throw new Error(body.error || 'Failed to add patient to queue')
+    }
+
+    await fetchQueue()
+    await fetchCompletedCount()
+    setSelectedPatientId('')
+    showToast('Patient added to queue.', 'success')
+  } catch (err) {
+    showToast(err.message || 'Failed to add patient to queue', 'error')
+  } finally {
+    setAddPatientLoading(false)
+  }
+}  
 
   const stats = {
     total: queue.length,
     waiting: queue.filter(entry => entry.status === 'Waiting').length,
     consultation: queue.filter(entry => entry.status === 'In Consultation').length,
-    complete: queue.filter(entry => entry.status === 'Complete').length,
+    complete: completedCount,  
   }
 
   return (
@@ -381,6 +478,46 @@ export default function StaffDashboard() {
         <section className="sd-panel">
           <header className="sd-panel-header">
             <h2 className="sd-panel-title">Patients</h2>
+
+            <form
+              onSubmit={e => {
+                e.preventDefault()
+                handleAddPatientToQueue()
+              }}
+              style={{
+                display: 'flex',
+                gap: '8px',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+              }}
+            >
+              <label htmlFor="patientSelect" className="sr-only">
+                Select patient
+              </label>
+
+              <select
+                id="patientSelect"
+                value={selectedPatientId}
+                onChange={e => setSelectedPatientId(e.target.value)}
+                className="sd-act-btn"
+                style={{ minWidth: '240px', background: 'white' }}
+              >
+                <option value="">Select a patient</option>
+                {allPatients.map(patient => (
+                  <option key={patient.id} value={patient.id}>
+                    {patient.full_name} ({patient.role})
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="submit"
+                className="sd-act-btn"
+                disabled={addPatientLoading || !selectedPatientId}
+              >
+                {addPatientLoading ? 'Adding…' : 'Add to queue'}
+              </button>
+            </form>
           </header>
 
           {fetchLoading && <p className="sd-empty">Loading queue…</p>}
@@ -409,7 +546,7 @@ export default function StaffDashboard() {
                   <tr>
                     <th className="sd-pos">#</th>
                     <th>Patient</th>
-                    <th>Patient ID</th>
+                    <th>Patient Email</th>
                     <th>Status</th>
                     <th>Actions</th>
                   </tr>
@@ -417,9 +554,17 @@ export default function StaffDashboard() {
                 <tbody>
                   {queue.map((entry, index) => (
                     <tr key={entry.id}>
-                      <td className="sd-pos">{entry.position ?? index + 1}</td>
+                      <td className="sd-pos">
+                        {entry.status === 'In Consultation'
+                          ? 0
+                          : queue.filter(
+                              item =>
+                                item.status !== 'In Consultation' &&
+                                (item.position ?? 999999) < (entry.position ?? 999999)
+                            ).length + 1}
+                      </td>
                       <td>{getDisplayName(entry)}</td>
-                      <td>{entry.patient_id}</td>
+                      <td>{entry.patient?.email}</td>
                       <td>
                         <span className={`sd-badge ${BADGE_CLASS[entry.status] ?? ''}`}>
                           {entry.status}

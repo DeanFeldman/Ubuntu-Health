@@ -346,6 +346,50 @@ export default function QueuePage() {
   const [actionError, setActionError] = useState(null)
   const [actionSuccess, setActionSuccess] = useState(null)
 
+  const [clinicRequestLoading, setClinicRequestLoading] = useState(false)
+  const [clinicRequestSuccess, setClinicRequestSuccess] = useState(null)
+ 
+  
+  async function handleRequestClinicAccess() {
+    const clinicId = localStorage.getItem('selectedClinicId')
+    const clinicName = pendingClinic?.name || queueEntry?.clinic_name || 'this clinic'
+
+    if (!clinicId || !user?.id) {
+      setActionError('Missing clinic or user details')
+      return
+    }
+
+    try {
+      setClinicRequestLoading(true)
+      setActionError(null)
+      setClinicRequestSuccess(null)
+
+      const res = await fetch(`${API_BASE}/api/clinic-requests`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          staff_user_id: user.id,
+          clinic_id: clinicId,
+        }),
+      })
+
+      const data = await res.json().catch(() => null)
+
+      if (!res.ok) {
+        throw new Error(data?.error || 'Failed to submit clinic access request')
+      }
+
+      setClinicRequestSuccess(`Clinic access request sent for ${clinicName}.`)
+    } catch (err) {
+      setActionError(err.message || 'Failed to submit clinic access request')
+    } finally {
+      setClinicRequestLoading(false)
+    }
+  }
+
   const fetchQueue = useCallback(async () => {
     try {
       setLoadingQueue(true)
@@ -368,7 +412,6 @@ export default function QueuePage() {
 
       if (res.status === 404) {
         setFetchError(null)
-        setActionError(null)
         setQueueEntry(null)
         return
       }
@@ -416,7 +459,7 @@ export default function QueuePage() {
   }, [fetchQueue])
 
   useEffect(() => {
-    const id = setInterval(fetchQueue, 50000)
+    const id = setInterval(fetchQueue, 30000)
     return () => clearInterval(id)
   }, [fetchQueue])
 
@@ -482,6 +525,7 @@ export default function QueuePage() {
   const handleCancelJoin = () => {
     setPendingClinic(null)
     setActionError(null)
+    window.history.replaceState({}, '')
   }
 
   const handleLeaveQueue = async () => {
@@ -510,6 +554,7 @@ export default function QueuePage() {
 
       localStorage.removeItem('selectedClinicId')
       setQueueEntry(null)
+      setPendingClinic(null)
       setActionSuccess('You have been removed from the queue.')
     } catch (err) {
       setActionError(err.message)
@@ -518,6 +563,19 @@ export default function QueuePage() {
     }
   }
 
+  useEffect(() => {
+    if (!pendingClinic) return
+
+    window.history.replaceState(
+      { ...(window.history.state || {}), usr: { ...(window.history.state?.usr || {}), clinic: null } },
+      ''
+    )
+  }, [pendingClinic])
+
+  const canRequestClinicAccess =
+    ['Staff', 'Admin', 'Clinic Staff'].includes(user?.role) &&
+    !!pendingClinic?.id
+    
   return (
     <>
       <style>{styles}</style>
@@ -619,9 +677,10 @@ export default function QueuePage() {
                 <dt className="q-detail-key">Joined at</dt>
                 <dd className="q-detail-val">
                   {queueEntry.joined_at
-                    ? new Date(queueEntry.joined_at).toLocaleTimeString([], {
+                    ? new Date(queueEntry.joined_at + 'Z').toLocaleTimeString('en-ZA', {
                         hour: '2-digit',
                         minute: '2-digit',
+                        timeZone: 'Africa/Johannesburg',
                       })
                     : '—'}
                 </dd>
@@ -645,11 +704,10 @@ export default function QueuePage() {
         )}
 
         {!loadingQueue && queueEntry && ['Waiting', 'Called'].includes(queueEntry.status) && (
-          <p className="q-refresh-hint">Updates automatically every 5 seconds.</p>
+          <p className="q-refresh-hint">Updates automatically every 30 seconds.</p>
         )}
 
-        <QueueNotifications queueEntry={queueEntry} />
-
+{queueEntry && <QueueNotifications queueEntry={queueEntry} />}
         {!loadingQueue && !fetchError && queueEntry && ['Waiting', 'Called'].includes(queueEntry.status) && (
       <div style={{ marginTop: '12px', textAlign: 'center' }}>
         <button
@@ -663,7 +721,7 @@ export default function QueuePage() {
     )}
       </main>
 
-      {pendingClinic && !queueEntry && (
+      {pendingClinic && !loadingQueue && (
         <aside
           className="q-overlay"
           role="dialog"
@@ -690,6 +748,25 @@ export default function QueuePage() {
               <strong>{pendingClinic.name}</strong>
               <span>{pendingClinic.municipality}, {pendingClinic.district}</span>
             </address>
+              
+            {clinicRequestSuccess && (
+              <p className="q-alert q-alert-success" role="status">
+                <span className="q-alert-icon">✓</span>
+                {clinicRequestSuccess}
+              </p>
+            )}
+
+            {canRequestClinicAccess && (
+              <button
+                className="q-btn q-btn-ghost"
+                onClick={handleRequestClinicAccess}
+                disabled={clinicRequestLoading}
+                type="button"
+                style={{ width: '100%', marginBottom: '12px' }}
+              >
+                {clinicRequestLoading ? 'Sending request…' : 'Request staff access for this clinic'}
+              </button>
+            )}
 
             <footer className="q-modal-actions">
               <button
