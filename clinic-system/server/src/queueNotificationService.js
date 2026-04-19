@@ -14,6 +14,7 @@ function configureQueueNotificationService(client) {
 }
 
 function toPosition(value) {
+  if (value === null || value === undefined || value === '') return null
   const position = Number(value)
   return Number.isInteger(position) ? position : null
 }
@@ -46,10 +47,10 @@ function getPositionNotification(oldEntry, newEntry) {
   if (!oldEntry) return null
 
   
-  if (oldPosition === null || newPosition === null) return null
+  if (newPosition === null) return null
 
   
-  if (newPosition >= oldPosition) return null
+  if (oldPosition !== null && newPosition >= oldPosition) return null
 
 
   if (newEntry.status === 'Complete') return null
