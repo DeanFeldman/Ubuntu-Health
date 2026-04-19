@@ -745,9 +745,10 @@ app.patch('/api/queue/:clinicId/entry/:entryId/status', async (req, res) => {
 
     if (updateError) throw updateError
 
-    if (status === 'In Consultation' || status === 'Complete') {
-      await resequenceQueue(clinicId)
-    }
+if (['In Consultation', 'Complete'].includes(status)) {
+  await resequenceQueue(clinicId)
+}
+    
 
     const queueNotifications = await triggerQueueNotificationsForClinicSafely(clinicId, oldQueue)
 
@@ -829,18 +830,29 @@ app.delete('/api/queue/:clinicId/entry/:entryId', async (req, res) => {
 app.get('/api/queue-notifications/:patientId', async (req, res) => {
   try {
     const { patientId } = req.params
+    const { queue_entry_id } = req.query
 
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (!uuidRegex.test(patientId)) {
       return res.status(400).json({ error: 'Invalid patient ID format' })
     }
 
-    const { data, error } = await supabase
+    if (queue_entry_id && !uuidRegex.test(queue_entry_id)) {
+      return res.status(400).json({ error: 'Invalid queue entry ID format' })
+    }
+
+    let query = supabase
       .from('queue_notifications')
-      .select('id, type, position, created_at')
+      .select('id, queue_entry_id, clinic_id, type, position, created_at')
       .eq('patient_id', patientId)
       .order('created_at', { ascending: false })
       .limit(10)
+
+    if (queue_entry_id) {
+      query = query.eq('queue_entry_id', queue_entry_id)
+    }
+
+    const { data, error } = await query
 
     if (error) throw error
 

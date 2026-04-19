@@ -161,7 +161,7 @@ function formatNotificationTime(createdAt) {
   })
 }
 
-export default function QueueNotifications() {
+export default function QueueNotifications({ queueEntry }) {
   const { user } = useAuth()
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(false)
@@ -169,6 +169,12 @@ export default function QueueNotifications() {
   const [popup, setPopup] = useState(null)
   const previousLatestId = useRef(null)
   
+  useEffect(() => {
+    setNotifications([])
+    setPopup(null)
+    previousLatestId.current = null
+  }, [queueEntry?.id])
+
 
   useEffect(() => {
     console.log('[QueueNotifications] Notification permission check on mount', {
@@ -200,8 +206,9 @@ export default function QueueNotifications() {
   }, [])
 
   const fetchNotifications = useCallback(async ({ showLoading = false } = {}) => {
-    if (!user?.id) {
+    if (!user?.id || !queueEntry?.id) {
       setNotifications([])
+      setPopup(null)
       previousLatestId.current = null
       
       return
@@ -211,7 +218,10 @@ export default function QueueNotifications() {
       if (showLoading) setLoading(true)
       setError('')
 
-      const response = await fetch(`${API_BASE}/api/queue-notifications/${user.id}`)
+      const params = new URLSearchParams({
+        queue_entry_id: queueEntry.id,
+      })
+      const response = await fetch(`${API_BASE}/api/queue-notifications/${user.id}?${params}`)
       const data = await response.json().catch(() => ({}))
 
       if (!response.ok) {
@@ -233,69 +243,28 @@ export default function QueueNotifications() {
 
       setNotifications(nextNotifications)
 
-      /*const isInitialLoad =
-  previousLatestId.current === null && latestNotification?.id
-      const isNewNotification =
-        latestNotification?.id &&
-        latestNotification.id !== previousLatestId.current
+      if (latestNotification?.id) {
+        if (latestNotification.id !== previousLatestId.current) {
+          console.log('[QueueNotifications] New queue notification detected', {
+            latestNotification,
+            previousLatestId: previousLatestId.current,
+          })
 
-      if (isInitialLoad) {
-        console.log('[QueueNotifications] Browser notification skipped: initial load', {
-          latestNotificationId: latestNotification?.id || null,
-        })
-      } else if (isNewNotification) {
-        console.log('[QueueNotifications] New queue notification detected', {
-          latestNotification,
-          previousLatestId: previousLatestId.current,
-          hasLoaded: hasLoaded.current,
-        })
-        setPopup(latestNotification)
-        triggerBrowserNotification(latestNotification)
-      } else {
-        console.log('[QueueNotifications] No new browser notification triggered', {
-          latestNotificationId: latestNotification?.id || null,
-          previousLatestId: previousLatestId.current,
-          hasLoaded: hasLoaded.current,
-          notificationCount: nextNotifications.length,
-        })
-      }*/
-     //start
-     if (latestNotification?.id) {
-  // First time seeing a notification → set baseline ONLY
-  if (previousLatestId.current === null) {
-    console.log('[QueueNotifications] Initial load — storing baseline ID', {
-      latestNotificationId: latestNotification.id,
-    })
+          setPopup(latestNotification)
+          playNotificationSound()
+          triggerBrowserNotification(latestNotification)
+        }
 
-    previousLatestId.current = latestNotification.id
-    return
-  }
+        previousLatestId.current = latestNotification.id
+      }
 
-  // New notification detected
-  if (latestNotification.id !== previousLatestId.current) {
-    console.log('[QueueNotifications] New queue notification detected', {
-      latestNotification,
-      previousLatestId: previousLatestId.current,
-    })
-
-    setPopup(latestNotification)
-    playNotificationSound()
-    triggerBrowserNotification(latestNotification)
-  }
-
-  // Always update latest seen ID
-  previousLatestId.current = latestNotification.id
-}
-     
-//end
-     
       
     } catch (err) {
       setError(err.message || 'Could not load queue notifications.')
     } finally {
       if (showLoading) setLoading(false)
     }
-  }, [user?.id])
+  }, [queueEntry?.id, user?.id])
 
   useEffect(() => {
     fetchNotifications({ showLoading: true })
