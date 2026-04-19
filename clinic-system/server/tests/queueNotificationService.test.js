@@ -167,3 +167,121 @@ describe('checkAndTriggerNotifications', () => {
     expect(insert).toHaveBeenCalledTimes(2)
   })
 })
+
+//Add extra edge cases- These improve coverage without affecting existing logic tests
+ 
+describe('queue notification additional edge cases', () => {
+  const baseEntry = {
+    clinic_id: 'clinic-1',
+    patient_id: 'patient-1',
+    status: 'Waiting',
+  }
+
+  test('ignores invalid position values', () => {
+    const rows = getQueueNotificationRows(
+      [{ ...baseEntry, id: 'entry-1', position: 4 }],
+      [{ ...baseEntry, id: 'entry-1', position: 'invalid' }]
+    )
+
+    expect(rows).toEqual([])
+  })
+
+  test('does not notify for positions outside 1–3', () => {
+    const rows = getQueueNotificationRows(
+      [{ ...baseEntry, id: 'entry-1', position: 5 }],
+      [{ ...baseEntry, id: 'entry-1', position: 4 }]
+    )
+
+    expect(rows).toEqual([])
+  })
+
+  test('does not notify when no previous entry exists', () => {
+    const rows = getQueueNotificationRows(
+      [],
+      [{ ...baseEntry, id: 'entry-1', position: 2 }]
+    )
+
+    expect(rows).toEqual([])
+  })
+
+  test('does not notify when position increases (wrong direction)', () => {
+    const rows = getQueueNotificationRows(
+      [{ ...baseEntry, id: 'entry-1', position: 2 }],
+      [{ ...baseEntry, id: 'entry-1', position: 3 }]
+    )
+
+    expect(rows).toEqual([])
+  })
+
+  test('does not notify when status becomes Complete', () => {
+    const rows = getQueueNotificationRows(
+      [{ ...baseEntry, id: 'entry-1', position: 4 }],
+      [{ ...baseEntry, id: 'entry-1', position: 3, status: 'Complete' }]
+    )
+
+    expect(rows).toEqual([])
+  })
+
+  test('does not duplicate consultation notifications', () => {
+    const rows = getQueueNotificationRows(
+      [{ ...baseEntry, id: 'entry-1', status: 'In Consultation' }],
+      [{ ...baseEntry, id: 'entry-1', status: 'In Consultation' }]
+    )
+
+    expect(rows).toEqual([])
+  })
+})
+
+describe('queue notification error handling', () => {
+  test('throws error if service is not configured and notifications need to be created', async () => {
+  configureQueueNotificationService(null)
+
+  const oldQueue = [
+    {
+      id: 'entry-1',
+      clinic_id: 'clinic-1',
+      patient_id: 'patient-1',
+      status: 'Waiting',
+      position: 4,
+    },
+  ]
+
+  const newQueue = [
+    {
+      id: 'entry-1',
+      clinic_id: 'clinic-1',
+      patient_id: 'patient-1',
+      status: 'Waiting',
+      position: 3,
+    },
+  ]
+
+  await expect(
+    checkAndTriggerNotifications(oldQueue, newQueue)
+  ).rejects.toThrow('Queue notification service is not configured')
+})
+  test('createNotification throws on database error', async () => {
+    const single = jest.fn().mockResolvedValue({
+      data: null,
+      error: new Error('DB error'),
+    })
+
+    const insert = jest.fn(() => ({
+      select: () => ({ single }),
+    }))
+
+    const from = jest.fn(() => ({ insert }))
+
+    configureQueueNotificationService({ from })
+
+    await expect(
+      createNotification({
+        queue_entry_id: 'entry-1',
+        patient_id: 'patient-1',
+        clinic_id: 'clinic-1',
+        type: 'POSITION_1',
+        position: 1,
+      })
+    ).rejects.toThrow()
+  })
+})
