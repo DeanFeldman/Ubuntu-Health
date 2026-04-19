@@ -12,7 +12,7 @@ import getApiBase from '../lib/getApiBase'
 
 const styles = `
   .admin-header {
-    margin-bottom: 24px;SS
+    margin-bottom: 24px;
   }
 
   .admin-header h1 {
