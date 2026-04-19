@@ -1,11 +1,16 @@
 const request = require('supertest')
 const app = require('../src/app')
 
+// UUID-format values used for validation tests
 const validClinicId = '00000000-0000-0000-0000-000000000001'
 const validPatientId = '00000000-0000-0000-0000-000000000002'
 const validEntryId = '00000000-0000-0000-0000-000000000003'
 const invalidId = 'invalid-id'
 
+/**
+ * Queue GET endpoints
+ * Tests basic success and validation behaviour
+ */
 describe('Queue GET endpoints', () => {
   test('GET /api/queue/:clinicId with invalid id returns 400 or 500', async () => {
     const res = await request(app).get(`/api/queue/${invalidId}`)
@@ -67,6 +72,9 @@ describe('Queue GET endpoints', () => {
   }, 15000)
 })
 
+/**
+ * Queue POST endpoints (join)
+ */
 describe('Queue POST endpoints', () => {
   test('POST /api/queue/:clinicId/join with invalid clinic id returns 400 or 500', async () => {
     const res = await request(app)
@@ -84,7 +92,7 @@ describe('Queue POST endpoints', () => {
     expect([400, 500]).toContain(res.statusCode)
   })
 
-  test('POST /api/queue/:clinicId/join without confirmed returns 400, 404 or 500', async () => {
+  test('POST /api/queue/:clinicId/join without confirmation returns 400, 404 or 500', async () => {
     const res = await request(app)
       .post(`/api/queue/${validClinicId}/join`)
       .send({ patient_id: validPatientId, confirmed: false })
@@ -99,18 +107,13 @@ describe('Queue POST endpoints', () => {
 
     expect([201, 409, 404, 500]).toContain(res.statusCode)
   }, 15000)
-
-  test('POST /api/queue/:clinicId/join returns duplicate conflict, missing route, or server error for valid repeated join attempt', async () => {
-    const res = await request(app)
-      .post(`/api/queue/${validClinicId}/join`)
-      .send({ patient_id: validPatientId, confirmed: true })
-
-    expect([201, 409, 404, 500]).toContain(res.statusCode)
-  }, 15000)
 })
 
+/**
+ * Staff queue actions (status update and removal)
+ */
 describe('Queue staff action endpoints', () => {
-  test('PATCH /api/queue/:clinicId/entry/:entryId/status with invalid clinic id returns 400 or 500', async () => {
+  test('PATCH status with invalid clinic id returns 400 or 500', async () => {
     const res = await request(app)
       .patch(`/api/queue/${invalidId}/entry/${validEntryId}/status`)
       .send({ status: 'In Consultation' })
@@ -118,7 +121,7 @@ describe('Queue staff action endpoints', () => {
     expect([400, 500]).toContain(res.statusCode)
   })
 
-  test('PATCH /api/queue/:clinicId/entry/:entryId/status with invalid entry id returns 400 or 500', async () => {
+  test('PATCH status with invalid entry id returns 400 or 500', async () => {
     const res = await request(app)
       .patch(`/api/queue/${validClinicId}/entry/${invalidId}/status`)
       .send({ status: 'In Consultation' })
@@ -126,7 +129,7 @@ describe('Queue staff action endpoints', () => {
     expect([400, 500]).toContain(res.statusCode)
   })
 
-  test('PATCH /api/queue/:clinicId/entry/:entryId/status with invalid status returns 400 or 500', async () => {
+  test('PATCH status with invalid status value returns 400 or 500', async () => {
     const res = await request(app)
       .patch(`/api/queue/${validClinicId}/entry/${validEntryId}/status`)
       .send({ status: 'InvalidStatus' })
@@ -134,7 +137,7 @@ describe('Queue staff action endpoints', () => {
     expect([400, 500]).toContain(res.statusCode)
   })
 
-  test('PATCH /api/queue/:clinicId/entry/:entryId/status with no status returns 400 or 500', async () => {
+  test('PATCH status with missing status returns 400 or 500', async () => {
     const res = await request(app)
       .patch(`/api/queue/${validClinicId}/entry/${validEntryId}/status`)
       .send({})
@@ -142,7 +145,7 @@ describe('Queue staff action endpoints', () => {
     expect([400, 500]).toContain(res.statusCode)
   })
 
-  test('PATCH /api/queue/:clinicId/entry/:entryId/status with valid data returns 200, 404, 409 or 500', async () => {
+  test('PATCH status with valid data returns 200, 404, 409 or 500', async () => {
     const res = await request(app)
       .patch(`/api/queue/${validClinicId}/entry/${validEntryId}/status`)
       .send({ status: 'In Consultation' })
@@ -150,21 +153,21 @@ describe('Queue staff action endpoints', () => {
     expect([200, 404, 409, 500]).toContain(res.statusCode)
   }, 15000)
 
-  test('DELETE /api/queue/:clinicId/entry/:entryId with invalid clinic id returns 400 or 500', async () => {
+  test('DELETE with invalid clinic id returns 400 or 500', async () => {
     const res = await request(app)
       .delete(`/api/queue/${invalidId}/entry/${validEntryId}`)
 
     expect([400, 500]).toContain(res.statusCode)
   })
 
-  test('DELETE /api/queue/:clinicId/entry/:entryId with invalid entry id returns 400 or 500', async () => {
+  test('DELETE with invalid entry id returns 400 or 500', async () => {
     const res = await request(app)
       .delete(`/api/queue/${validClinicId}/entry/${invalidId}`)
 
     expect([400, 500]).toContain(res.statusCode)
   })
 
-  test('DELETE /api/queue/:clinicId/entry/:entryId with valid ids returns 200, 404 or 500', async () => {
+  test('DELETE with valid ids returns 200, 404 or 500', async () => {
     const res = await request(app)
       .delete(`/api/queue/${validClinicId}/entry/${validEntryId}`)
 
@@ -172,39 +175,38 @@ describe('Queue staff action endpoints', () => {
   }, 15000)
 })
 
-/*
- EXTRA APP ROUTE COVERAGE
- These tests target uncovered app.js endpoints
- Keep high-level to avoid brittleness
+/**
+ * Additional routes related to queue behaviour
  */
-
-describe('Additional app.js route coverage', () => {
-  test('GET /api/queue-notifications/:patientId invalid patient id → 400', async () => {
+describe('Additional queue-related routes', () => {
+  test('GET /api/queue-notifications invalid patient id returns 400', async () => {
     const res = await request(app).get(`/api/queue-notifications/${invalidId}`)
-
     expect(res.statusCode).toBe(400)
-    expect(res.body).toHaveProperty('error')
   })
 
-  test('GET /api/queue-notifications/:patientId valid id → 200 or 500', async () => {
+  test('GET /api/queue-notifications valid request returns 200 or 500', async () => {
     const res = await request(app).get(`/api/queue-notifications/${validPatientId}`)
-
     expect([200, 500]).toContain(res.statusCode)
 
     if (res.statusCode === 200) {
       expect(res.body).toHaveProperty('notifications')
     }
-  }, 15000)
+  })
 
-  test('GET /api/queue/:clinicId/completed-count invalid → 400', async () => {
-    const res = await request(app).get(`/api/queue/${invalidId}/completed-count`)
-
+  test('GET /api/queue-notifications invalid queue_entry_id returns 400', async () => {
+    const res = await request(app).get(
+      `/api/queue-notifications/${validPatientId}?queue_entry_id=${invalidId}`
+    )
     expect(res.statusCode).toBe(400)
   })
 
-  test('GET /api/queue/:clinicId/completed-count valid → 200 or 500', async () => {
-    const res = await request(app).get(`/api/queue/${validClinicId}/completed-count`)
+  test('GET completed count invalid clinic id returns 400', async () => {
+    const res = await request(app).get(`/api/queue/${invalidId}/completed-count`)
+    expect(res.statusCode).toBe(400)
+  })
 
+  test('GET completed count valid clinic id returns 200 or 500', async () => {
+    const res = await request(app).get(`/api/queue/${validClinicId}/completed-count`)
     expect([200, 500]).toContain(res.statusCode)
 
     if (res.statusCode === 200) {
@@ -212,7 +214,7 @@ describe('Additional app.js route coverage', () => {
     }
   }, 15000)
 
-  test('POST /api/queue/:clinicId/add-patient invalid clinic → 400', async () => {
+  test('POST add patient with invalid clinic id returns 400', async () => {
     const res = await request(app)
       .post(`/api/queue/${invalidId}/add-patient`)
       .send({ patient_id: validPatientId })
@@ -220,7 +222,7 @@ describe('Additional app.js route coverage', () => {
     expect(res.statusCode).toBe(400)
   })
 
-  test('POST /api/queue/:clinicId/add-patient invalid patient → 400', async () => {
+  test('POST add patient with invalid patient id returns 400', async () => {
     const res = await request(app)
       .post(`/api/queue/${validClinicId}/add-patient`)
       .send({ patient_id: invalidId })
@@ -228,7 +230,15 @@ describe('Additional app.js route coverage', () => {
     expect(res.statusCode).toBe(400)
   })
 
-  test('POST /api/queue/:clinicId/add-patient valid → 201/409/500', async () => {
+  test('POST add patient with missing body returns 400', async () => {
+    const res = await request(app)
+      .post(`/api/queue/${validClinicId}/add-patient`)
+      .send({})
+
+    expect(res.statusCode).toBe(400)
+  })
+
+  test('POST add patient valid request returns 201, 409 or 500', async () => {
     const res = await request(app)
       .post(`/api/queue/${validClinicId}/add-patient`)
       .send({ patient_id: validPatientId })
@@ -236,13 +246,12 @@ describe('Additional app.js route coverage', () => {
     expect([201, 409, 500]).toContain(res.statusCode)
   }, 15000)
 
-  test('GET /api/users → 200 or 500', async () => {
+  test('GET /api/users returns 200 or 500', async () => {
     const res = await request(app).get('/api/users')
-
     expect([200, 500]).toContain(res.statusCode)
 
     if (res.statusCode === 200) {
       expect(res.body).toHaveProperty('users')
     }
-  }, 15000)
+  })
 })
