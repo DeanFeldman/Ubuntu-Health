@@ -748,7 +748,7 @@ app.patch('/api/queue/:clinicId/entry/:entryId/status', async (req, res) => {
 if (['In Consultation', 'Complete'].includes(status)) {
   await resequenceQueue(clinicId)
 }
-    }
+    
 
     const queueNotifications = await triggerQueueNotificationsForClinicSafely(clinicId, oldQueue)
 
