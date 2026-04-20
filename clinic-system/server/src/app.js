@@ -863,60 +863,6 @@ app.get('/api/queue-notifications/:patientId', async (req, res) => {
   }
 })
 
-app.get('/api/clinic-requests', async (req, res) => {
-  try {
-    if (!supabase) {
-      return res.status(500).json({ error: 'Supabase not configured' })
-    }
-
-    const { admin_id, status } = req.query
-
-    if (!admin_id) {
-      return res.status(400).json({ error: 'admin_id is required' })
-    }
-
-    const uuidRegex = /^[0-9a-f-]{36}$/i
-    if (!uuidRegex.test(admin_id)) {
-      return res.status(400).json({ error: 'Invalid admin ID format' })
-    }
-
-    const { data: admin, error: adminError } = await supabase
-      .from('users')
-      .select('id, role')
-      .eq('id', admin_id)
-      .single()
-
-    if (adminError || !admin) {
-      return res.status(404).json({ error: 'Admin user not found' })
-    }
-
-    if (admin.role !== 'Admin') {
-      return res.status(403).json({ error: 'Only admins can view clinic requests' })
-    }
-
-    let query = supabase
-      .from('clinic_requests')
-      .select(`
-        *,
-        users:staff_user_id ( id, full_name, email, role ),
-        clinics:clinic_id ( id, name, facility_type, province )
-      `)
-      .order('created_at', { ascending: true })
-
-    if (status) {
-      query = query.eq('status', status)
-    }
-
-    const { data, error } = await query
-
-    if (error) throw error
-
-    return res.json({ requests: data || [] })
-  } catch (err) {
-    console.error(err)
-    return res.status(500).json({ error: 'Failed to load clinic requests' })
-  }
-})
 
 // GET /api/clinic-requests?admin_id=...&status=pending
 app.get('/api/clinic-requests', async (req, res) => {
@@ -1128,7 +1074,148 @@ app.patch('/api/clinic-requests/:id/reject', async (req, res) => {
     return res.status(500).json({ error: 'Failed to reject clinic request' })
   }
 })
-// add the backend for the staff to request staff access here 
+
+
+// PATCH /api/users/:userId/assign-clinic — admin assigns a staff member to a clinic
+app.patch('/api/users/:userId/assign-clinic', async (req, res) => {
+  try {
+    const { userId } = req.params
+    const { admin_id, clinic_id } = req.body
+
+    const uuidRegex = /^[0-9a-f-]{36}$/i
+
+    if (!uuidRegex.test(userId) || !uuidRegex.test(admin_id) || !uuidRegex.test(clinic_id)) {
+      return res.status(400).json({ error: 'Invalid ID format' })
+    }
+
+    const { data: admin, error: adminError } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('id', admin_id)
+      .single()
+
+    if (adminError || !admin) {
+      return res.status(404).json({ error: 'Admin user not found' })
+    }
+
+    if (admin.role !== 'Admin') {
+      return res.status(403).json({ error: 'Only admins can assign staff to clinics' })
+    }
+
+    const { data: selectedUser, error: userError } = await supabase
+      .from('users')
+      .select('id, role, full_name, clinic_id')
+      .eq('id', userId)
+      .single()
+
+    if (userError || !selectedUser) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    const normalizedRole = selectedUser.role?.trim().toLowerCase()
+
+    if (!normalizedRole || !normalizedRole.includes('staff')) {
+      return res.status(400).json({ error: 'Selected user is not staff' })
+    }
+
+    if (selectedUser.clinic_id && selectedUser.clinic_id !== clinic_id) {
+      return res.status(409).json({ error: 'Staff member is already assigned to another clinic' })
+    }
+
+    const { data: clinic, error: clinicError } = await supabase
+      .from('clinics')
+      .select('id, name')
+      .eq('id', clinic_id)
+      .single()
+
+    if (clinicError || !clinic) {
+      return res.status(404).json({ error: 'Clinic not found' })
+    }
+
+    const { data, error } = await supabase
+      .from('users')
+      .update({ clinic_id })
+      .eq('id', userId)
+      .select('id, full_name, role, clinic_id')
+      .single()
+
+    if (error) throw error
+
+    res.json({
+      message: `${data.full_name} assigned to ${clinic.name}`,
+      user: data,
+      clinic,
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to assign staff to clinic' })
+  }
+})
+
+// PATCH /api/users/:userId/unassign-clinic — admin removes a staff member from their clinic
+app.patch('/api/users/:userId/unassign-clinic', async (req, res) => {
+  try {
+    const { userId } = req.params
+    const { admin_id } = req.body
+
+    const uuidRegex = /^[0-9a-f-]{36}$/i
+
+    if (!uuidRegex.test(userId) || !uuidRegex.test(admin_id)) {
+      return res.status(400).json({ error: 'Invalid ID format' })
+    }
+
+    const { data: admin, error: adminError } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('id', admin_id)
+      .single()
+
+    if (adminError || !admin) {
+      return res.status(404).json({ error: 'Admin user not found' })
+    }
+
+    if (admin.role !== 'Admin') {
+      return res.status(403).json({ error: 'Only admins can unassign staff from clinics' })
+    }
+
+    const { data: selectedUser, error: userError } = await supabase
+      .from('users')
+      .select('id, role, full_name, clinic_id')
+      .eq('id', userId)
+      .single()
+
+    if (userError || !selectedUser) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    const normalizedRole = selectedUser.role?.trim().toLowerCase()
+
+    if (!normalizedRole || !normalizedRole.includes('staff')) {
+      return res.status(400).json({ error: 'Selected user is not staff' })
+    }
+
+    if (!selectedUser.clinic_id) {
+      return res.status(400).json({ error: 'Staff member is not assigned to a clinic' })
+    }
+
+    const { data, error } = await supabase
+      .from('users')
+      .update({ clinic_id: null })
+      .eq('id', userId)
+      .select('id, full_name, role, clinic_id')
+      .single()
+
+    if (error) throw error
+
+    res.json({
+      message: `${data.full_name} unassigned from clinic`,
+      user: data,
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to unassign staff from clinic' })
+  }
+})
 
 // GET /api/queue/:clinicId/completed-count — retrieve completed count for a clinic
 app.get('/api/queue/:clinicId/completed-count', async (req, res) => {
