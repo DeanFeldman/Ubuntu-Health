@@ -15,6 +15,62 @@ const styles = `
     margin-bottom: 24px;
   }
 
+  .clinic-details-grid.is-clickable {
+  cursor: pointer;
+}
+
+
+.edit-clinic-container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.edit-clinic-name {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.edit-clinic-name input {
+  text-align: center;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.edit-clinic-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 700px) {
+  .edit-clinic-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.edit-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.clinic-details-grid.is-clickable .clinic-detail-card:hover {
+  border-color: var(--uh-text);
+  transform: translateY(-2px);
+  transition: 0.2s ease;
+}
+
+.clinic-main-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+  margin-top: 20px;
+}
+
+@media (max-width: 900px) {
+  .clinic-main-grid {
+    grid-template-columns: 1fr;
+  }
+}
   .admin-header h1 {
     margin-bottom: 8px;
   }
@@ -36,6 +92,49 @@ const styles = `
     overflow: hidden;
   }
 
+  .clinic-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.clinic-detail-card {
+  background: var(--uh-surface);
+  border: 1px solid var(--uh-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.clinic-detail-card h4 {
+  margin: 0 0 8px 0;
+  font-size: 0.85rem;
+  color: var(--uh-muted);
+  text-transform: uppercase;
+}
+
+.clinic-detail-card p {
+  margin: 0;
+  font-size: 14px;
+  word-break: break-word;
+}
+  
+  .admin-message select {
+  border: 1px solid var(--uh-border);
+  border-radius: 8px;
+  font: inherit;
+  margin-top: 6px;
+  padding: 10px 12px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.admin-message label {
+  display: inline-block;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
   .admin-panel-header {
     align-items: center;
     border-bottom: 1px solid var(--uh-border);
@@ -44,6 +143,25 @@ const styles = `
     gap: 16px;
     padding: 16px;
   }
+    .admin-message input {
+  border: 1px solid var(--uh-border);
+  border-radius: 8px;
+  font: inherit;
+  margin-top: 6px;
+  padding: 10px 12px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.admin-subsection {
+  border-top: 1px solid var(--uh-border);
+  margin-top: 20px;
+  padding-top: 20px;
+}
+
+.admin-subsection h3 {
+  margin-bottom: 12px;
+}
 
   .admin-panel-header h2 {
     font-size: 1.1rem;
@@ -169,6 +287,43 @@ export default function AdminDashboard() {
   const [roleError, setRoleError] = useState('')
   const [clinicError, setClinicError] = useState('')
 
+  const [clinics, setClinics] = useState([])
+  const [staffUsers, setStaffUsers] = useState([])
+  const [loadingAssignmentData, setLoadingAssignmentData] = useState(true)
+
+  const [selectedClinicId, setSelectedClinicId] = useState('')
+  const [selectedStaffId, setSelectedStaffId] = useState('')
+
+  const [assignmentFeedback, setAssignmentFeedback] = useState('')
+  const [assignmentError, setAssignmentError] = useState('')
+  const [assigningStaff, setAssigningStaff] = useState(false)
+  const [showClinicEditor, setShowClinicEditor] = useState(false)
+
+  const [clinicForm, setClinicForm] = useState({
+    name: '',
+    facility_type: '',
+    province: '',
+    district: '',
+    municipality: '',
+    operating_hours: '',
+    services: '',
+  })
+
+  const [savingClinic, setSavingClinic] = useState(false)
+  const [clinicEditFeedback, setClinicEditFeedback] = useState('')
+  const [clinicEditError, setClinicEditError] = useState('')
+
+
+  const selectedClinicStaff = staffUsers.filter(
+    (staffUser) => staffUser.clinic_id === selectedClinicId
+  )
+
+  const unassignedStaffUsers = staffUsers.filter(
+    (staffUser) => !staffUser.clinic_id
+  )
+  const selectedClinic = clinics.find(
+    (clinic) => clinic.id === selectedClinicId
+  )
   useEffect(() => {
     async function loadRoleRequests() {
       if (!user?.id) return
@@ -199,6 +354,48 @@ export default function AdminDashboard() {
         setLoadingRoleRequests(false)
       }
     }
+    
+  async function loadAssignmentData() {
+  if (!user?.id) return
+
+  try {
+    setLoadingAssignmentData(true)
+    setAssignmentError('')
+
+    const [clinicsResponse, usersResponse] = await Promise.all([
+      fetch(`${API_BASE_URL}/api/clinics`, {
+        headers: { Accept: 'application/json' },
+      }),
+      fetch(`${API_BASE_URL}/api/users`, {
+        headers: { Accept: 'application/json' },
+      }),
+    ])
+
+    const clinicsBody = await readApiResponse(clinicsResponse)
+    const usersBody = await readApiResponse(usersResponse)
+
+    if (!clinicsResponse.ok) {
+      throw new Error(clinicsBody.error || 'Failed to load clinics')
+    }
+
+    if (!usersResponse.ok) {
+      throw new Error(usersBody.error || 'Failed to load users')
+    }
+
+    setClinics(clinicsBody.clinics || [])
+    setStaffUsers(
+      (usersBody.users || []).filter((currentUser) => {
+        const role = currentUser.role?.trim().toLowerCase()
+        return role && (role.includes('staff') || role === 'admin')
+      })
+    )
+  } catch (err) {
+    setAssignmentError(err.message || 'Failed to load assignment data')
+  } finally {
+    setLoadingAssignmentData(false)
+  }
+}
+
 
   async function loadClinicRequests() {
     if (!user?.id) return
@@ -242,8 +439,47 @@ export default function AdminDashboard() {
 
     loadRoleRequests()
     loadClinicRequests()
-  }, [user?.id])
+    loadAssignmentData()
+    
+}, [API_BASE_URL, user?.id])
 
+
+useEffect(() => {
+  if (!selectedClinic) {
+    setClinicForm({
+      name: '',
+      facility_type: '',
+      province: '',
+      district: '',
+      municipality: '',
+      operating_hours: '',
+      services: '',
+    })
+    return
+  }
+
+  setClinicForm({
+    name: selectedClinic.name || '',
+    facility_type: selectedClinic.facility_type || '',
+    province: selectedClinic.province || '',
+    district: selectedClinic.district || '',
+    municipality: selectedClinic.municipality || '',
+    operating_hours: selectedClinic.operating_hours || '',
+    services: Array.isArray(selectedClinic.services)
+      ? selectedClinic.services.join(', ')
+      : selectedClinic.services || '',
+  })
+}, [selectedClinic])
+
+
+  function handleClinicFormChange(event) {
+    const { name, value } = event.target
+
+    setClinicForm((currentForm) => ({
+      ...currentForm,
+      [name]: value,
+    }))
+  }
   async function approveRoleRequest(request) {
     setProcessingRoleRequestId(request.id)
     setRoleFeedback('')
@@ -277,6 +513,50 @@ export default function AdminDashboard() {
     }
   }
 
+  async function saveClinicChanges() {
+    if (!selectedClinicId) {
+      setClinicEditError('Please select a clinic first.')
+      return
+    }
+
+    setSavingClinic(true)
+    setClinicEditError('')
+    setClinicEditFeedback('')
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/clinics/${selectedClinicId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          admin_id: user.id,
+          ...clinicForm,
+        }),
+      })
+
+      const body = await readApiResponse(response)
+
+      if (!response.ok) {
+        throw new Error(body.error || 'Failed to update clinic')
+      }
+
+      setClinics((currentClinics) =>
+        currentClinics.map((clinic) =>
+          clinic.id === selectedClinicId
+            ? { ...clinic, ...body.clinic }
+            : clinic
+        )
+      )
+
+      setClinicEditFeedback('Clinic updated successfully.')
+    } catch (err) {
+      setClinicEditError(err.message || 'Failed to update clinic')
+    } finally {
+      setSavingClinic(false)
+    }
+  }
   async function rejectRoleRequest(request) {
     setProcessingRoleRequestId(request.id)
     setRoleFeedback('')
@@ -310,8 +590,98 @@ export default function AdminDashboard() {
     }
   }
 
-  // for the clinic requests, we can have similar approveClinicRequest and rejectClinicRequest functions that call the respective API endpoints and update the clinicRequests state accordingly
-  
+  async function assignStaffToClinic() {
+    if (!selectedClinicId || !selectedStaffId) {
+      setAssignmentError('Please select both a clinic and a staff member.')
+      return
+    }
+
+    setAssigningStaff(true)
+    setAssignmentError('')
+    setAssignmentFeedback('')
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/users/${selectedStaffId}/assign-clinic`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            admin_id: user.id,
+            clinic_id: selectedClinicId,
+          }),
+        }
+      )
+
+      const body = await readApiResponse(response)
+
+      if (!response.ok) {
+        throw new Error(body.error || 'Failed to assign staff to clinic')
+      }
+
+      setAssignmentFeedback(body.message || 'Staff assigned successfully.')
+
+      setStaffUsers((currentUsers) =>
+        currentUsers.map((currentUser) =>
+          currentUser.id === selectedStaffId
+            ? { ...currentUser, clinic_id: selectedClinicId }
+            : currentUser
+        )
+      )
+
+      setSelectedClinicId('')
+      setSelectedStaffId('')
+    } catch (err) {
+      setAssignmentError(err.message || 'Failed to assign staff to clinic')
+    } finally {
+      setAssigningStaff(false)
+    }
+  }
+
+  async function unassignStaffFromClinic(staffUserId) {
+    setAssignmentError('')
+    setAssignmentFeedback('')
+    setAssigningStaff(true)
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/users/${staffUserId}/unassign-clinic`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            admin_id: user.id,
+          }),
+        }
+      )
+
+      const body = await readApiResponse(response)
+
+      if (!response.ok) {
+        throw new Error(body.error || 'Failed to unassign staff from clinic')
+      }
+
+      setAssignmentFeedback(body.message || 'Staff unassigned successfully.')
+
+      setStaffUsers((currentUsers) =>
+        currentUsers.map((currentUser) =>
+          currentUser.id === staffUserId
+            ? { ...currentUser, clinic_id: null }
+            : currentUser
+        )
+      )
+    } catch (err) {
+      setAssignmentError(err.message || 'Failed to unassign staff from clinic')
+    } finally {
+      setAssigningStaff(false)
+    }
+  }
 
   return (
     <section>
@@ -399,6 +769,281 @@ export default function AdminDashboard() {
         </section>
 
        {/* add the clinic requests panel here, similar to the role requests panel, using the clinicRequests state and related functions */}
+      <section className="admin-panel" aria-labelledby="staff-assignment-heading">
+        <header className="admin-panel-header">
+          <h2 id="staff-assignment-heading">Assign staff to clinic</h2>
+          <span>Choose a clinic and a staff member</span>
+        </header>
+
+        {assignmentError && (
+          <p className="admin-message admin-error" role="alert">
+            {assignmentError}
+          </p>
+        )}
+
+        {assignmentFeedback && (
+          <p className="admin-message admin-feedback" role="status">
+            {assignmentFeedback}
+          </p>
+        )}
+
+        {loadingAssignmentData ? (
+          <p className="admin-message">Loading clinics and staff...</p>
+        ) : (
+          <form
+            className="admin-message"
+            onSubmit={(event) => {
+              event.preventDefault()
+              assignStaffToClinic()
+            }}
+          >
+            <label htmlFor="clinic-select">Clinic</label>
+            <br />
+            <select
+              id="clinic-select"
+              value={selectedClinicId}
+              onChange={(event) => {
+                setSelectedClinicId(event.target.value)
+                setSelectedStaffId('')
+                setAssignmentError('')
+                setAssignmentFeedback('')
+                setShowClinicEditor(false)
+              }}
+            >
+              <option value="">Select clinic</option>
+              {clinics.map((clinic) => (
+                <option key={clinic.id} value={clinic.id}>
+                  {clinic.name}
+                </option>
+              ))}
+            </select>
+
+          {selectedClinicId && (
+            <>
+              <br />
+              <br />
+
+              <section className="admin-subsection">
+                <h3>Clinic staff</h3>
+
+                <section className="admin-table-wrap">
+                  <table className="admin-table">
+                    <tbody>
+                      {selectedClinicStaff.length === 0 ? (
+                        <tr>
+                          <td colSpan="4">No staff assigned.</td>
+                        </tr>
+                      ) : (
+                        selectedClinicStaff.map((staffUser) => (
+                          <tr key={staffUser.id}>
+                            <td>{staffUser.full_name}</td>
+                            <td>{staffUser.role}</td>
+                            <td>{selectedClinic?.name}</td>
+                            <td>
+                              <button
+                                className="admin-btn admin-btn-reject"
+                                type="button"
+                                onClick={() => unassignStaffFromClinic(staffUser.id)}
+                              >
+                                Unassign
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </section>
+
+                <br />
+
+                <label htmlFor="staff-select">Add staff</label>
+                <br />
+                <select
+                  id="staff-select"
+                  value={selectedStaffId}
+                  onChange={(event) => setSelectedStaffId(event.target.value)}
+                >
+                  <option value="">Select staff</option>
+                  {unassignedStaffUsers.map((staffUser) => (
+                    <option key={staffUser.id} value={staffUser.id}>
+                      {staffUser.full_name}
+                    </option>
+                  ))}
+                </select>
+
+                <br />
+                <br />
+
+                <button
+                  className="admin-btn admin-btn-approve"
+                  type="button"
+                  onClick={assignStaffToClinic}
+                  disabled={assigningStaff || !selectedStaffId}
+                >
+                  {assigningStaff ? 'Adding...' : 'Add staff'}
+                </button>
+              </section>
+
+              <section className="admin-subsection">
+                <h3>Selected clinic details</h3>
+                <p className="admin-feedback">Click any card below to edit this clinic.</p>
+
+                <section
+                  className="clinic-details-grid is-clickable"
+                  onClick={() => setShowClinicEditor((current) => !current)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      setShowClinicEditor((current) => !current)
+                    }
+                  }}
+                >
+                  <article className="clinic-detail-card">
+                    <h4>Clinic name</h4>
+                    <p>{selectedClinic?.name || 'Not available'}</p>
+                  </article>
+
+                  <article className="clinic-detail-card">
+                    <h4>Facility type</h4>
+                    <p>{selectedClinic?.facility_type || 'Not available'}</p>
+                  </article>
+
+                  <article className="clinic-detail-card">
+                    <h4>Province</h4>
+                    <p>{selectedClinic?.province || 'Not available'}</p>
+                  </article>
+
+                  <article className="clinic-detail-card">
+                    <h4>District</h4>
+                    <p>{selectedClinic?.district || 'Not available'}</p>
+                  </article>
+
+                  <article className="clinic-detail-card">
+                    <h4>Municipality</h4>
+                    <p>{selectedClinic?.municipality || 'Not available'}</p>
+                  </article>
+
+                  <article className="clinic-detail-card">
+                    <h4>Operating hours</h4>
+                    <p>{selectedClinic?.operating_hours || 'Not available'}</p>
+                  </article>
+
+                  <article className="clinic-detail-card">
+                    <h4>Services</h4>
+                    <p>
+                      {Array.isArray(selectedClinic?.services)
+                        ? selectedClinic.services.join(', ')
+                        : selectedClinic?.services || 'Not available'}
+                    </p>
+                  </article>
+                </section>
+              </section>
+
+              {showClinicEditor && (
+                <section className="admin-subsection">
+                  <h3>Edit clinic</h3>
+
+                  <section className="edit-clinic-container">
+
+                    {/* 🔹 NAME CENTERED */}
+                    <section className="edit-clinic-name">
+                      <label htmlFor="clinic-name">Name</label>
+                      <input
+                        id="clinic-name"
+                        name="name"
+                        value={clinicForm.name}
+                        onChange={handleClinicFormChange}
+                      />
+                    </section>
+
+                    {/* 🔹 GRID */}
+                    <section className="edit-clinic-grid">
+
+                      <section className="edit-field">
+                        <label htmlFor="facility-type">Facility type</label>
+                        <input
+                          id="facility-type"
+                          name="facility_type"
+                          value={clinicForm.facility_type}
+                          onChange={handleClinicFormChange}
+                        />
+                      </section>
+
+                      <section className="edit-field">
+                        <label htmlFor="province">Province</label>
+                        <input
+                          id="province"
+                          name="province"
+                          value={clinicForm.province}
+                          onChange={handleClinicFormChange}
+                        />
+                      </section>
+
+                      <section className="edit-field">
+                        <label htmlFor="district">District</label>
+                        <input
+                          id="district"
+                          name="district"
+                          value={clinicForm.district}
+                          onChange={handleClinicFormChange}
+                        />
+                      </section>
+
+                      <section className="edit-field">
+                        <label htmlFor="municipality">Municipality</label>
+                        <input
+                          id="municipality"
+                          name="municipality"
+                          value={clinicForm.municipality}
+                          onChange={handleClinicFormChange}
+                        />
+                      </section>
+
+                      <section className="edit-field">
+                        <label htmlFor="operating-hours">Operating hours</label>
+                        <input
+                          id="operating-hours"
+                          name="operating_hours"
+                          value={clinicForm.operating_hours}
+                          onChange={handleClinicFormChange}
+                        />
+                      </section>
+
+                      <section className="edit-field">
+                        <label htmlFor="services">Services</label>
+                        <input
+                          id="services"
+                          name="services"
+                          value={clinicForm.services}
+                          onChange={handleClinicFormChange}
+                        />
+                      </section>
+
+                    </section>
+
+                    <br />
+
+                    <button
+                      className="admin-btn admin-btn-approve"
+                      type="button"
+                      onClick={saveClinicChanges}
+                      disabled={savingClinic}
+                    >
+                      {savingClinic ? 'Saving...' : 'Save changes'}
+                    </button>
+
+                  </section>
+                </section>
+              )}
+            </>
+          )}
+
+          </form>
+        )}
+      </section>
       </section>
     </section>
   )
