@@ -60,5 +60,5 @@ jobs:
           files: |
             ./clinic-system/client/coverage/lcov.info
             ./clinic-system/server/coverage/lcov.info
-          flags: client,server
+          #flags: client,server
           fail_ci_if_error: true
