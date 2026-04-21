@@ -17,5 +17,5 @@ module.exports = {
     '!src/index.js'
   ],
 
-  coverageReporters: ['text', 'lcov', 'html']
+ coverageReporters: ['text', 'lcov', 'html', 'json-summary']
 }
