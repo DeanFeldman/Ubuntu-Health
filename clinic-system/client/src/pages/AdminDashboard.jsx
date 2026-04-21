@@ -464,8 +464,10 @@ useEffect(() => {
     province: selectedClinic.province || '',
     district: selectedClinic.district || '',
     municipality: selectedClinic.municipality || '',
-    operating_hours: selectedClinic.operating_hours || '',
-    services: Array.isArray(selectedClinic.services)
+    operating_hours:
+      typeof selectedClinic.operating_hours === 'object'
+        ? JSON.stringify(selectedClinic.operating_hours)
+        : selectedClinic.operating_hours || '',    services: Array.isArray(selectedClinic.services)
       ? selectedClinic.services.join(', ')
       : selectedClinic.services || '',
   })
@@ -533,7 +535,11 @@ useEffect(() => {
         body: JSON.stringify({
           admin_id: user.id,
           ...clinicForm,
-        }),
+          operating_hours:
+            typeof clinicForm.operating_hours === 'string'
+              ? JSON.parse(clinicForm.operating_hours || '{}')
+              : clinicForm.operating_hours,
+        })
       })
 
       const body = await readApiResponse(response)
@@ -928,7 +934,22 @@ useEffect(() => {
 
                   <article className="clinic-detail-card">
                     <h4>Operating hours</h4>
-                    <p>{selectedClinic?.operating_hours || 'Not available'}</p>
+                    {selectedClinic?.operating_hours ? (
+                      Object.entries(selectedClinic.operating_hours).map(([day, hours]) => (
+                        <p key={day}>
+                          <strong>
+                            {day.charAt(0).toUpperCase() + day.slice(1)}:
+                          </strong>{' '}
+                          {typeof hours === 'string'
+                            ? hours
+                            : hours?.open && hours?.close
+                            ? `${hours.open} - ${hours.close}`
+                            : 'Closed'}
+                        </p>
+                      ))
+                    ) : (
+                      <p>Not available</p>
+                    )}
                   </article>
 
                   <article className="clinic-detail-card">
@@ -1007,7 +1028,11 @@ useEffect(() => {
                         <input
                           id="operating-hours"
                           name="operating_hours"
-                          value={clinicForm.operating_hours}
+                          value={
+                            typeof clinicForm.operating_hours === 'string'
+                              ? clinicForm.operating_hours
+                              : JSON.stringify(clinicForm.operating_hours || {})
+                          }
                           onChange={handleClinicFormChange}
                         />
                       </section>
