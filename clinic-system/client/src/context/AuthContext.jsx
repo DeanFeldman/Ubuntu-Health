@@ -24,7 +24,7 @@ async function fetchOrCreateUser(authUser) {
     if (existingUser) {
       console.log('DB USER:', existingUser)
 
-      setUser(existingUser)   // 🔥 IMPORTANT
+      setUser(existingUser)   
       setRole(existingUser.role)
 
       return existingUser.role
@@ -43,7 +43,7 @@ async function fetchOrCreateUser(authUser) {
 
     if (insertError) throw insertError
 
-    setUser(newUser)   // 🔥 IMPORTANT
+    setUser(newUser) 
     setRole(newUser.role)
 
     return newUser.role
