@@ -24,50 +24,65 @@ const styles = `
     line-height: 1.5;
   }
 
-  .uh-navbar {
-    background: var(--uh-surface);
-    border-bottom: 1px solid var(--uh-border);
-    padding: 0 24px;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-  }
-
-  .uh-navbar-inner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px 0;
-    gap: 16px;
-  }
-
-  .uh-brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-weight: 700;
-    font-size: 1.1rem;
-    white-space: nowrap;
-    text-decoration: none;
-    color: var(--uh-text);
-  }
-
-.uh-brand-logo {
-  height: 60px;
-  width: 60px;
-  object-fit: cover;
-  transform: scale(2);  
+.uh-navbar {
+  background: var(--uh-surface);
+  border-bottom: 1px solid var(--uh-border);
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
-  .uh-nav-links {
-    display: flex;
-    gap: 20px;
-    font-size: 14px;
-    font-weight: 500;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
+.uh-navbar-inner {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  padding: 16px 0;
+  gap: 16px;
+}
+
+.uh-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 1.1rem;
+  white-space: nowrap;
+  text-decoration: none;
+  color: var(--uh-text);
+  min-width: 220px;
+}
+
+.uh-brand-logo {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  display: block;
+  flex-shrink: 0;
+  transform: none;
+}
+
+.uh-nav-links {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.uh-nav-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  align-items: center;
+  min-width: 220px;
+}
 
   .uh-nav-links a {
     text-decoration: none;
@@ -83,14 +98,6 @@ const styles = `
     border-bottom: 2px solid var(--uh-primary);
   }
 
-  .uh-nav-actions {
-    display: flex;
-    gap: 10px;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    align-items: center;
-  }
 
   .uh-btn {
     border: none;
@@ -155,7 +162,7 @@ export default function Layout() {
   const showRequestStaff = role === 'Patient'
   const showRequestAdmin = role === 'Staff'
 
-  const isFlowPage =  isBookingPage
+  const isFlowPage = isQueuePage || isBookingPage
 
   return (
   <>
@@ -164,7 +171,6 @@ export default function Layout() {
     {!isLoginPage && (
       <header className="uh-navbar">
         <nav className="uh-navbar-inner" aria-label="Primary navigation">
-          
           <NavLink to="/" className="uh-brand">
             <img
               src={logo}
@@ -174,27 +180,29 @@ export default function Layout() {
             Ubuntu Health
           </NavLink>
 
-          {/* Hide nav links on booking + queue */}
-          {!isFlowPage && (
-            <ul className="uh-nav-links">
-              {canAccess(role, 'admin') && (
-                <li><NavLink to="/admin">Admin</NavLink></li>
-              )}
-              {canAccess(role, 'staff') && (
-                <li><NavLink to="/staff">Staff</NavLink></li>
-              )}
-              {canAccess(role, 'clinic') && (
-                <li><NavLink to="/clinic">Clinic</NavLink></li>
-              )}
-              {user && (
-                <li><NavLink to="/queue">Queue</NavLink></li>
-              )}
-            </ul>
+          {!isBookingPage && (
+            <ul
+                className="uh-nav-links"
+                style={{ visibility: isBookingPage ? 'hidden' : 'visible' }}
+              >
+                {canAccess(role, 'admin') && (
+                  <li><NavLink to="/admin">Admin</NavLink></li>
+                )}
+                {canAccess(role, 'staff') && (
+                  <li><NavLink to="/staff">Staff</NavLink></li>
+                )}
+                {canAccess(role, 'clinic') && (
+                  <li><NavLink to="/clinic">Clinic</NavLink></li>
+                )}
+                {user && (
+                  <li><NavLink to="/queue">Queue</NavLink></li>
+                )}
+              </ul>
           )}
 
           {user && (
             <menu className="uh-nav-actions">
-              {isFlowPage ? (
+              {(isQueuePage || isBookingPage) && (
                 <li>
                   <button
                     className="uh-btn uh-btn-secondary"
@@ -203,43 +211,42 @@ export default function Layout() {
                     Back
                   </button>
                 </li>
-              ) : (
-                <>
-                  {showRequestStaff && (
-                    <li>
-                      <button
-                        className="uh-btn uh-btn-secondary"
-                        onClick={() => RoleRequest('Staff')}
-                      >
-                        Request Staff Role
-                      </button>
-                    </li>
-                  )}
+              )}
 
-                  {showRequestAdmin && (
-                    <li>
-                      <button
-                        className="uh-btn uh-btn-secondary"
-                        onClick={() => RoleRequest('Admin')}
-                      >
-                        Request Admin Role
-                      </button>
-                    </li>
-                  )}
+              {!isBookingPage && showRequestStaff && (
+                <li>
+                  <button
+                    className="uh-btn uh-btn-secondary"
+                    onClick={() => RoleRequest('Staff')}
+                  >
+                    Request Staff Role
+                  </button>
+                </li>
+              )}
 
-                  <li>
-                    <button
-                      className="uh-btn uh-btn-primary"
-                      onClick={handleLogout}
-                    >
-                      Log out
-                    </button>
-                  </li>
-                </>
+              {!isBookingPage && showRequestAdmin && (
+                <li>
+                  <button
+                    className="uh-btn uh-btn-secondary"
+                    onClick={() => RoleRequest('Admin')}
+                  >
+                    Request Admin Role
+                  </button>
+                </li>
+              )}
+
+              {!isBookingPage && (
+                <li>
+                  <button
+                    className="uh-btn uh-btn-primary"
+                    onClick={handleLogout}
+                  >
+                    Log out
+                  </button>
+                </li>
               )}
             </menu>
           )}
-
         </nav>
       </header>
     )}
