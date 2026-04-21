@@ -146,6 +146,7 @@ export default function Layout() {
 
   const isLoginPage = location.pathname === '/login'
   const isQueuePage = location.pathname === '/queue'
+  const isBookingPage = location.pathname === '/booking'
 
   const handleLogout = async () => {
     await logout()
@@ -154,22 +155,27 @@ export default function Layout() {
   const showRequestStaff = role === 'Patient'
   const showRequestAdmin = role === 'Staff'
 
+  const isFlowPage =  isBookingPage
+
   return (
-    <>
-      <style>{styles}</style>
+  <>
+    <style>{styles}</style>
 
-      {!isLoginPage && (
-        <header className="uh-navbar">
-          <nav className="uh-navbar-inner" aria-label="Primary navigation">
-            <NavLink to="/" className="uh-brand">
-                <img
-                src={logo}
-                alt="Ubuntu Health logo"
-                className="uh-brand-logo"
-              />
-              Ubuntu Health
-            </NavLink>
+    {!isLoginPage && (
+      <header className="uh-navbar">
+        <nav className="uh-navbar-inner" aria-label="Primary navigation">
+          
+          <NavLink to="/" className="uh-brand">
+            <img
+              src={logo}
+              alt="Ubuntu Health logo"
+              className="uh-brand-logo"
+            />
+            Ubuntu Health
+          </NavLink>
 
+          {/* Hide nav links on booking + queue */}
+          {!isFlowPage && (
             <ul className="uh-nav-links">
               {canAccess(role, 'admin') && (
                 <li><NavLink to="/admin">Admin</NavLink></li>
@@ -184,58 +190,63 @@ export default function Layout() {
                 <li><NavLink to="/queue">Queue</NavLink></li>
               )}
             </ul>
-            
-            {user && (
-              <menu className="uh-nav-actions">
-                {isQueuePage && (
+          )}
+
+          {user && (
+            <menu className="uh-nav-actions">
+              {isFlowPage ? (
+                <li>
+                  <button
+                    className="uh-btn uh-btn-secondary"
+                    onClick={() => navigate('/clinic')}
+                  >
+                    Back
+                  </button>
+                </li>
+              ) : (
+                <>
+                  {showRequestStaff && (
+                    <li>
+                      <button
+                        className="uh-btn uh-btn-secondary"
+                        onClick={() => RoleRequest('Staff')}
+                      >
+                        Request Staff Role
+                      </button>
+                    </li>
+                  )}
+
+                  {showRequestAdmin && (
+                    <li>
+                      <button
+                        className="uh-btn uh-btn-secondary"
+                        onClick={() => RoleRequest('Admin')}
+                      >
+                        Request Admin Role
+                      </button>
+                    </li>
+                  )}
+
                   <li>
                     <button
-                      className="uh-btn uh-btn-secondary"
-                      onClick={() => navigate('/clinic')}
+                      className="uh-btn uh-btn-primary"
+                      onClick={handleLogout}
                     >
-                      Back
-                    </button>
-                  </li>
-                )}
-
-                {!isQueuePage && showRequestStaff && (
-                  <li>
-                    <button
-                      className="uh-btn uh-btn-secondary"
-                      onClick={() => RoleRequest('Staff')}
-                    >
-                      Request Staff Role
-                    </button>
-                  </li>
-                )}
-
-                {!isQueuePage && showRequestAdmin && (
-                  <li>
-                    <button
-                      className="uh-btn uh-btn-secondary"
-                      onClick={() => RoleRequest('Admin')}
-                    >
-                      Request Admin Role
-                    </button>
-                  </li>
-                )}
-
-                {!isQueuePage && (
-                  <li>
-                    <button className="uh-btn uh-btn-primary" onClick={handleLogout}>
                       Log out
                     </button>
                   </li>
-                )}
-              </menu>
-            )}
-          </nav>
-        </header>
-      )}
+                </>
+              )}
+            </menu>
+          )}
 
-      <main className={isLoginPage ? '' : 'uh-page'}>
-        <Outlet />
-      </main>
-    </>
-  )
+        </nav>
+      </header>
+    )}
+
+    <main className={isLoginPage ? '' : 'uh-page'}>
+      <Outlet />
+    </main>
+  </>
+)
 }
