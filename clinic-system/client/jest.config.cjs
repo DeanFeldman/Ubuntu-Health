@@ -19,5 +19,5 @@ module.exports = {
     '!src/**/*.test.{js,jsx}',
   ],
   coverageDirectory: 'coverage',
-  coverageReporters: ['text', 'lcov', 'html'],
+  coverageReporters: ['text', 'lcov', 'html', 'json-summary'],
 }

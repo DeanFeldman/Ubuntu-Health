@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -26,26 +28,37 @@ jobs:
           cache-dependency-path: |
             clinic-system/client/package-lock.json
             clinic-system/server/package-lock.json
+            clinic-system/package-lock.json
 
       - name: Install server dependencies
         working-directory: clinic-system/server
         run: npm ci
 
-      - name: Run server tests
+      - name: Run server tests with coverage
         working-directory: clinic-system/server
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: npm test
+        run: npm test -- --coverage
 
       - name: Install client dependencies
         working-directory: clinic-system/client
         run: npm ci
 
-      - name: Run client tests
+      - name: Run client tests with coverage
         working-directory: clinic-system/client
-        run: npm test
+        run: npm test -- --coverage
 
       - name: Build client
         working-directory: clinic-system/client
         run: npm run build
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: |
+            ./clinic-system/client/coverage/lcov.info
+            ./clinic-system/server/coverage/lcov.info
+          flags: client,server
+          fail_ci_if_error: true
