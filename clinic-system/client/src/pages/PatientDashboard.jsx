@@ -203,6 +203,23 @@ const styles = `
   }
   .uh-join-btn:hover { background: var(--uh-primary-dark); }
 
+  /* ── Book Appointment button ── */
+  .uh-book-btn {
+    width: 100%;
+    margin-top: 8px;
+    padding: 10px;
+    background: #023474;
+    color: white;
+    border: 1.5px solid #023474;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .uh-book-btn:hover { background: #EFF6FF; }
+
   /* ── Feedback states ── */
   .uh-empty {
     padding: 3rem;
@@ -263,6 +280,10 @@ const navigate = useNavigate()
 
 const handleJoinQueue = (clinic) => {
   navigate('/queue', { state: { clinic } })
+}
+
+const handleBookAppointment = (clinic) => {
+  navigate('/book', { state: { clinic } })
 }
 
   // Clinic data state
@@ -492,6 +513,13 @@ const handleJoinQueue = (clinic) => {
                           aria-label={`Join queue at ${clinic.name}`}
                         >
                           Join Queue
+                        </button>
+                        <button
+                          className="uh-book-btn"
+                          onClick={() => handleBookAppointment(clinic)}
+                          aria-label={`Book appointment at ${clinic.name}`}
+                        >
+                          Book Appointment
                         </button>
 
                       </article>
