@@ -283,7 +283,7 @@ const handleJoinQueue = (clinic) => {
 }
 
 const handleBookAppointment = (clinic) => {
-  navigate('/book', { state: { clinic } })
+  navigate('/booking', { state: { clinic } })
 }
 
   // Clinic data state
