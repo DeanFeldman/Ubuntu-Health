@@ -9,6 +9,7 @@ import PatientDashboard from './pages/PatientDashboard'
 import StaffDashboard from './pages/StaffDashboard'
 import AdminDashboard from './pages/AdminDashboard'
 import QueuePage from './pages/QueuePage'
+import BookingPage from './pages/BookingPage'
 
 export default function App() {
   return (
@@ -51,6 +52,16 @@ export default function App() {
           element={
             <ProtectedRoute routeName="clinic">
               <QueuePage />
+            </ProtectedRoute>
+          }
+        />
+
+
+        <Route
+          path="/booking"
+          element={
+            <ProtectedRoute routeName="clinic">
+              <BookingPage />
             </ProtectedRoute>
           }
         />
