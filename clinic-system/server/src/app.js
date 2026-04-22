@@ -1075,16 +1075,21 @@ app.patch('/api/clinic-requests/:id/reject', async (req, res) => {
   }
 })
 
-
+const {
+  isValidUuid: isValidClinicUuid,
+  isAdminUser,
+  canAssignStaffToClinic,
+  canUnassignStaff,
+  validateClinicUpdatePayload,
+  normalizeServicesInput,
+} = require('./clinicManagementValidation')
 // PATCH /api/users/:userId/assign-clinic — admin assigns a staff member to a clinic
 app.patch('/api/users/:userId/assign-clinic', async (req, res) => {
   try {
     const { userId } = req.params
     const { admin_id, clinic_id } = req.body
 
-    const uuidRegex = /^[0-9a-f-]{36}$/i
-
-    if (!uuidRegex.test(userId) || !uuidRegex.test(admin_id) || !uuidRegex.test(clinic_id)) {
+    if (!isValidClinicUuid(userId) || !isValidClinicUuid(admin_id) || !isValidClinicUuid(clinic_id)) {
       return res.status(400).json({ error: 'Invalid ID format' })
     }
 
@@ -1098,7 +1103,7 @@ app.patch('/api/users/:userId/assign-clinic', async (req, res) => {
       return res.status(404).json({ error: 'Admin user not found' })
     }
 
-    if (admin.role !== 'Admin') {
+    if (!isAdminUser(admin)) {
       return res.status(403).json({ error: 'Only admins can assign staff to clinics' })
     }
 
@@ -1112,14 +1117,9 @@ app.patch('/api/users/:userId/assign-clinic', async (req, res) => {
       return res.status(404).json({ error: 'User not found' })
     }
 
-    const normalizedRole = selectedUser.role?.trim().toLowerCase()
-
-    if (!normalizedRole || !normalizedRole.includes('staff')) {
-      return res.status(400).json({ error: 'Selected user is not staff' })
-    }
-
-    if (selectedUser.clinic_id && selectedUser.clinic_id !== clinic_id) {
-      return res.status(409).json({ error: 'Staff member is already assigned to another clinic' })
+    const assignmentCheck = canAssignStaffToClinic(selectedUser, clinic_id)
+    if (!assignmentCheck.valid) {
+      return res.status(assignmentCheck.status).json({ error: assignmentCheck.error })
     }
 
     const { data: clinic, error: clinicError } = await supabase
@@ -1158,9 +1158,7 @@ app.patch('/api/users/:userId/unassign-clinic', async (req, res) => {
     const { userId } = req.params
     const { admin_id } = req.body
 
-    const uuidRegex = /^[0-9a-f-]{36}$/i
-
-    if (!uuidRegex.test(userId) || !uuidRegex.test(admin_id)) {
+    if (!isValidClinicUuid(userId) || !isValidClinicUuid(admin_id)) {
       return res.status(400).json({ error: 'Invalid ID format' })
     }
 
@@ -1174,7 +1172,7 @@ app.patch('/api/users/:userId/unassign-clinic', async (req, res) => {
       return res.status(404).json({ error: 'Admin user not found' })
     }
 
-    if (admin.role !== 'Admin') {
+    if (!isAdminUser(admin)) {
       return res.status(403).json({ error: 'Only admins can unassign staff from clinics' })
     }
 
@@ -1188,14 +1186,9 @@ app.patch('/api/users/:userId/unassign-clinic', async (req, res) => {
       return res.status(404).json({ error: 'User not found' })
     }
 
-    const normalizedRole = selectedUser.role?.trim().toLowerCase()
-
-    if (!normalizedRole || !normalizedRole.includes('staff')) {
-      return res.status(400).json({ error: 'Selected user is not staff' })
-    }
-
-    if (!selectedUser.clinic_id) {
-      return res.status(400).json({ error: 'Staff member is not assigned to a clinic' })
+    const unassignCheck = canUnassignStaff(selectedUser)
+    if (!unassignCheck.valid) {
+      return res.status(unassignCheck.status).json({ error: unassignCheck.error })
     }
 
     const { data, error } = await supabase
