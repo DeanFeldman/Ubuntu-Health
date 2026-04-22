@@ -477,8 +477,40 @@ export default function BookingPage() {
   }, [isStaff])
 
   // ── Generated slots for the selected date ──
-  const slots = useMemo(() => generateSlots(selectedDate), [selectedDate])
+  const [slots, setSlots] = useState([])
+  const [slotsLoading, setSlotsLoading] = useState(false)
+  
 
+  useEffect(() => {
+    if (!selectedDate || !clinic?.id) {
+      setSlots([])
+      return
+    }
+
+    async function fetchSlots() {
+      setSlotsLoading(true)
+
+      try {
+        const res = await fetch(
+          `${API_BASE_URL}/api/appointments/slots?clinic_id=${clinic.id}&date=${selectedDate}`
+        )
+
+        const data = await res.json()
+
+        if (!res.ok) throw new Error(data.error || 'Failed to load slots')
+
+        setSlots(data.slots || [])
+      } catch (err) {
+        console.error(err)
+
+        setSlots(generateSlots(selectedDate))
+      } finally {
+        setSlotsLoading(false)
+      }
+    }
+
+    fetchSlots()
+  }, [selectedDate, clinic?.id])
   // Reset slot when date changes
   useEffect(() => {
     setSelectedSlot('')
