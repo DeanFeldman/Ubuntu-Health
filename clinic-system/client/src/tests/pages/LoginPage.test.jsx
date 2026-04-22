@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import LoginPage from '../../pages/LoginPage'
 import { useAuth } from '../../context/AuthContext'
@@ -39,9 +39,16 @@ describe('LoginPage', () => {
 
     renderPage()
 
-    expect(screen.getByText('Ubuntu Health')).toBeInTheDocument()
     expect(
-      screen.getByText('Sign in with Google')
+      screen.getByRole('heading', { name: /welcome to ubuntu health/i })
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getByRole('button', { name: /sign in with google/i })
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getByText(/secure login for patients, staff, and admins/i)
     ).toBeInTheDocument()
   })
 
@@ -58,9 +65,10 @@ describe('LoginPage', () => {
 
     renderPage()
 
-    fireEvent.click(screen.getByText('Sign in with Google'))
+    fireEvent.click(screen.getByRole('button', { name: /sign in with google/i }))
 
     expect(loginMock).toHaveBeenCalled()
+    expect(sessionStorage.getItem('oauth_started')).toBe('true')
   })
 
   test('shows auth error message', () => {
@@ -74,7 +82,7 @@ describe('LoginPage', () => {
 
     renderPage()
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Login failed')
+    expect(screen.getByText('Login failed')).toBeInTheDocument()
   })
 
   test('shows cancelled login error', () => {
@@ -90,49 +98,56 @@ describe('LoginPage', () => {
 
     renderPage()
 
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Login was cancelled or failed'
-    )
-  })
-})
-test('redirects admin after login', () => {
-  useAuth.mockReturnValue({
-    loginWithGoogle: jest.fn(),
-    error: '',
-    user: { id: '1' },
-    role: 'Admin',
-    loading: false,
+    expect(
+      screen.getByText('Login was cancelled or failed. Please try again.')
+    ).toBeInTheDocument()
   })
 
-  renderPage()
+  test('redirects admin after login', async () => {
+    useAuth.mockReturnValue({
+      loginWithGoogle: jest.fn(),
+      error: '',
+      user: { id: '1' },
+      role: 'Admin',
+      loading: false,
+    })
 
-  expect(mockNavigate).toHaveBeenCalledWith('/admin')
-})
+    renderPage()
 
-test('redirects staff after login', () => {
-  useAuth.mockReturnValue({
-    loginWithGoogle: jest.fn(),
-    error: '',
-    user: { id: '1' },
-    role: 'Staff',
-    loading: false,
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/admin')
+    })
   })
 
-  renderPage()
+  test('redirects staff after login', async () => {
+    useAuth.mockReturnValue({
+      loginWithGoogle: jest.fn(),
+      error: '',
+      user: { id: '1' },
+      role: 'Staff',
+      loading: false,
+    })
 
-  expect(mockNavigate).toHaveBeenCalledWith('/staff')
-})
+    renderPage()
 
-test('redirects patient to clinic after login', () => {
-  useAuth.mockReturnValue({
-    loginWithGoogle: jest.fn(),
-    error: '',
-    user: { id: '1' },
-    role: 'Patient',
-    loading: false,
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/staff')
+    })
   })
 
-  renderPage()
+  test('redirects patient to clinic after login', async () => {
+    useAuth.mockReturnValue({
+      loginWithGoogle: jest.fn(),
+      error: '',
+      user: { id: '1' },
+      role: 'Patient',
+      loading: false,
+    })
 
-  expect(mockNavigate).toHaveBeenCalledWith('/clinic')
+    renderPage()
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/clinic')
+    })
+  })
 })

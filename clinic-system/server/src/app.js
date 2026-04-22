@@ -863,60 +863,6 @@ app.get('/api/queue-notifications/:patientId', async (req, res) => {
   }
 })
 
-app.get('/api/clinic-requests', async (req, res) => {
-  try {
-    if (!supabase) {
-      return res.status(500).json({ error: 'Supabase not configured' })
-    }
-
-    const { admin_id, status } = req.query
-
-    if (!admin_id) {
-      return res.status(400).json({ error: 'admin_id is required' })
-    }
-
-    const uuidRegex = /^[0-9a-f-]{36}$/i
-    if (!uuidRegex.test(admin_id)) {
-      return res.status(400).json({ error: 'Invalid admin ID format' })
-    }
-
-    const { data: admin, error: adminError } = await supabase
-      .from('users')
-      .select('id, role')
-      .eq('id', admin_id)
-      .single()
-
-    if (adminError || !admin) {
-      return res.status(404).json({ error: 'Admin user not found' })
-    }
-
-    if (admin.role !== 'Admin') {
-      return res.status(403).json({ error: 'Only admins can view clinic requests' })
-    }
-
-    let query = supabase
-      .from('clinic_requests')
-      .select(`
-        *,
-        users:staff_user_id ( id, full_name, email, role ),
-        clinics:clinic_id ( id, name, facility_type, province )
-      `)
-      .order('created_at', { ascending: true })
-
-    if (status) {
-      query = query.eq('status', status)
-    }
-
-    const { data, error } = await query
-
-    if (error) throw error
-
-    return res.json({ requests: data || [] })
-  } catch (err) {
-    console.error(err)
-    return res.status(500).json({ error: 'Failed to load clinic requests' })
-  }
-})
 
 // GET /api/clinic-requests?admin_id=...&status=pending
 app.get('/api/clinic-requests', async (req, res) => {
@@ -1128,7 +1074,148 @@ app.patch('/api/clinic-requests/:id/reject', async (req, res) => {
     return res.status(500).json({ error: 'Failed to reject clinic request' })
   }
 })
-// add the backend for the staff to request staff access here 
+
+
+// PATCH /api/users/:userId/assign-clinic — admin assigns a staff member to a clinic
+app.patch('/api/users/:userId/assign-clinic', async (req, res) => {
+  try {
+    const { userId } = req.params
+    const { admin_id, clinic_id } = req.body
+
+    const uuidRegex = /^[0-9a-f-]{36}$/i
+
+    if (!uuidRegex.test(userId) || !uuidRegex.test(admin_id) || !uuidRegex.test(clinic_id)) {
+      return res.status(400).json({ error: 'Invalid ID format' })
+    }
+
+    const { data: admin, error: adminError } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('id', admin_id)
+      .single()
+
+    if (adminError || !admin) {
+      return res.status(404).json({ error: 'Admin user not found' })
+    }
+
+    if (admin.role !== 'Admin') {
+      return res.status(403).json({ error: 'Only admins can assign staff to clinics' })
+    }
+
+    const { data: selectedUser, error: userError } = await supabase
+      .from('users')
+      .select('id, role, full_name, clinic_id')
+      .eq('id', userId)
+      .single()
+
+    if (userError || !selectedUser) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    const normalizedRole = selectedUser.role?.trim().toLowerCase()
+
+    if (!normalizedRole || !normalizedRole.includes('staff')) {
+      return res.status(400).json({ error: 'Selected user is not staff' })
+    }
+
+    if (selectedUser.clinic_id && selectedUser.clinic_id !== clinic_id) {
+      return res.status(409).json({ error: 'Staff member is already assigned to another clinic' })
+    }
+
+    const { data: clinic, error: clinicError } = await supabase
+      .from('clinics')
+      .select('id, name')
+      .eq('id', clinic_id)
+      .single()
+
+    if (clinicError || !clinic) {
+      return res.status(404).json({ error: 'Clinic not found' })
+    }
+
+    const { data, error } = await supabase
+      .from('users')
+      .update({ clinic_id })
+      .eq('id', userId)
+      .select('id, full_name, role, clinic_id')
+      .single()
+
+    if (error) throw error
+
+    res.json({
+      message: `${data.full_name} assigned to ${clinic.name}`,
+      user: data,
+      clinic,
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to assign staff to clinic' })
+  }
+})
+
+// PATCH /api/users/:userId/unassign-clinic — admin removes a staff member from their clinic
+app.patch('/api/users/:userId/unassign-clinic', async (req, res) => {
+  try {
+    const { userId } = req.params
+    const { admin_id } = req.body
+
+    const uuidRegex = /^[0-9a-f-]{36}$/i
+
+    if (!uuidRegex.test(userId) || !uuidRegex.test(admin_id)) {
+      return res.status(400).json({ error: 'Invalid ID format' })
+    }
+
+    const { data: admin, error: adminError } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('id', admin_id)
+      .single()
+
+    if (adminError || !admin) {
+      return res.status(404).json({ error: 'Admin user not found' })
+    }
+
+    if (admin.role !== 'Admin') {
+      return res.status(403).json({ error: 'Only admins can unassign staff from clinics' })
+    }
+
+    const { data: selectedUser, error: userError } = await supabase
+      .from('users')
+      .select('id, role, full_name, clinic_id')
+      .eq('id', userId)
+      .single()
+
+    if (userError || !selectedUser) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    const normalizedRole = selectedUser.role?.trim().toLowerCase()
+
+    if (!normalizedRole || !normalizedRole.includes('staff')) {
+      return res.status(400).json({ error: 'Selected user is not staff' })
+    }
+
+    if (!selectedUser.clinic_id) {
+      return res.status(400).json({ error: 'Staff member is not assigned to a clinic' })
+    }
+
+    const { data, error } = await supabase
+      .from('users')
+      .update({ clinic_id: null })
+      .eq('id', userId)
+      .select('id, full_name, role, clinic_id')
+      .single()
+
+    if (error) throw error
+
+    res.json({
+      message: `${data.full_name} unassigned from clinic`,
+      user: data,
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to unassign staff from clinic' })
+  }
+})
 
 // GET /api/queue/:clinicId/completed-count — retrieve completed count for a clinic
 app.get('/api/queue/:clinicId/completed-count', async (req, res) => {
@@ -1238,204 +1325,6 @@ app.post('/api/queue/:clinicId/add-patient', async (req, res) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to add patient to queue' })
-  }
-})
-
-// GET /api/staff/:staffId/availability — retrieve staff availability
-app.get('/api/staff/:staffId/availability', async (req, res) => {
-  try {
-    const { staffId } = req.params
-
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(staffId)) {
-      return res.status(400).json({ error: 'Invalid staff ID format' })
-    }
-
-    const { data, error } = await supabase
-      .from('staff_availability')
-      .select('*')
-      .eq('staff_id', staffId)
-      .order('day_of_week', { ascending: true })
-
-    if (error) throw error
-
-    return res.status(200).json({ availability: data })
-  } catch (err) {
-    console.error(err)
-    return res.status(500).json({ error: 'Failed to fetch staff availability' })
-  }
-})
-
-// POST /api/staff/:staffId/availability — create availability records
-app.post('/api/staff/:staffId/availability', async (req, res) => {
-  try {
-    const { staffId } = req.params
-    const { day_of_week, start_time, end_time, is_available } = req.body
-
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(staffId)) {
-      return res.status(400).json({ error: 'Invalid staff ID format' })
-    }
-
-    if (day_of_week === undefined || day_of_week === null) {
-      return res.status(400).json({ error: 'day_of_week is required' })
-    }
-
-    if (!Number.isInteger(day_of_week) || day_of_week < 0 || day_of_week > 6) {
-      return res.status(400).json({ error: 'day_of_week must be an integer between 0 and 6' })
-    }
-
-    if (!start_time || !end_time) {
-      return res.status(400).json({ error: 'start_time and end_time are required' })
-    }
-
-    if (start_time >= end_time) {
-      return res.status(400).json({ error: 'start_time must be before end_time' })
-    }
-
-    const { data: staffUser, error: userError } = await supabase
-      .from('users')
-      .select('id, role')
-      .eq('id', staffId)
-      .maybeSingle()
-
-    if (userError) throw userError
-    if (!staffUser) return res.status(404).json({ error: 'Staff member not found' })
-    if (!['Staff', 'Admin'].includes(staffUser.role)) {
-      return res.status(403).json({ error: 'Only staff or admin can have availability records' })
-    }
-
-    const { data: existing, error: existingError } = await supabase
-      .from('staff_availability')
-      .select('id')
-      .eq('staff_id', staffId)
-      .eq('day_of_week', day_of_week)
-      .maybeSingle()
-
-    if (existingError) throw existingError
-    if (existing) {
-      return res.status(409).json({ error: 'Availability record already exists for this day' })
-    }
-
-    const { data, error } = await supabase
-      .from('staff_availability')
-      .insert({
-        staff_id: staffId,
-        day_of_week,
-        start_time,
-        end_time,
-        is_available: is_available ?? true,
-      })
-      .select()
-      .single()
-
-    if (error) throw error
-
-    return res.status(201).json({ availability: data })
-  } catch (err) {
-    console.error(err)
-    return res.status(500).json({ error: 'Failed to create availability record' })
-  }
-})
-// PATCH /api/staff/:staffId/availability/:availabilityId — update existing availability
-app.patch('/api/staff/:staffId/availability/:availabilityId', async (req, res) => {
-  try {
-    const { staffId, availabilityId } = req.params
-    const { start_time, end_time, is_available } = req.body
-
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(staffId) || !uuidRegex.test(availabilityId)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
-
-    if (!start_time && !end_time && is_available === undefined) {
-      return res.status(400).json({ error: 'At least one field must be provided to update' })
-    }
-
-    if (start_time && end_time && start_time >= end_time) {
-      return res.status(400).json({ error: 'start_time must be before end_time' })
-    }
-
-    const { data: existing, error: fetchError } = await supabase
-      .from('staff_availability')
-      .select('*')
-      .eq('id', availabilityId)
-      .eq('staff_id', staffId)
-      .maybeSingle()
-
-    if (fetchError) throw fetchError
-    if (!existing) return res.status(404).json({ error: 'Availability record not found' })
-
-    const updates = {}
-    if (start_time) updates.start_time = start_time
-    if (end_time) updates.end_time = end_time
-    if (is_available !== undefined) updates.is_available = is_available
-
-    const { data, error } = await supabase
-      .from('staff_availability')
-      .update(updates)
-      .eq('id', availabilityId)
-      .eq('staff_id', staffId)
-      .select()
-      .single()
-
-    if (error) throw error
-
-    return res.status(200).json({ availability: data })
-  } catch (err) {
-    console.error(err)
-    return res.status(500).json({ error: 'Failed to update availability record' })
-  }
-})
-// POST /api/patients — staff creates a patient record for a walk-in
-app.post('/api/patients', async (req, res) => {
-  try {
-    const { full_name, phone, email, date_of_birth, created_by } = req.body
-
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-    if (!full_name || full_name.trim() === '') {
-      return res.status(400).json({ error: 'full_name is required' })
-    }
-
-    if (!created_by) {
-      return res.status(400).json({ error: 'created_by is required' })
-    }
-
-    if (!uuidRegex.test(created_by)) {
-      return res.status(400).json({ error: 'Invalid created_by ID format' })
-    }
-
-    const { data: staffUser, error: staffError } = await supabase
-      .from('users')
-      .select('id, role')
-      .eq('id', created_by)
-      .maybeSingle()
-
-    if (staffError) throw staffError
-    if (!staffUser) return res.status(404).json({ error: 'Staff member not found' })
-    if (!['Staff', 'Admin'].includes(staffUser.role)) {
-      return res.status(403).json({ error: 'Only staff or admin can create patient records' })
-    }
-
-    const { data, error } = await supabase
-      .from('patients')
-      .insert({
-        full_name: full_name.trim(),
-        phone: phone || null,
-        email: email || null,
-        date_of_birth: date_of_birth || null,
-        created_by,
-      })
-      .select()
-      .single()
-
-    if (error) throw error
-
-    return res.status(201).json({ patient: data })
-  } catch (err) {
-    console.error(err)
-    return res.status(500).json({ error: 'Failed to create patient record' })
   }
 })
 
