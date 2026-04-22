@@ -36,3 +36,44 @@ describe('GET /api/staff/:staffId/availability', () => {
     expect(res.body).toHaveProperty('error', 'Invalid staff ID format')
   })
 })
+describe('POST /api/staff/:staffId/availability', () => {
+  it('returns 400 for invalid staff ID', async () => {
+    const res = await request(app)
+      .post(`/api/staff/${INVALID_UUID}/availability`)
+      .send({ day_of_week: 1, start_time: '08:00', end_time: '16:00' })
+    expect(res.status).toBe(400)
+    expect(res.body).toHaveProperty('error', 'Invalid staff ID format')
+  })
+
+  it('returns 400 when day_of_week is missing', async () => {
+    const res = await request(app)
+      .post(`/api/staff/${VALID_UUID}/availability`)
+      .send({ start_time: '08:00', end_time: '16:00' })
+    expect(res.status).toBe(400)
+    expect(res.body).toHaveProperty('error', 'day_of_week is required')
+  })
+
+  it('returns 400 when day_of_week is out of range', async () => {
+    const res = await request(app)
+      .post(`/api/staff/${VALID_UUID}/availability`)
+      .send({ day_of_week: 7, start_time: '08:00', end_time: '16:00' })
+    expect(res.status).toBe(400)
+    expect(res.body).toHaveProperty('error', 'day_of_week must be an integer between 0 and 6')
+  })
+
+  it('returns 400 when start_time or end_time is missing', async () => {
+    const res = await request(app)
+      .post(`/api/staff/${VALID_UUID}/availability`)
+      .send({ day_of_week: 1, start_time: '08:00' })
+    expect(res.status).toBe(400)
+    expect(res.body).toHaveProperty('error', 'start_time and end_time are required')
+  })
+
+  it('returns 400 when start_time is after end_time', async () => {
+    const res = await request(app)
+      .post(`/api/staff/${VALID_UUID}/availability`)
+      .send({ day_of_week: 1, start_time: '16:00', end_time: '08:00' })
+    expect(res.status).toBe(400)
+    expect(res.body).toHaveProperty('error', 'start_time must be before end_time')
+  })
+})
