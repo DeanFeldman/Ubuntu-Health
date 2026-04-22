@@ -1241,6 +1241,31 @@ app.post('/api/queue/:clinicId/add-patient', async (req, res) => {
   }
 })
 
+// GET /api/staff/:staffId/availability — retrieve staff availability
+app.get('/api/staff/:staffId/availability', async (req, res) => {
+  try {
+    const { staffId } = req.params
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(staffId)) {
+      return res.status(400).json({ error: 'Invalid staff ID format' })
+    }
+
+    const { data, error } = await supabase
+      .from('staff_availability')
+      .select('*')
+      .eq('staff_id', staffId)
+      .order('day_of_week', { ascending: true })
+
+    if (error) throw error
+
+    return res.status(200).json({ availability: data })
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: 'Failed to fetch staff availability' })
+  }
+})
+
 // Serve built frontend
 const publicPath = path.join(__dirname, '..', 'public')
 app.use(express.static(publicPath))
