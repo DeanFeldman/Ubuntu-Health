@@ -37,6 +37,10 @@ function isAssignedToSameClinic(currentClinicId, targetClinicId) {
 function isAssignedToDifferentClinic(currentClinicId, targetClinicId) {
   return !!currentClinicId && currentClinicId !== targetClinicId
 }
+function isMeaningfulService(service) {
+  // must contain at least one letter
+  return typeof service === 'string' && /[a-zA-Z]/.test(service)
+}
 /*confirms:
 they are staff
 the clinic ID is valid
@@ -131,7 +135,12 @@ function areValidServices(services) {
   return (
     Array.isArray(normalizedServices) &&
     normalizedServices.length > 0 &&
-    normalizedServices.every((service) => isNonEmptyString(service))
+    normalizedServices.every(
+      (service) =>
+        typeof service === 'string' &&
+        service.trim().length > 0 &&
+        /[a-zA-Z]/.test(service) // 👈 NEW CHECK
+    )
   )
 }
 
