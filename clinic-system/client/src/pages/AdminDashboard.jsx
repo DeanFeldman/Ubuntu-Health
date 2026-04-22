@@ -497,7 +497,10 @@ function buildOperatingHoursPayload(operatingHoursForm) {
     const currentDay = operatingHoursForm[day]
 
     if (!currentDay || currentDay.closed || !currentDay.open || !currentDay.close) {
-      hours[day] = 'Closed'
+      hours[day] = {
+        open: '',
+        close: '',
+      }
       return hours
     }
 
