@@ -1339,78 +1339,165 @@ app.post('/api/queue/:clinicId/add-patient', async (req, res) => {
   }
 })
 
-
-app.patch('/api/clinics/:id', async (req, res) => {
+// GET /api/staff/:staffId/availability — retrieve staff availability
+app.get('/api/staff/:staffId/availability', async (req, res) => {
   try {
-    const { id } = req.params
-    const {
-      admin_id,
-      name,
-      facility_type,
-      province,
-      district,
-      municipality,
-      operating_hours,
-      services,
-    } = req.body
-
+    const { staffId } = req.params
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-    if (!uuidRegex.test(id)) {
-      return res.status(400).json({ error: 'Invalid clinic ID format' })
+    if (!uuidRegex.test(staffId)) {
+      return res.status(400).json({ error: 'Invalid staff ID format' })
     }
-
-    if (!admin_id || !uuidRegex.test(admin_id)) {
-      return res.status(400).json({ error: 'Valid admin_id is required' })
-    }
-
-    const { data: adminUser, error: adminError } = await supabase
-      .from('users')
-      .select('id, role')
-      .eq('id', admin_id)
-      .maybeSingle()
-
-    if (adminError) throw adminError
-
-    if (!adminUser) {
-      return res.status(404).json({ error: 'Admin user not found' })
-    }
-
-    if (adminUser.role !== 'Admin') {
-      return res.status(403).json({ error: 'Only admins can update clinics' })
-    }
-
-    const updateData = {
-      name,
-      facility_type,
-      province,
-      district,
-      municipality,
-      operating_hours,
-      services: typeof services === 'string'
-        ? services.split(',').map((item) => item.trim()).filter(Boolean)
-        : services,
-    }
-
     const { data, error } = await supabase
-      .from('clinics')
-      .update(updateData)
-      .eq('id', id)
+      .from('staff_availability')
       .select('*')
-      .single()
-
+      .eq('staff_id', staffId)
+      .order('day_of_week', { ascending: true })
     if (error) throw error
-
-    res.json({
-      message: 'Clinic updated successfully',
-      clinic: data,
-    })
+    return res.status(200).json({ availability: data })
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Failed to update clinic' })
+    return res.status(500).json({ error: 'Failed to fetch staff availability' })
   }
 })
 
+// POST /api/staff/:staffId/availability — create availability records
+app.post('/api/staff/:staffId/availability', async (req, res) => {
+  try {
+    const { staffId } = req.params
+    const { day_of_week, start_time, end_time, is_available } = req.body
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(staffId)) {
+      return res.status(400).json({ error: 'Invalid staff ID format' })
+    }
+    if (day_of_week === undefined || day_of_week === null) {
+      return res.status(400).json({ error: 'day_of_week is required' })
+    }
+    if (!Number.isInteger(day_of_week) || day_of_week < 0 || day_of_week > 6) {
+      return res.status(400).json({ error: 'day_of_week must be an integer between 0 and 6' })
+    }
+    if (!start_time || !end_time) {
+      return res.status(400).json({ error: 'start_time and end_time are required' })
+    }
+    if (start_time >= end_time) {
+      return res.status(400).json({ error: 'start_time must be before end_time' })
+    }
+    const { data: staffUser, error: userError } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('id', staffId)
+      .maybeSingle()
+    if (userError) throw userError
+    if (!staffUser) return res.status(404).json({ error: 'Staff member not found' })
+    if (!['Staff', 'Admin'].includes(staffUser.role)) {
+      return res.status(403).json({ error: 'Only staff or admin can have availability records' })
+    }
+    const { data: existing, error: existingError } = await supabase
+      .from('staff_availability')
+      .select('id')
+      .eq('staff_id', staffId)
+      .eq('day_of_week', day_of_week)
+      .maybeSingle()
+    if (existingError) throw existingError
+    if (existing) {
+      return res.status(409).json({ error: 'Availability record already exists for this day' })
+    }
+    const { data, error } = await supabase
+      .from('staff_availability')
+      .insert({ staff_id: staffId, day_of_week, start_time, end_time, is_available: is_available ?? true })
+      .select()
+      .single()
+    if (error) throw error
+    return res.status(201).json({ availability: data })
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: 'Failed to create availability record' })
+  }
+})
+
+// PATCH /api/staff/:staffId/availability/:availabilityId — update existing availability
+app.patch('/api/staff/:staffId/availability/:availabilityId', async (req, res) => {
+  try {
+    const { staffId, availabilityId } = req.params
+    const { start_time, end_time, is_available } = req.body
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(staffId) || !uuidRegex.test(availabilityId)) {
+      return res.status(400).json({ error: 'Invalid ID format' })
+    }
+    if (!start_time && !end_time && is_available === undefined) {
+      return res.status(400).json({ error: 'At least one field must be provided to update' })
+    }
+    if (start_time && end_time && start_time >= end_time) {
+      return res.status(400).json({ error: 'start_time must be before end_time' })
+    }
+    const { data: existing, error: fetchError } = await supabase
+      .from('staff_availability')
+      .select('*')
+      .eq('id', availabilityId)
+      .eq('staff_id', staffId)
+      .maybeSingle()
+    if (fetchError) throw fetchError
+    if (!existing) return res.status(404).json({ error: 'Availability record not found' })
+    const updates = {}
+    if (start_time) updates.start_time = start_time
+    if (end_time) updates.end_time = end_time
+    if (is_available !== undefined) updates.is_available = is_available
+    const { data, error } = await supabase
+      .from('staff_availability')
+      .update(updates)
+      .eq('id', availabilityId)
+      .eq('staff_id', staffId)
+      .select()
+      .single()
+    if (error) throw error
+    return res.status(200).json({ availability: data })
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: 'Failed to update availability record' })
+  }
+})
+
+// POST /api/patients — staff creates a patient record for a walk-in
+app.post('/api/patients', async (req, res) => {
+  try {
+    const { full_name, phone, email, date_of_birth, created_by } = req.body
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!full_name || full_name.trim() === '') {
+      return res.status(400).json({ error: 'full_name is required' })
+    }
+    if (!created_by) {
+      return res.status(400).json({ error: 'created_by is required' })
+    }
+    if (!uuidRegex.test(created_by)) {
+      return res.status(400).json({ error: 'Invalid created_by ID format' })
+    }
+    const { data: staffUser, error: staffError } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('id', created_by)
+      .maybeSingle()
+    if (staffError) throw staffError
+    if (!staffUser) return res.status(404).json({ error: 'Staff member not found' })
+    if (!['Staff', 'Admin'].includes(staffUser.role)) {
+      return res.status(403).json({ error: 'Only staff or admin can create patient records' })
+    }
+    const { data, error } = await supabase
+      .from('patients')
+      .insert({
+        full_name: full_name.trim(),
+        phone: phone || null,
+        email: email || null,
+        date_of_birth: date_of_birth || null,
+        created_by,
+      })
+      .select()
+      .single()
+    if (error) throw error
+    return res.status(201).json({ patient: data })
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: 'Failed to create patient record' })
+  }
+})
 
 // Serve built frontend
 const publicPath = path.join(__dirname, '..', 'public')
