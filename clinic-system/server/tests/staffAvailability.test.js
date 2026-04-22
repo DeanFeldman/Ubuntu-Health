@@ -77,3 +77,38 @@ describe('POST /api/staff/:staffId/availability', () => {
     expect(res.body).toHaveProperty('error', 'start_time must be before end_time')
   })
 })
+describe('PATCH /api/staff/:staffId/availability/:availabilityId', () => {
+  const VALID_AVAILABILITY_ID = '8a8d439e-6634-44df-be8e-f51b9e0ca87a'
+
+  it('returns 400 for invalid staff ID', async () => {
+    const res = await request(app)
+      .patch(`/api/staff/${INVALID_UUID}/availability/${VALID_AVAILABILITY_ID}`)
+      .send({ start_time: '09:00', end_time: '17:00' })
+    expect(res.status).toBe(400)
+    expect(res.body).toHaveProperty('error', 'Invalid ID format')
+  })
+
+  it('returns 400 for invalid availability ID', async () => {
+    const res = await request(app)
+      .patch(`/api/staff/${VALID_UUID}/availability/${INVALID_UUID}`)
+      .send({ start_time: '09:00', end_time: '17:00' })
+    expect(res.status).toBe(400)
+    expect(res.body).toHaveProperty('error', 'Invalid ID format')
+  })
+
+  it('returns 400 when no fields are provided', async () => {
+    const res = await request(app)
+      .patch(`/api/staff/${VALID_UUID}/availability/${VALID_AVAILABILITY_ID}`)
+      .send({})
+    expect(res.status).toBe(400)
+    expect(res.body).toHaveProperty('error', 'At least one field must be provided to update')
+  })
+
+  it('returns 400 when start_time is after end_time', async () => {
+    const res = await request(app)
+      .patch(`/api/staff/${VALID_UUID}/availability/${VALID_AVAILABILITY_ID}`)
+      .send({ start_time: '17:00', end_time: '09:00' })
+    expect(res.status).toBe(400)
+    expect(res.body).toHaveProperty('error', 'start_time must be before end_time')
+  })
+})

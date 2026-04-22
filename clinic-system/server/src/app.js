@@ -1337,6 +1337,56 @@ app.post('/api/staff/:staffId/availability', async (req, res) => {
     return res.status(500).json({ error: 'Failed to create availability record' })
   }
 })
+// PATCH /api/staff/:staffId/availability/:availabilityId — update existing availability
+app.patch('/api/staff/:staffId/availability/:availabilityId', async (req, res) => {
+  try {
+    const { staffId, availabilityId } = req.params
+    const { start_time, end_time, is_available } = req.body
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(staffId) || !uuidRegex.test(availabilityId)) {
+      return res.status(400).json({ error: 'Invalid ID format' })
+    }
+
+    if (!start_time && !end_time && is_available === undefined) {
+      return res.status(400).json({ error: 'At least one field must be provided to update' })
+    }
+
+    if (start_time && end_time && start_time >= end_time) {
+      return res.status(400).json({ error: 'start_time must be before end_time' })
+    }
+
+    const { data: existing, error: fetchError } = await supabase
+      .from('staff_availability')
+      .select('*')
+      .eq('id', availabilityId)
+      .eq('staff_id', staffId)
+      .maybeSingle()
+
+    if (fetchError) throw fetchError
+    if (!existing) return res.status(404).json({ error: 'Availability record not found' })
+
+    const updates = {}
+    if (start_time) updates.start_time = start_time
+    if (end_time) updates.end_time = end_time
+    if (is_available !== undefined) updates.is_available = is_available
+
+    const { data, error } = await supabase
+      .from('staff_availability')
+      .update(updates)
+      .eq('id', availabilityId)
+      .eq('staff_id', staffId)
+      .select()
+      .single()
+
+    if (error) throw error
+
+    return res.status(200).json({ availability: data })
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: 'Failed to update availability record' })
+  }
+})
 
 // Serve built frontend
 const publicPath = path.join(__dirname, '..', 'public')
