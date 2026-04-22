@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import getApiBase from '../lib/getApiBase'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -428,6 +429,7 @@ const styles = `
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function BookingPage() {
+  const API_BASE_URL = getApiBase()
   const { user, role } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
@@ -464,7 +466,7 @@ export default function BookingPage() {
   useEffect(() => {
     if (!isStaff) return
     setPatientsLoading(true)
-    fetch('/api/users')
+    fetch(`${API_BASE_URL}/api/users`)
       .then((r) => r.json())
       .then((data) => {
         const patientList = (data.users || []).filter((u) => u.role === 'Patient')
@@ -540,7 +542,7 @@ export default function BookingPage() {
 
       // If staff is creating a new patient, create them first
       if (isStaff && showNewPatient) {
-        const res = await fetch('/api/patients', {
+      const res = await fetch(`${API_BASE_URL}/api/patients`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -556,7 +558,7 @@ export default function BookingPage() {
       }
 
       // Book the appointment slot
-      const res = await fetch(`/api/appointments`, {
+      const res = await fetch(`${API_BASE_URL}/api/appointments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -588,10 +590,8 @@ export default function BookingPage() {
   // ── Back navigation ──
   function handleBack() {
     if (isStaff) {
-      navigate('/staff')
-    } else {
       navigate('/clinic')
-    }
+    } 
   }
 
   // ── Redirect if no clinic context ──
@@ -693,8 +693,13 @@ export default function BookingPage() {
                   )}
                 </div>
                 <button
+                  type="button"
                   className="bp-toggle-link"
-                  onClick={() => { setShowNewPatient(true); setSelectedPatientId('') }}
+                  onClick={() => {
+                    setShowNewPatient(true)
+                    setSelectedPatientId('')
+                    setSubmitError('')
+                  }}
                 >
                   + Add new patient instead
                 </button>

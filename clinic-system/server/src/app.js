@@ -1571,63 +1571,74 @@ app.post('/api/patients', async (req, res) => {
   }
 })
 
-
-app.patch('/api/clinics/:id', async (req, res) => {
+app.post('/api/appointments', async (req, res) => {
   try {
-    const { id } = req.params
-    const { admin_id, name, province, district, municipality, facility_type, services, hours } = req.body
+    const { clinic_id, patient_id, date, time, booked_by } = req.body
 
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-    if (!uuidRegex.test(id)) {
-      return res.status(400).json({ error: 'Invalid clinic ID format' })
+    if (!clinic_id || !patient_id || !date || !time || !booked_by) {
+      return res.status(400).json({
+        error: 'clinic_id, patient_id, date, time and booked_by are required',
+      })
     }
 
-    if (!admin_id || !uuidRegex.test(admin_id)) {
-      return res.status(400).json({ error: 'Valid admin_id is required' })
+    if (!uuidRegex.test(clinic_id) || !uuidRegex.test(patient_id) || !uuidRegex.test(booked_by)) {
+      return res.status(400).json({ error: 'Invalid ID format' })
     }
 
-    const { data: admin, error: adminError } = await supabase
-      .from('users')
-      .select('id, role')
-      .eq('id', admin_id)
-      .maybeSingle()
+    const slot_datetime = new Date(`${date}T${time}:00`)
 
-    if (adminError) throw adminError
-    if (!admin) {
-      return res.status(404).json({ error: 'Admin user not found' })
+    if (Number.isNaN(slot_datetime.getTime())) {
+      return res.status(400).json({ error: 'Invalid date or time format' })
     }
 
-    if (admin.role !== 'Admin') {
-      return res.status(403).json({ error: 'Only admins can update clinics' })
-    }
-
-    const updates = {}
-
-    if (name !== undefined) updates.name = name
-    if (province !== undefined) updates.province = province
-    if (district !== undefined) updates.district = district
-    if (municipality !== undefined) updates.municipality = municipality
-    if (facility_type !== undefined) updates.facility_type = facility_type
-    if (services !== undefined) updates.services = services
-    if (hours !== undefined) updates.hours = hours
-
-    const { data, error } = await supabase
+    const { data: clinic, error: clinicError } = await supabase
       .from('clinics')
-      .update(updates)
-      .eq('id', id)
-      .select('*')
+      .select('id')
+      .eq('id', clinic_id)
       .maybeSingle()
 
-    if (error) throw error
-    if (!data) {
+    if (clinicError) throw clinicError
+    if (!clinic) {
       return res.status(404).json({ error: 'Clinic not found' })
     }
 
-    res.json({ clinic: data })
+    const { data: existingAppointment, error: existingError } = await supabase
+      .from('appointments')
+      .select('id')
+      .eq('clinic_id', clinic_id)
+      .eq('slot_datetime', slot_datetime.toISOString())
+      .in('status', ['Pending', 'Confirmed'])
+      .maybeSingle()
+
+    if (existingError) throw existingError
+
+    if (existingAppointment) {
+      return res.status(409).json({ error: 'This slot is already booked' })
+    }
+
+    const { data, error } = await supabase
+      .from('appointments')
+      .insert({
+        clinic_id,
+        patient_id,
+        slot_datetime: slot_datetime.toISOString(),
+        status: 'Confirmed',
+        booked_by,
+      })
+      .select('*')
+      .single()
+
+    if (error) throw error
+
+    res.status(201).json({
+      message: 'Appointment booked successfully',
+      appointment: data,
+    })
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Failed to update clinic' })
+    res.status(500).json({ error: 'Failed to create appointment' })
   }
 })
 
