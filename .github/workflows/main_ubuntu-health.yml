@@ -42,13 +42,8 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }} 
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
         run: npm run build
-        
-      - name: Install server dependencies
-        working-directory: ${{ env.SERVER_DIR }}
-        run: npm ci
-
 
       - name: Copy client build into server public folder
         run: |
@@ -89,3 +84,4 @@ jobs:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           slot-name: Production
           package: .
+          
