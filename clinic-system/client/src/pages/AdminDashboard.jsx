@@ -2,75 +2,50 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import getApiBase from '../lib/getApiBase'
 
-/*const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ||
-  (window.location.hostname === 'localhost' ? 'http://localhost:8080' : '')*/
-  /*const API_BASE_URL = getApiBase()*/
-  /*const API_BASE_URL =
-  getApiBase() ||
-  (window.location.hostname === 'localhost' ? 'http://localhost:8080' : '')*/
+const WEEK_DAYS = [
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+  'sunday',
+]
+
+const FACILITY_TYPE_OPTIONS = [
+  'Clinic',
+  'Community Health Centre',
+  'Hospital',
+  'Mobile Clinic',
+  'Day Hospital',
+  'Primary Health Care Clinic',
+]
+
+const EMPTY_CLINIC_FORM = {
+  name: '',
+  facility_type: '',
+  province: '',
+  district: '',
+  municipality: '',
+  services: '',
+}
+
+function createEmptyOperatingHours() {
+  return WEEK_DAYS.reduce((hours, day) => {
+    hours[day] = {
+      open: '',
+      close: '',
+      closed: true,
+    }
+    return hours
+  }, {})
+}
 
 const styles = `
   .admin-header {
     margin-bottom: 24px;
   }
 
-  .clinic-details-grid.is-clickable {
-  cursor: pointer;
-}
-
-
-.edit-clinic-container {
-  max-width: 900px;
-  margin: 0 auto;
-}
-
-.edit-clinic-name {
-  text-align: center;
-  margin-bottom: 24px;
-}
-
-.edit-clinic-name input {
-  text-align: center;
-  font-weight: 700;
-  font-size: 16px;
-}
-
-.edit-clinic-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-}
-
-@media (max-width: 700px) {
-  .edit-clinic-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.edit-field {
-  display: flex;
-  flex-direction: column;
-}
-
-.clinic-details-grid.is-clickable .clinic-detail-card:hover {
-  border-color: var(--uh-text);
-  transform: translateY(-2px);
-  transition: 0.2s ease;
-}
-
-.clinic-main-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 24px;
-  margin-top: 20px;
-}
-
-@media (max-width: 900px) {
-  .clinic-main-grid {
-    grid-template-columns: 1fr;
-  }
-}
   .admin-header h1 {
     margin-bottom: 8px;
   }
@@ -78,6 +53,45 @@ const styles = `
   .admin-header p {
     color: var(--uh-muted);
     font-size: 13px;
+  }
+
+  .admin-overview {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .admin-overview-card {
+    background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(248,250,252,0.92));
+    border: 1px solid var(--uh-border);
+    border-radius: 14px;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+    padding: 18px;
+  }
+
+  .admin-overview-card span {
+    color: var(--uh-muted);
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+
+  .admin-overview-card strong {
+    color: var(--uh-text);
+    display: block;
+    font-size: 1.9rem;
+    line-height: 1.1;
+    margin-bottom: 6px;
+  }
+
+  .admin-overview-card p {
+    color: var(--uh-muted);
+    font-size: 13px;
+    margin: 0;
   }
 
   .admin-stack {
@@ -88,88 +102,112 @@ const styles = `
   .admin-panel {
     background: var(--uh-surface);
     border: 1px solid var(--uh-border);
-    border-radius: 8px;
+    border-radius: 16px;
+    box-shadow: 0 16px 32px rgba(15, 23, 42, 0.05);
     overflow: hidden;
   }
-
-  .clinic-details-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
-  margin-top: 16px;
-}
-
-.clinic-detail-card {
-  background: var(--uh-surface);
-  border: 1px solid var(--uh-border);
-  border-radius: 8px;
-  padding: 14px 16px;
-}
-
-.clinic-detail-card h4 {
-  margin: 0 0 8px 0;
-  font-size: 0.85rem;
-  color: var(--uh-muted);
-  text-transform: uppercase;
-}
-
-.clinic-detail-card p {
-  margin: 0;
-  font-size: 14px;
-  word-break: break-word;
-}
-  
-  .admin-message select {
-  border: 1px solid var(--uh-border);
-  border-radius: 8px;
-  font: inherit;
-  margin-top: 6px;
-  padding: 10px 12px;
-  width: 100%;
-  max-width: 420px;
-}
-
-.admin-message label {
-  display: inline-block;
-  font-weight: 700;
-  margin-top: 4px;
-}
 
   .admin-panel-header {
     align-items: center;
     border-bottom: 1px solid var(--uh-border);
     display: flex;
-    justify-content: space-between;
     gap: 16px;
-    padding: 16px;
+    justify-content: space-between;
+    padding: 18px 20px;
   }
-    .admin-message input {
-  border: 1px solid var(--uh-border);
-  border-radius: 8px;
-  font: inherit;
-  margin-top: 6px;
-  padding: 10px 12px;
-  width: 100%;
-  max-width: 420px;
-}
-
-.admin-subsection {
-  border-top: 1px solid var(--uh-border);
-  margin-top: 20px;
-  padding-top: 20px;
-}
-
-.admin-subsection h3 {
-  margin-bottom: 12px;
-}
 
   .admin-panel-header h2 {
     font-size: 1.1rem;
+    margin: 0;
   }
 
   .admin-panel-header span {
-    font-size: 13px;
     color: var(--uh-muted);
+    font-size: 13px;
+  }
+
+  .admin-section-intro {
+    color: var(--uh-muted);
+    font-size: 13px;
+    margin: 4px 0 0;
+  }
+
+  .admin-message {
+    padding: 16px 20px;
+    font-size: 14px;
+  }
+
+  .admin-message label {
+    display: inline-block;
+    font-weight: 400;
+    margin-top: 4px;
+  }
+
+  .admin-message input,
+  .admin-message select,
+  .admin-message textarea {
+    border: 1px solid var(--uh-border);
+    border-radius: 8px;
+    font: inherit;
+    margin-top: 6px;
+    max-width: none;
+    padding: 10px 12px;
+    width: 100%;
+  }
+
+  .admin-message textarea {
+    min-height: 88px;
+    resize: vertical;
+  }
+
+  .admin-hint {
+    color: var(--uh-muted);
+    font-size: 12px;
+    margin: 6px 0 0;
+  }
+
+  .admin-error {
+    color: #DC2626;
+  }
+
+  .admin-feedback {
+    color: var(--uh-muted);
+  }
+
+  .admin-empty {
+    color: var(--uh-muted);
+    padding: 28px 20px;
+    text-align: center;
+  }
+
+  .admin-empty strong {
+    color: var(--uh-text);
+    display: block;
+    font-size: 1rem;
+    margin-bottom: 6px;
+  }
+
+  .admin-selected-banner {
+    align-items: center;
+    background: linear-gradient(135deg, #F8FAFC, #EFF6FF);
+    border: 1px solid var(--uh-border);
+    border-radius: 12px;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    margin-top: 18px;
+    padding: 14px 16px;
+  }
+
+  .admin-selected-banner strong {
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .admin-selected-banner p {
+    color: var(--uh-muted);
+    font-size: 13px;
+    margin: 0;
   }
 
   .admin-table-wrap {
@@ -185,10 +223,10 @@ const styles = `
   .admin-table th,
   .admin-table td {
     border-bottom: 1px solid var(--uh-border);
+    font-size: 14px;
     padding: 14px 16px;
     text-align: left;
     vertical-align: middle;
-    font-size: 14px;
   }
 
   .admin-table th {
@@ -204,8 +242,8 @@ const styles = `
 
   .admin-actions {
     display: flex;
-    gap: 8px;
     flex-wrap: wrap;
+    gap: 8px;
     list-style: none;
     margin: 0;
     padding: 0;
@@ -235,21 +273,146 @@ const styles = `
     color: white;
   }
 
-  .admin-message {
-    padding: 16px;
-    font-size: 14px;
+  .admin-btn-secondary {
+    background: #F8FAFC;
+    border: 1px solid var(--uh-border);
+    color: var(--uh-text);
   }
 
-  .admin-error {
-    color: #DC2626;
+  .admin-subsection {
+    border-top: 1px solid var(--uh-border);
+    margin-top: 32px;
+    padding-top: 24px;
   }
 
-  .admin-feedback {
+  .admin-subsection-header {
+    align-items: center;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  .admin-subsection-header h3 {
+    margin: 0;
+  }
+
+  .admin-subsection-copy {
     color: var(--uh-muted);
+    font-size: 13px;
+    margin: 0 0 16px;
+  }
+
+  .clinic-details-grid {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    margin-top: 16px;
+  }
+
+  .clinic-detail-card {
+    background: var(--uh-surface);
+    border: 1px solid var(--uh-border);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+
+  .clinic-detail-card h4 {
+    color: var(--uh-muted);
+    font-size: 0.85rem;
+    margin: 0 0 8px 0;
+    text-transform: uppercase;
+  }
+
+  .clinic-detail-card p {
+    font-size: 14px;
+    margin: 0;
+    word-break: break-word;
+  }
+
+  .edit-clinic-container {
+    width: 100%;
+    max-width: none;
+  }
+
+  .edit-clinic-name {
+    width: 100%;
+    margin-bottom: 24px;
+  }
+
+  .edit-clinic-name input {
+    font-size: 16px;
+    font-weight: 700;
+    text-align: center;
+  }
+  
+  .edit-clinic-grid {
+    display: grid;
+    gap: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    width: 100%;
+  }
+
+  .edit-field {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .operating-hours-grid {
+    display: grid;
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  .operating-hours-row {
+    align-items: center;
+    background: #F8FAFC;
+    border: 1px solid var(--uh-border);
+    border-radius: 10px;
+    display: grid;
+    gap: 12px;
+    grid-template-columns: 140px 110px 1fr 1fr;
+    padding: 12px;
+  }
+
+  .operating-hours-day {
+    font-weight: 700;
+  }
+
+  .operating-hours-row label {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    margin: 0;
+  }
+
+  .operating-hours-row input[type='checkbox'] {
+    margin: 0;
+    max-width: none;
+    width: auto;
+  }
+
+  .operating-hours-row input[type='time'] {
+    max-width: none;
+    width: 100%;
+  }
+
+  @media (max-width: 900px) {
+    .operating-hours-row {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 700px) {
+    .edit-clinic-grid {
+      grid-template-columns: 1fr;
+    }
   }
 
   @media (max-width: 640px) {
-    .admin-panel-header {
+    .admin-panel-header,
+    .admin-selected-banner,
+    .admin-subsection-header {
       align-items: flex-start;
       flex-direction: column;
     }
@@ -268,26 +431,97 @@ async function readApiResponse(response) {
   }
 }
 
+function formatClinicOperatingHours(operatingHours) {
+  if (!operatingHours) {
+    return <p>Not available</p>
+  }
+
+  if (typeof operatingHours !== 'object') {
+    return <p>{operatingHours}</p>
+  }
+
+  return Object.entries(operatingHours).map(([day, hours]) => (
+    <p key={day}>
+      <strong>{day.charAt(0).toUpperCase() + day.slice(1)}:</strong>{' '}
+      {typeof hours === 'string'
+        ? hours
+        : hours?.open && hours?.close
+        ? `${hours.open} - ${hours.close}`
+        : 'Closed'}
+    </p>
+  ))
+}
+
+function normaliseOperatingHours(operatingHours) {
+  const editableHours = createEmptyOperatingHours()
+
+  if (!operatingHours || typeof operatingHours !== 'object') {
+    return editableHours
+  }
+
+  WEEK_DAYS.forEach((day) => {
+    const dayHours = operatingHours[day]
+
+    if (!dayHours) {
+      return
+    }
+
+    if (typeof dayHours === 'string') {
+      const value = dayHours.trim().toLowerCase()
+      if (value === 'closed') {
+        editableHours[day] = { open: '', close: '', closed: true }
+        return
+      }
+
+      const [open = '', close = ''] = dayHours.split('-').map((item) => item.trim())
+      editableHours[day] = {
+        open,
+        close,
+        closed: !open || !close,
+      }
+      return
+    }
+
+    editableHours[day] = {
+      open: dayHours.open || '',
+      close: dayHours.close || '',
+      closed: !(dayHours.open && dayHours.close),
+    }
+  })
+
+  return editableHours
+}
+
+function buildOperatingHoursPayload(operatingHoursForm) {
+  return WEEK_DAYS.reduce((hours, day) => {
+    const currentDay = operatingHoursForm[day]
+
+    if (!currentDay || currentDay.closed || !currentDay.open || !currentDay.close) {
+      hours[day] = 'Closed'
+      return hours
+    }
+
+    hours[day] = {
+      open: currentDay.open,
+      close: currentDay.close,
+    }
+
+    return hours
+  }, {})
+}
+
 export default function AdminDashboard() {
   const { user } = useAuth()
   const API_BASE_URL = getApiBase()
 
   const [roleRequests, setRoleRequests] = useState([])
-  const [clinicRequests, setClinicRequests] = useState([])
-
   const [loadingRoleRequests, setLoadingRoleRequests] = useState(true)
-  const [loadingClinicRequests, setLoadingClinicRequests] = useState(true)
-
   const [processingRoleRequestId, setProcessingRoleRequestId] = useState('')
-  const [processingClinicRequestId, setProcessingClinicRequestId] = useState('')
-
   const [roleFeedback, setRoleFeedback] = useState('')
-  const [clinicFeedback, setClinicFeedback] = useState('')
-
   const [roleError, setRoleError] = useState('')
-  const [clinicError, setClinicError] = useState('')
 
   const [clinics, setClinics] = useState([])
+  const [selectedClinic, setSelectedClinic] = useState(null)
   const [staffUsers, setStaffUsers] = useState([])
   const [loadingAssignmentData, setLoadingAssignmentData] = useState(true)
 
@@ -297,33 +531,16 @@ export default function AdminDashboard() {
   const [assignmentFeedback, setAssignmentFeedback] = useState('')
   const [assignmentError, setAssignmentError] = useState('')
   const [assigningStaff, setAssigningStaff] = useState(false)
-  const [showClinicEditor, setShowClinicEditor] = useState(false)
 
-  const [clinicForm, setClinicForm] = useState({
-    name: '',
-    facility_type: '',
-    province: '',
-    district: '',
-    municipality: '',
-    operating_hours: '',
-    services: '',
-  })
-
+  const [clinicForm, setClinicForm] = useState(EMPTY_CLINIC_FORM)
+  const [operatingHoursForm, setOperatingHoursForm] = useState(createEmptyOperatingHours())
   const [savingClinic, setSavingClinic] = useState(false)
   const [clinicEditFeedback, setClinicEditFeedback] = useState('')
   const [clinicEditError, setClinicEditError] = useState('')
 
+  const selectedClinicStaff = staffUsers.filter((staffUser) => staffUser.clinic_id === selectedClinicId)
+  const unassignedStaffUsers = staffUsers.filter((staffUser) => !staffUser.clinic_id)
 
-  const selectedClinicStaff = staffUsers.filter(
-    (staffUser) => staffUser.clinic_id === selectedClinicId
-  )
-
-  const unassignedStaffUsers = staffUsers.filter(
-    (staffUser) => !staffUser.clinic_id
-  )
-  const selectedClinic = clinics.find(
-    (clinic) => clinic.id === selectedClinicId
-  )
   useEffect(() => {
     async function loadRoleRequests() {
       if (!user?.id) return
@@ -354,125 +571,72 @@ export default function AdminDashboard() {
         setLoadingRoleRequests(false)
       }
     }
-    
-  async function loadAssignmentData() {
-  if (!user?.id) return
 
-  try {
-    setLoadingAssignmentData(true)
-    setAssignmentError('')
+    async function loadAssignmentData() {
+      if (!user?.id) return
 
-    const [clinicsResponse, usersResponse] = await Promise.all([
-      fetch(`${API_BASE_URL}/api/clinics`, {
-        headers: { Accept: 'application/json' },
-      }),
-      fetch(`${API_BASE_URL}/api/users`, {
-        headers: { Accept: 'application/json' },
-      }),
-    ])
-
-    const clinicsBody = await readApiResponse(clinicsResponse)
-    const usersBody = await readApiResponse(usersResponse)
-
-    if (!clinicsResponse.ok) {
-      throw new Error(clinicsBody.error || 'Failed to load clinics')
-    }
-
-    if (!usersResponse.ok) {
-      throw new Error(usersBody.error || 'Failed to load users')
-    }
-
-    setClinics(clinicsBody.clinics || [])
-    setStaffUsers(
-      (usersBody.users || []).filter((currentUser) => {
-        const role = currentUser.role?.trim().toLowerCase()
-        return role && (role.includes('staff') || role === 'admin')
-      })
-    )
-  } catch (err) {
-    setAssignmentError(err.message || 'Failed to load assignment data')
-  } finally {
-    setLoadingAssignmentData(false)
-  }
-}
-
-
-  async function loadClinicRequests() {
-    if (!user?.id) return
-
-    try {
-      setLoadingClinicRequests(true)
-      setClinicError('')
-
-      const response = await fetch(
-        `${API_BASE_URL}/api/clinic-requests?admin_id=${encodeURIComponent(user.id)}&status=pending`,
-        {
-          headers: {
-            Accept: 'application/json',
-          },
-        }
-      )
-
-      const text = await response.text()
-
-      let body = {}
       try {
-        body = text ? JSON.parse(text) : {}
-      } catch {
-        // Azure returned HTML instead of JSON, so just treat it as no clinic requests
-        setClinicRequests([])
-        setClinicError('')
-        return
-      }
+        setLoadingAssignmentData(true)
+        setAssignmentError('')
 
-      if (!response.ok) {
-        throw new Error(body.error || 'Failed to load clinic requests')
-      }
+        const [clinicsResponse, usersResponse] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/clinics`, {
+            headers: { Accept: 'application/json' },
+          }),
+          fetch(`${API_BASE_URL}/api/users`, {
+            headers: { Accept: 'application/json' },
+          }),
+        ])
 
-      setClinicRequests(body.requests || [])
-    } catch (err) {
-      setClinicError(err.message || 'Failed to load clinic requests')
-    } finally {
-      setLoadingClinicRequests(false)
+        const clinicsBody = await readApiResponse(clinicsResponse)
+        const usersBody = await readApiResponse(usersResponse)
+
+        if (!clinicsResponse.ok) {
+          throw new Error(clinicsBody.error || 'Failed to load clinics')
+        }
+
+        if (!usersResponse.ok) {
+          throw new Error(usersBody.error || 'Failed to load users')
+        }
+
+        setClinics(clinicsBody.clinics || [])
+        setStaffUsers(
+          (usersBody.users || []).filter((currentUser) => {
+            const role = currentUser.role?.trim().toLowerCase()
+            return role && (role.includes('staff') || role === 'admin')
+          })
+        )
+      } catch (err) {
+        setAssignmentError(err.message || 'Failed to load assignment data')
+      } finally {
+        setLoadingAssignmentData(false)
+      }
     }
-  }
 
     loadRoleRequests()
-    loadClinicRequests()
     loadAssignmentData()
-    
-}, [API_BASE_URL, user?.id])
+  }, [API_BASE_URL, user?.id])
 
+  useEffect(() => {
+    if (!selectedClinic) {
+      setClinicForm(EMPTY_CLINIC_FORM)
+      setOperatingHoursForm(createEmptyOperatingHours())
+      return
+    }
 
-useEffect(() => {
-  if (!selectedClinic) {
     setClinicForm({
-      name: '',
-      facility_type: '',
-      province: '',
-      district: '',
-      municipality: '',
-      operating_hours: '',
-      services: '',
+      name: selectedClinic.name || '',
+      facility_type: selectedClinic.facility_type || '',
+      province: selectedClinic.province || '',
+      district: selectedClinic.district || '',
+      municipality: selectedClinic.municipality || '',
+      services: Array.isArray(selectedClinic.services)
+        ? selectedClinic.services.join(', ')
+        : selectedClinic.services || '',
     })
-    return
-  }
 
-  setClinicForm({
-    name: selectedClinic.name || '',
-    facility_type: selectedClinic.facility_type || '',
-    province: selectedClinic.province || '',
-    district: selectedClinic.district || '',
-    municipality: selectedClinic.municipality || '',
-    operating_hours:
-      typeof selectedClinic.operating_hours === 'object'
-        ? JSON.stringify(selectedClinic.operating_hours)
-        : selectedClinic.operating_hours || '',    services: Array.isArray(selectedClinic.services)
-      ? selectedClinic.services.join(', ')
-      : selectedClinic.services || '',
-  })
-}, [selectedClinic])
-
+    setOperatingHoursForm(normaliseOperatingHours(selectedClinic.operating_hours))
+  }, [selectedClinic])
 
   function handleClinicFormChange(event) {
     const { name, value } = event.target
@@ -482,6 +646,40 @@ useEffect(() => {
       [name]: value,
     }))
   }
+
+  function handleClinicSelect(clinicId) {
+    setSelectedClinicId(clinicId)
+    setSelectedStaffId('')
+    setAssignmentError('')
+    setAssignmentFeedback('')
+    setClinicEditError('')
+    setClinicEditFeedback('')
+
+    const clinic = clinics.find((currentClinic) => currentClinic.id === clinicId) || null
+    setSelectedClinic(clinic)
+  }
+
+  function handleOperatingHoursChange(day, field, value) {
+    setOperatingHoursForm((currentForm) => ({
+      ...currentForm,
+      [day]: {
+        ...currentForm[day],
+        [field]: value,
+      },
+    }))
+  }
+
+  function handleClosedToggle(day, checked) {
+    setOperatingHoursForm((currentForm) => ({
+      ...currentForm,
+      [day]: {
+        open: checked ? '' : currentForm[day].open,
+        close: checked ? '' : currentForm[day].close,
+        closed: checked,
+      },
+    }))
+  }
+
   async function approveRoleRequest(request) {
     setProcessingRoleRequestId(request.id)
     setRoleFeedback('')
@@ -515,54 +713,6 @@ useEffect(() => {
     }
   }
 
-  async function saveClinicChanges() {
-    if (!selectedClinicId) {
-      setClinicEditError('Please select a clinic first.')
-      return
-    }
-
-    setSavingClinic(true)
-    setClinicEditError('')
-    setClinicEditFeedback('')
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/clinics/${selectedClinicId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({
-          admin_id: user.id,
-          ...clinicForm,
-          operating_hours:
-            typeof clinicForm.operating_hours === 'string'
-              ? JSON.parse(clinicForm.operating_hours || '{}')
-              : clinicForm.operating_hours,
-        })
-      })
-
-      const body = await readApiResponse(response)
-
-      if (!response.ok) {
-        throw new Error(body.error || 'Failed to update clinic')
-      }
-
-      setClinics((currentClinics) =>
-        currentClinics.map((clinic) =>
-          clinic.id === selectedClinicId
-            ? { ...clinic, ...body.clinic }
-            : clinic
-        )
-      )
-
-      setClinicEditFeedback('Clinic updated successfully.')
-    } catch (err) {
-      setClinicEditError(err.message || 'Failed to update clinic')
-    } finally {
-      setSavingClinic(false)
-    }
-  }
   async function rejectRoleRequest(request) {
     setProcessingRoleRequestId(request.id)
     setRoleFeedback('')
@@ -593,6 +743,56 @@ useEffect(() => {
       setRoleFeedback(err.message || 'Failed to reject role request')
     } finally {
       setProcessingRoleRequestId('')
+    }
+  }
+
+  async function saveClinicChanges() {
+    if (!selectedClinicId) {
+      setClinicEditError('Please select a clinic first.')
+      return
+    }
+
+    setSavingClinic(true)
+    setClinicEditError('')
+    setClinicEditFeedback('')
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/clinics/${selectedClinicId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          admin_id: user.id,
+          ...clinicForm,
+          operating_hours: buildOperatingHoursPayload(operatingHoursForm),
+          services: clinicForm.services
+            .split(/[\n,]+/)
+            .map((item) => item.trim())
+            .filter(Boolean),
+        }),
+      })
+
+      const body = await readApiResponse(response)
+
+      if (!response.ok) {
+        throw new Error(body.error || 'Failed to update clinic')
+      }
+
+      setClinics((currentClinics) =>
+        currentClinics.map((clinic) =>
+          clinic.id === selectedClinicId
+            ? { ...clinic, ...body.clinic }
+            : clinic
+        )
+      )
+      setSelectedClinic(body.clinic)
+      setClinicEditFeedback('Clinic updated successfully.')
+    } catch (err) {
+      setClinicEditError(err.message || 'Failed to update clinic')
+    } finally {
+      setSavingClinic(false)
     }
   }
 
@@ -638,7 +838,6 @@ useEffect(() => {
         )
       )
 
-      setSelectedClinicId('')
       setSelectedStaffId('')
     } catch (err) {
       setAssignmentError(err.message || 'Failed to assign staff to clinic')
@@ -690,95 +889,121 @@ useEffect(() => {
   }
 
   return (
-    <section>
-      <style>{styles}</style>
+  <section>
+    <style>{styles}</style>
 
-      <header className="admin-header">
-        <h1>Admin Dashboard</h1>
-        <p>Review pending role requests and clinic access requests.</p>
-      </header>
+    <header className="admin-header">
+      <h1>Admin Dashboard</h1>
+      <p>Manage role approvals, staff placement, and clinic details from one place.</p>
+    </header>
 
-      <section className="admin-stack">
-        <section className="admin-panel" aria-labelledby="role-requests-heading">
-          <header className="admin-panel-header">
+    <section className="admin-overview" aria-label="Admin overview">
+      <article className="admin-overview-card">
+        <span>Pending requests</span>
+        <strong>{roleRequests.length}</strong>
+        <p>Role changes waiting for a decision.</p>
+      </article>
+
+      <article className="admin-overview-card">
+        <span>Unassigned staff</span>
+        <strong>{unassignedStaffUsers.length}</strong>
+        <p>Team members ready to be linked to a clinic.</p>
+      </article>
+    </section>
+
+    <section className="admin-stack">
+      <section className="admin-panel" aria-labelledby="role-requests-heading">
+        <header className="admin-panel-header">
+          <section>
             <h2 id="role-requests-heading">Pending role requests</h2>
-            <span>{roleRequests.length} pending</span>
-          </header>
-
-          {roleError && (
-            <p className="admin-message admin-error" role="alert">
-              {roleError}
+            <p className="admin-section-intro">
+              Review each request and approve only the roles you want active.
             </p>
-          )}
+          </section>
+          <span>{roleRequests.length} pending</span>
+        </header>
 
-          {roleFeedback && (
-            <p className="admin-message admin-feedback" role="status">
-              {roleFeedback}
-            </p>
-          )}
+        {roleError && (
+          <p className="admin-message admin-error" role="alert">
+            {roleError}
+          </p>
+        )}
 
-          {loadingRoleRequests ? (
-            <p className="admin-message">Loading role requests...</p>
-          ) : roleRequests.length === 0 ? (
-            <p className="admin-message">No pending role requests.</p>
-          ) : (
-            <section className="admin-table-wrap">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>User</th>
-                    <th>Email</th>
-                    <th>Current role</th>
-                    <th>Requested role</th>
-                    <th>Requested</th>
-                    <th>Action</th>
+        {roleFeedback && (
+          <p className="admin-message admin-feedback" role="status">
+            {roleFeedback}
+          </p>
+        )}
+
+        {loadingRoleRequests ? (
+          <p className="admin-message">Loading role requests...</p>
+        ) : roleRequests.length === 0 ? (
+          <section className="admin-empty">
+            <strong>No pending role requests.</strong>
+            <p>Everything is up to date for now.</p>
+          </section>
+        ) : (
+          <section className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Email</th>
+                  <th>Current role</th>
+                  <th>Requested role</th>
+                  <th>Requested</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {roleRequests.map((request) => (
+                  <tr key={request.id}>
+                    <td>{request.users?.full_name || 'Unknown user'}</td>
+                    <td>{request.users?.email || 'No email'}</td>
+                    <td>{request.users?.role || 'Unknown'}</td>
+                    <td>{request.requested_role}</td>
+                    <td>{new Date(request.created_at).toLocaleDateString('en-GB')}</td>
+                    <td>
+                      <menu className="admin-actions">
+                        <li>
+                          <button
+                            className="admin-btn admin-btn-approve"
+                            disabled={processingRoleRequestId === request.id}
+                            onClick={() => approveRoleRequest(request)}
+                            type="button"
+                          >
+                            Approve
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            className="admin-btn admin-btn-reject"
+                            disabled={processingRoleRequestId === request.id}
+                            onClick={() => rejectRoleRequest(request)}
+                            type="button"
+                          >
+                            Reject
+                          </button>
+                        </li>
+                      </menu>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {roleRequests.map((request) => (
-                    <tr key={request.id}>
-                      <td>{request.users?.full_name || 'Unknown user'}</td>
-                      <td>{request.users?.email || 'No email'}</td>
-                      <td>{request.users?.role || 'Unknown'}</td>
-                      <td>{request.requested_role}</td>
-                      <td>{new Date(request.created_at).toLocaleDateString('en-GB')}</td>
-                      <td>
-                        <menu className="admin-actions">
-                          <li>
-                            <button
-                              className="admin-btn admin-btn-approve"
-                              disabled={processingRoleRequestId === request.id}
-                              onClick={() => approveRoleRequest(request)}
-                              type="button"
-                            >
-                              Approve
-                            </button>
-                          </li>
-                          <li>
-                            <button
-                              className="admin-btn admin-btn-reject"
-                              disabled={processingRoleRequestId === request.id}
-                              onClick={() => rejectRoleRequest(request)}
-                              type="button"
-                            >
-                              Reject
-                            </button>
-                          </li>
-                        </menu>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </section>
-          )}
-        </section>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        )}
+      </section>
 
-       {/* add the clinic requests panel here, similar to the role requests panel, using the clinicRequests state and related functions */}
       <section className="admin-panel" aria-labelledby="staff-assignment-heading">
         <header className="admin-panel-header">
-          <h2 id="staff-assignment-heading">Assign staff to clinic</h2>
-          <span>Choose a clinic and a staff member</span>
+          <section>
+            <h2 id="staff-assignment-heading">Clinic details</h2>
+            <p className="admin-section-intro">
+              Search for a clinic by name, then manage staff and edit the clinic profile.
+            </p>
+          </section>
+          <span>{selectedClinic ? selectedClinic.name : 'No clinic selected'}</span>
         </header>
 
         {assignmentError && (
@@ -803,18 +1028,11 @@ useEffect(() => {
               assignStaffToClinic()
             }}
           >
-            <label htmlFor="clinic-select">Clinic</label>
-            <br />
+            <label htmlFor="clinic-select">Choose a clinic</label>
             <select
               id="clinic-select"
               value={selectedClinicId}
-              onChange={(event) => {
-                setSelectedClinicId(event.target.value)
-                setSelectedStaffId('')
-                setAssignmentError('')
-                setAssignmentFeedback('')
-                setShowClinicEditor(false)
-              }}
+              onChange={(event) => handleClinicSelect(event.target.value)}
             >
               <option value="">Select clinic</option>
               {clinics.map((clinic) => (
@@ -824,229 +1042,238 @@ useEffect(() => {
               ))}
             </select>
 
-          {selectedClinicId && (
-            <>
-              <br />
-              <br />
-
-              <section className="admin-subsection">
-                <h3>Clinic staff</h3>
-
-                <section className="admin-table-wrap">
-                  <table className="admin-table">
-                    <tbody>
-                      {selectedClinicStaff.length === 0 ? (
-                        <tr>
-                          <td colSpan="4">No staff assigned.</td>
-                        </tr>
-                      ) : (
-                        selectedClinicStaff.map((staffUser) => (
-                          <tr key={staffUser.id}>
-                            <td>{staffUser.full_name}</td>
-                            <td>{staffUser.role}</td>
-                            <td>{selectedClinic?.name}</td>
-                            <td>
-                              <button
-                                className="admin-btn admin-btn-reject"
-                                type="button"
-                                onClick={() => unassignStaffFromClinic(staffUser.id)}
-                              >
-                                Unassign
-                              </button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </section>
-
-                <br />
-
-                <label htmlFor="staff-select">Add staff</label>
-                <br />
-                <select
-                  id="staff-select"
-                  value={selectedStaffId}
-                  onChange={(event) => setSelectedStaffId(event.target.value)}
-                >
-                  <option value="">Select staff</option>
-                  {unassignedStaffUsers.map((staffUser) => (
-                    <option key={staffUser.id} value={staffUser.id}>
-                      {staffUser.full_name}
-                    </option>
-                  ))}
-                </select>
-
-                <br />
-                <br />
-
-                <button
-                  className="admin-btn admin-btn-approve"
-                  type="button"
-                  onClick={assignStaffToClinic}
-                  disabled={assigningStaff || !selectedStaffId}
-                >
-                  {assigningStaff ? 'Adding...' : 'Add staff'}
-                </button>
+            {!selectedClinicId && (
+              <section className="admin-empty">
+                <strong>Select a clinic to get started</strong>
+                <p>
+                  You will be able to view assigned staff, update facility type,
+                  services, and edit each day&apos;s operating hours.
+                </p>
               </section>
+            )}
 
-              <section className="admin-subsection">
-                <h3>Selected clinic details</h3>
-                <p className="admin-feedback">Click any card below to edit this clinic.</p>
-
-                <section
-                  className="clinic-details-grid is-clickable"
-                  onClick={() => setShowClinicEditor((current) => !current)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault()
-                      setShowClinicEditor((current) => !current)
-                    }
-                  }}
-                >
-                  <article className="clinic-detail-card">
-                    <h4>Clinic name</h4>
-                    <p>{selectedClinic?.name || 'Not available'}</p>
-                  </article>
-
-                  <article className="clinic-detail-card">
-                    <h4>Facility type</h4>
-                    <p>{selectedClinic?.facility_type || 'Not available'}</p>
-                  </article>
-
-                  <article className="clinic-detail-card">
-                    <h4>Province</h4>
-                    <p>{selectedClinic?.province || 'Not available'}</p>
-                  </article>
-
-                  <article className="clinic-detail-card">
-                    <h4>District</h4>
-                    <p>{selectedClinic?.district || 'Not available'}</p>
-                  </article>
-
-                  <article className="clinic-detail-card">
-                    <h4>Municipality</h4>
-                    <p>{selectedClinic?.municipality || 'Not available'}</p>
-                  </article>
-
-                  <article className="clinic-detail-card">
-                    <h4>Operating hours</h4>
-                    {selectedClinic?.operating_hours ? (
-                      Object.entries(selectedClinic.operating_hours).map(([day, hours]) => (
-                        <p key={day}>
-                          <strong>
-                            {day.charAt(0).toUpperCase() + day.slice(1)}:
-                          </strong>{' '}
-                          {typeof hours === 'string'
-                            ? hours
-                            : hours?.open && hours?.close
-                            ? `${hours.open} - ${hours.close}`
-                            : 'Closed'}
-                        </p>
-                      ))
-                    ) : (
-                      <p>Not available</p>
-                    )}
-                  </article>
-
-                  <article className="clinic-detail-card">
-                    <h4>Services</h4>
+            {selectedClinicId && (
+              <>
+                <section className="admin-selected-banner" aria-live="polite">
+                  <section>
+                    <strong>{selectedClinic?.name}</strong>
                     <p>
-                      {Array.isArray(selectedClinic?.services)
-                        ? selectedClinic.services.join(', ')
-                        : selectedClinic?.services || 'Not available'}
+                      {selectedClinic?.municipality || 'Municipality not set'}
+                      {' - '}
+                      {selectedClinic?.district || 'District not set'}
                     </p>
-                  </article>
+                  </section>
+                  <span>Edit the fields just below.</span>
                 </section>
-              </section>
 
-              {showClinicEditor && (
                 <section className="admin-subsection">
-                  <h3>Edit clinic</h3>
+                  <header className="admin-subsection-header">
+                    <h3>Clinic staff</h3>
+                  </header>
+                  <p className="admin-subsection-copy">
+                    Manage the team currently assigned to this clinic and add available staff below.
+                  </p>
+
+                  <section className="admin-table-wrap">
+                    <table className="admin-table">
+                      <tbody>
+                        {selectedClinicStaff.length === 0 ? (
+                          <tr>
+                            <td colSpan="4">No staff assigned yet.</td>
+                          </tr>
+                        ) : (
+                          selectedClinicStaff.map((staffUser) => (
+                            <tr key={staffUser.id}>
+                              <td>{staffUser.full_name}</td>
+                              <td>{staffUser.role}</td>
+                              <td>{selectedClinic?.name}</td>
+                              <td>
+                                <button
+                                  className="admin-btn admin-btn-reject"
+                                  type="button"
+                                  onClick={() => unassignStaffFromClinic(staffUser.id)}
+                                >
+                                  Unassign
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </section>
+
+                  <br />
+
+                  <label htmlFor="staff-select">Add staff member</label>
+                  <select
+                    id="staff-select"
+                    value={selectedStaffId}
+                    onChange={(event) => setSelectedStaffId(event.target.value)}
+                  >
+                    <option value="">Select staff</option>
+                    {unassignedStaffUsers.map((staffUser) => (
+                      <option key={staffUser.id} value={staffUser.id}>
+                        {staffUser.full_name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <br />
+                  <br />
+
+                  <button
+                    className="admin-btn admin-btn-approve"
+                    type="button"
+                    onClick={assignStaffToClinic}
+                    disabled={assigningStaff || !selectedStaffId}
+                  >
+                    {assigningStaff ? 'Adding...' : 'Add staff'}
+                  </button>
+                </section>
+
+                <section className="admin-subsection">
+                  <header className="admin-subsection-header">
+                    <h3>Edit clinic</h3>
+                  </header>
+                  <p className="admin-subsection-copy">
+                    Update facility type, services, and operating hours below, then save your changes.
+                  </p>
+
+                  {clinicEditError && (
+                    <p className="admin-message admin-error" role="alert">
+                      {clinicEditError}
+                    </p>
+                  )}
+
+                  {clinicEditFeedback && (
+                    <p className="admin-message admin-feedback" role="status">
+                      {clinicEditFeedback}
+                    </p>
+                  )}
 
                   <section className="edit-clinic-container">
-
-                    {/* 🔹 NAME CENTERED */}
-                    <section className="edit-clinic-name">
-                      <label htmlFor="clinic-name">Name</label>
+                    <label className="edit-clinic-name" htmlFor="clinic-name">
+                      Name
                       <input
                         id="clinic-name"
                         name="name"
                         value={clinicForm.name}
                         onChange={handleClinicFormChange}
                       />
-                    </section>
+                    </label>
 
-                    {/* 🔹 GRID */}
                     <section className="edit-clinic-grid">
-
-                      <section className="edit-field">
-                        <label htmlFor="facility-type">Facility type</label>
+                      <label className="edit-field" htmlFor="facility-type">
+                        Facility type
                         <input
                           id="facility-type"
+                          list="facility-type-options"
                           name="facility_type"
                           value={clinicForm.facility_type}
                           onChange={handleClinicFormChange}
                         />
-                      </section>
+                        <datalist id="facility-type-options">
+                          {FACILITY_TYPE_OPTIONS.map((facilityType) => (
+                            <option key={facilityType} value={facilityType} />
+                          ))}
+                        </datalist>
+                      </label>
 
-                      <section className="edit-field">
-                        <label htmlFor="province">Province</label>
+                      <label className="edit-field" htmlFor="province">
+                        Province
                         <input
                           id="province"
                           name="province"
                           value={clinicForm.province}
                           onChange={handleClinicFormChange}
                         />
-                      </section>
+                      </label>
 
-                      <section className="edit-field">
-                        <label htmlFor="district">District</label>
+                      <label className="edit-field" htmlFor="district">
+                        District
                         <input
                           id="district"
                           name="district"
                           value={clinicForm.district}
                           onChange={handleClinicFormChange}
                         />
-                      </section>
+                      </label>
 
-                      <section className="edit-field">
-                        <label htmlFor="municipality">Municipality</label>
+                      <label className="edit-field" htmlFor="municipality">
+                        Municipality
                         <input
                           id="municipality"
                           name="municipality"
                           value={clinicForm.municipality}
                           onChange={handleClinicFormChange}
                         />
-                      </section>
+                      </label>
 
-                      <section className="edit-field">
-                        <label htmlFor="operating-hours">Operating hours</label>
-                        <input
-                          id="operating-hours"
-                          name="operating_hours"
-                          value={
-                            typeof clinicForm.operating_hours === 'string'
-                              ? clinicForm.operating_hours
-                              : JSON.stringify(clinicForm.operating_hours || {})
-                          }
-                          onChange={handleClinicFormChange}
-                        />
-                      </section>
-
-                      <section className="edit-field">
-                        <label htmlFor="services">Services</label>
-                        <input
+                      <label className="edit-field" htmlFor="services">
+                        Services
+                        <textarea
                           id="services"
                           name="services"
                           value={clinicForm.services}
                           onChange={handleClinicFormChange}
+                          placeholder="Separate services with commas or new lines"
                         />
-                      </section>
+                        <p className="admin-hint">
+                          Example: HIV testing, Immunisation, Family planning
+                        </p>
+                      </label>
+                    </section>
 
+                    <section className="admin-subsection">
+                      <header className="admin-subsection-header">
+                        <h3>Operating hours</h3>
+                      </header>
+                      <p className="admin-subsection-copy">
+                        Set opening and closing times for each day, or mark the day as closed.
+                      </p>
+
+                      <section className="operating-hours-grid">
+                        {WEEK_DAYS.map((day) => (
+                          <section className="operating-hours-row" key={day}>
+                            <span className="operating-hours-day">
+                              {day.charAt(0).toUpperCase() + day.slice(1)}
+                            </span>
+
+                            <label htmlFor={`${day}-closed`}>
+                              <input
+                                id={`${day}-closed`}
+                                type="checkbox"
+                                checked={operatingHoursForm[day]?.closed ?? true}
+                                onChange={(event) =>
+                                  handleClosedToggle(day, event.target.checked)
+                                }
+                              />
+                              Closed
+                            </label>
+
+                            <input
+                              aria-label={`${day} opening time`}
+                              type="time"
+                              value={operatingHoursForm[day]?.open ?? ''}
+                              disabled={operatingHoursForm[day]?.closed}
+                              onChange={(event) =>
+                                handleOperatingHoursChange(day, 'open', event.target.value)
+                              }
+                            />
+
+                            <input
+                              aria-label={`${day} closing time`}
+                              type="time"
+                              value={operatingHoursForm[day]?.close ?? ''}
+                              disabled={operatingHoursForm[day]?.closed}
+                              onChange={(event) =>
+                                handleOperatingHoursChange(day, 'close', event.target.value)
+                              }
+                            />
+                          </section>
+                        ))}
+                      </section>
                     </section>
 
                     <br />
@@ -1059,17 +1286,14 @@ useEffect(() => {
                     >
                       {savingClinic ? 'Saving...' : 'Save changes'}
                     </button>
-
                   </section>
                 </section>
-              )}
-            </>
-          )}
-
+              </>
+            )}
           </form>
         )}
       </section>
-      </section>
     </section>
-  )
+  </section>
+)
 }
