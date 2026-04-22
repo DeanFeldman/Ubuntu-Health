@@ -1210,6 +1210,78 @@ app.patch('/api/users/:userId/unassign-clinic', async (req, res) => {
   }
 })
 
+app.patch('/api/clinics/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const {
+      admin_id,
+      name,
+      facility_type,
+      operating_hours,
+      services,
+    } = req.body
+
+    if (!isValidClinicUuid(id)) {
+      return res.status(400).json({ error: 'Invalid clinic ID format' })
+    }
+
+    if (!admin_id || !isValidClinicUuid(admin_id)) {
+      return res.status(400).json({ error: 'Valid admin_id is required' })
+    }
+
+    const { data: adminUser, error: adminError } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('id', admin_id)
+      .maybeSingle()
+
+    if (adminError) throw adminError
+
+    if (!adminUser) {
+      return res.status(404).json({ error: 'Admin user not found' })
+    }
+
+    if (!isAdminUser(adminUser)) {
+      return res.status(403).json({ error: 'Only admins can update clinics' })
+    }
+
+    const clinicValidation = validateClinicUpdatePayload({
+      name,
+      facility_type,
+      services,
+      operating_hours,
+    })
+
+    if (!clinicValidation.valid) {
+      return res.status(400).json({ error: clinicValidation.errors.join(', ') })
+    }
+
+    const updateData = {
+      name,
+      facility_type,
+      operating_hours,
+      services: normalizeServicesInput(services),
+    }
+
+    const { data, error } = await supabase
+      .from('clinics')
+      .update(updateData)
+      .eq('id', id)
+      .select('*')
+      .single()
+
+    if (error) throw error
+
+    res.json({
+      message: 'Clinic updated successfully',
+      clinic: data,
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to update clinic' })
+  }
+})
+
 // GET /api/queue/:clinicId/completed-count — retrieve completed count for a clinic
 app.get('/api/queue/:clinicId/completed-count', async (req, res) => {
   try {
@@ -1318,78 +1390,6 @@ app.post('/api/queue/:clinicId/add-patient', async (req, res) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to add patient to queue' })
-  }
-})
-
-
-app.patch('/api/clinics/:id', async (req, res) => {
-  try {
-    const { id } = req.params
-    const {
-      admin_id,
-      name,
-      facility_type,
-      province,
-      district,
-      municipality,
-      operating_hours,
-      services,
-    } = req.body
-
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-    if (!uuidRegex.test(id)) {
-      return res.status(400).json({ error: 'Invalid clinic ID format' })
-    }
-
-    if (!admin_id || !uuidRegex.test(admin_id)) {
-      return res.status(400).json({ error: 'Valid admin_id is required' })
-    }
-
-    const { data: adminUser, error: adminError } = await supabase
-      .from('users')
-      .select('id, role')
-      .eq('id', admin_id)
-      .maybeSingle()
-
-    if (adminError) throw adminError
-
-    if (!adminUser) {
-      return res.status(404).json({ error: 'Admin user not found' })
-    }
-
-    if (adminUser.role !== 'Admin') {
-      return res.status(403).json({ error: 'Only admins can update clinics' })
-    }
-
-    const updateData = {
-      name,
-      facility_type,
-      province,
-      district,
-      municipality,
-      operating_hours,
-      services: typeof services === 'string'
-        ? services.split(',').map((item) => item.trim()).filter(Boolean)
-        : services,
-    }
-
-    const { data, error } = await supabase
-      .from('clinics')
-      .update(updateData)
-      .eq('id', id)
-      .select('*')
-      .single()
-
-    if (error) throw error
-
-    res.json({
-      message: 'Clinic updated successfully',
-      clinic: data,
-    })
-  } catch (err) {
-    console.error(err)
-    res.status(500).json({ error: 'Failed to update clinic' })
   }
 })
 
