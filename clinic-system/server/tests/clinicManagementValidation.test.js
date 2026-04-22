@@ -16,6 +16,7 @@ const {
   isValidDayName,
   isValidDailyHours,
   isValidOperatingHours,
+  isValidAppointmentDurationMinutes,
   validateClinicUpdatePayload,
 } = require('../src/clinicManagementValidation')
 
@@ -358,6 +359,40 @@ describe('clinicManagementValidation', () => {
 
     test('rejects operating hours when value is null', () => {
       expect(isValidOperatingHours(null)).toBe(false)
+    })
+  })
+
+  describe('appointment duration validation', () => {
+    test('accepts null as default duration', () => {
+      expect(isValidAppointmentDurationMinutes(null)).toBe(true)
+    })
+
+    test('accepts integer duration between 1 and 240', () => {
+      expect(isValidAppointmentDurationMinutes(15)).toBe(true)
+      expect(isValidAppointmentDurationMinutes(240)).toBe(true)
+    })
+
+    test('rejects zero, negatives, and values over 240', () => {
+      expect(isValidAppointmentDurationMinutes(0)).toBe(false)
+      expect(isValidAppointmentDurationMinutes(-15)).toBe(false)
+      expect(isValidAppointmentDurationMinutes(241)).toBe(false)
+    })
+
+    test('rejects non-integer duration values', () => {
+      expect(isValidAppointmentDurationMinutes(12.5)).toBe(false)
+      expect(isValidAppointmentDurationMinutes('15')).toBe(false)
+    })
+
+    test('allows clinic update payload to set custom duration or null', () => {
+      expect(validateClinicUpdatePayload({ appointment_duration_minutes: 30 }).valid).toBe(true)
+      expect(validateClinicUpdatePayload({ appointment_duration_minutes: null }).valid).toBe(true)
+    })
+
+    test('rejects clinic update payload with invalid duration', () => {
+      expect(validateClinicUpdatePayload({ appointment_duration_minutes: 0 })).toEqual({
+        valid: false,
+        errors: ['Invalid appointment duration'],
+      })
     })
   })
 

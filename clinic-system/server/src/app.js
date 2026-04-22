@@ -9,6 +9,10 @@ const {
   checkAndTriggerNotifications,
   configureQueueNotificationService,
 } = require('./queueNotificationService')
+const {
+  generateDailySlots,
+  resolveClinicSchedule,
+} = require('./clinicSchedule')
 
 app.use(cors())
 app.use(express.json())
@@ -73,6 +77,28 @@ async function triggerQueueNotificationsForClinicSafely(clinicId, oldQueue) {
     console.error('Failed to trigger queue notifications:', err)
     return []
   }
+}
+
+function withResolvedClinicSchedule(clinic) {
+  const schedule = resolveClinicSchedule(clinic)
+
+  return {
+    ...clinic,
+    operating_hours: schedule.operating_hours,
+    appointment_duration_minutes: schedule.appointment_duration_minutes,
+  }
+}
+
+function getTimeFromAppointmentDatetime(slotDatetime) {
+  if (typeof slotDatetime === 'string') {
+    const match = slotDatetime.match(/[T\s](\d{2}:\d{2})/)
+    if (match) return match[1]
+  }
+
+  const parsedDate = new Date(slotDatetime)
+  if (Number.isNaN(parsedDate.getTime())) return null
+
+  return `${String(parsedDate.getHours()).padStart(2, '0')}:${String(parsedDate.getMinutes()).padStart(2, '0')}`
 }
 
 async function resequenceQueue(clinicId) {
@@ -150,7 +176,7 @@ app.get('/api/clinics', async (req, res) => {
       }
     }
 
-    res.json({ clinics })
+    res.json({ clinics: clinics.map(withResolvedClinicSchedule) })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to fetch clinics' })
@@ -176,7 +202,7 @@ app.get('/api/clinics/:id', async (req, res) => {
     if (error) throw error
     if (!data) return res.status(404).json({ error: 'Clinic not found' })
 
-    res.json({ clinic: data })
+    res.json({ clinic: withResolvedClinicSchedule(data) })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to fetch clinic' })
@@ -1236,6 +1262,7 @@ app.patch('/api/clinics/:id', async (req, res) => {
       name,
       facility_type,
       operating_hours,
+      appointment_duration_minutes,
       services,
     } = req.body
 
@@ -1263,12 +1290,23 @@ app.patch('/api/clinics/:id', async (req, res) => {
       return res.status(403).json({ error: 'Only admins can update clinics' })
     }
 
-    const clinicValidation = validateClinicUpdatePayload({
+    const hasAppointmentDuration = Object.prototype.hasOwnProperty.call(
+      req.body,
+      'appointment_duration_minutes'
+    )
+
+    const clinicUpdatePayload = {
       name,
       facility_type,
       services,
       operating_hours,
-    })
+    }
+
+    if (hasAppointmentDuration) {
+      clinicUpdatePayload.appointment_duration_minutes = appointment_duration_minutes
+    }
+
+    const clinicValidation = validateClinicUpdatePayload(clinicUpdatePayload)
 
     if (!clinicValidation.valid) {
       return res.status(400).json({ error: clinicValidation.errors.join(', ') })
@@ -1279,6 +1317,10 @@ app.patch('/api/clinics/:id', async (req, res) => {
       facility_type,
       operating_hours,
       services: normalizeServicesInput(services),
+    }
+
+    if (hasAppointmentDuration) {
+      updateData.appointment_duration_minutes = appointment_duration_minutes
     }
 
     const { data, error } = await supabase
@@ -1571,6 +1613,72 @@ app.post('/api/patients', async (req, res) => {
   }
 })
 
+app.get('/api/appointments/slots', async (req, res) => {
+  try {
+    const { clinic_id, date } = req.query
+
+    if (!clinic_id || !date) {
+      return res.status(400).json({ error: 'clinic_id and date are required' })
+    }
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(clinic_id)) {
+      return res.status(400).json({ error: 'Invalid clinic ID format' })
+    }
+
+    const { data: clinic, error: clinicError } = await supabase
+      .from('clinics')
+      .select('id, operating_hours, appointment_duration_minutes')
+      .eq('id', clinic_id)
+      .maybeSingle()
+
+    if (clinicError) throw clinicError
+    if (!clinic) {
+      return res.status(404).json({ error: 'Clinic not found' })
+    }
+
+    const schedule = resolveClinicSchedule(clinic)
+    const dailySlots = generateDailySlots({
+      date,
+      operating_hours: schedule.operating_hours,
+      appointment_duration_minutes: schedule.appointment_duration_minutes,
+    })
+
+    if (dailySlots.length === 0) {
+      return res.json([])
+    }
+
+    const startOfDay = new Date(`${date}T00:00:00`)
+    const startOfNextDay = new Date(startOfDay)
+    startOfNextDay.setDate(startOfNextDay.getDate() + 1)
+
+    if (Number.isNaN(startOfDay.getTime())) {
+      return res.status(400).json({ error: 'Invalid date format' })
+    }
+
+    const { data: appointments, error: appointmentsError } = await supabase
+      .from('appointments')
+      .select('slot_datetime')
+      .eq('clinic_id', clinic_id)
+      .gte('slot_datetime', startOfDay.toISOString())
+      .lt('slot_datetime', startOfNextDay.toISOString())
+      .in('status', ['Pending', 'Confirmed'])
+
+    if (appointmentsError) throw appointmentsError
+
+    const bookedTimes = new Set(
+      (appointments || [])
+        .map((appointment) => getTimeFromAppointmentDatetime(appointment.slot_datetime))
+        .filter(Boolean)
+    )
+
+    return res.json(dailySlots.filter((slot) => !bookedTimes.has(slot)))
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: 'Failed to fetch appointment slots' })
+  }
+})
+
 app.post('/api/appointments', async (req, res) => {
   try {
     const { clinic_id, patient_id, date, time, booked_by } = req.body
@@ -1595,13 +1703,26 @@ app.post('/api/appointments', async (req, res) => {
 
     const { data: clinic, error: clinicError } = await supabase
       .from('clinics')
-      .select('id')
+      .select('id, operating_hours, appointment_duration_minutes')
       .eq('id', clinic_id)
       .maybeSingle()
 
     if (clinicError) throw clinicError
     if (!clinic) {
       return res.status(404).json({ error: 'Clinic not found' })
+    }
+
+    const schedule = resolveClinicSchedule(clinic)
+    const validSlots = generateDailySlots({
+      date,
+      operating_hours: schedule.operating_hours,
+      appointment_duration_minutes: schedule.appointment_duration_minutes,
+    })
+
+    if (!validSlots.includes(time)) {
+      return res.status(400).json({
+        error: 'Selected time is outside clinic hours or does not match the appointment duration',
+      })
     }
 
     const { data: existingAppointment, error: existingError } = await supabase
