@@ -38,7 +38,6 @@ function makeClinics() {
     },
   ]
 }
-//mockfetch with defaults that can be overridden by individual tests as needed
 function makeUsers() {
   return [
     {
