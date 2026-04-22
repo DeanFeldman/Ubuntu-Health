@@ -53,10 +53,20 @@ jobs:
         working-directory: clinic-system/client
         run: npm run build
 
-      - name: Upload coverage to Codecov
+      - name: Upload client coverage to Codecov
         uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./clinic-system/client/coverage/lcov.info,./clinic-system/server/coverage/lcov.info
+          files: ./clinic-system/client/coverage/lcov.info
+          flags: client
+          disable_search: true
+          fail_ci_if_error: true
+
+      - name: Upload server coverage to Codecov
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./clinic-system/server/coverage/lcov.info
+          flags: server
           disable_search: true
           fail_ci_if_error: true
