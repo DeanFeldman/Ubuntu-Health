@@ -3,7 +3,7 @@ const request = require('supertest')
 let mockFrom
 let mockRpc
 let app
-
+//data we will use in our tests - valid IDs for clinic, user and admin, and a different clinic ID for testing cross-clinic assignment prevention
 const validClinicId = '123e4567-e89b-12d3-a456-426614174000'
 const validUserId = '123e4567-e89b-12d3-a456-426614174001'
 const validAdminId = '123e4567-e89b-12d3-a456-426614174002'
