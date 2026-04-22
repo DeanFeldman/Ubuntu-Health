@@ -1642,40 +1642,43 @@ app.post('/api/appointments', async (req, res) => {
   }
 })
 
-app.get('/api/appointments/slots', async (req, res) => {
+app.post('/api/appointments', async (req, res) => {
   try {
-    const { clinic_id, date } = req.query
+    const { clinic_id, patient_id, slot_id, service } = req.body
 
-    if (!clinic_id || !date) {
-      return res.status(400).json({ error: 'clinic_id and date are required' })
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+    if (!clinic_id || !patient_id || !slot_id) {
+      return res.status(400).json({
+        error: 'clinic_id, patient_id and slot_id are required',
+      })
     }
 
-    // generate all possible slots
-    const slots = []
-    for (let h = 8; h < 17; h++) {
-      for (const m of [0, 30]) {
-        const hh = String(h).padStart(2, '0')
-        const mm = String(m).padStart(2, '0')
-        slots.push(`${hh}:${mm}`)
-      }
+    if (!uuidRegex.test(clinic_id) || !uuidRegex.test(patient_id) || !uuidRegex.test(slot_id)) {
+      return res.status(400).json({ error: 'Invalid ID format' })
     }
 
-    // OPTIONAL: remove booked ones (basic version)
-    const { data: booked } = await supabase
+    const { data, error } = await supabase
       .from('appointments')
-      .select('slot_datetime')
-      .eq('clinic_id', clinic_id)
+      .insert({
+        clinic_id,
+        patient_id,
+        slot_id,
+        status: 'Confirmed',
+        service: service || null,
+      })
+      .select('*')
+      .single()
 
-    const bookedTimes = (booked || []).map((b) =>
-      new Date(b.slot_datetime).toISOString().slice(11, 16)
-    )
+    if (error) throw error
 
-    const availableSlots = slots.filter((s) => !bookedTimes.includes(s))
-
-    res.json({ slots: availableSlots })
+    res.status(201).json({
+      message: 'Appointment booked successfully',
+      appointment: data,
+    })
   } catch (err) {
-    console.error(err)
-    res.status(500).json({ error: 'Failed to fetch slots' })
+    console.error('APPOINTMENT ERROR:', err)
+    res.status(500).json({ error: 'Failed to create appointment' })
   }
 })
 
