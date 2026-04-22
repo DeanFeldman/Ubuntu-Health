@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - 'clinic-system/client/**'
-      - 'clinic-system/server/**'
       - '.github/workflows/main_ubuntu-health.yml'
   workflow_dispatch:
 
