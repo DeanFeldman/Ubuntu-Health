@@ -499,7 +499,7 @@ export default function BookingPage() {
 
         if (!res.ok) throw new Error(data.error || 'Failed to load slots')
 
-        setSlots(data.slots || [])
+        setSlots(Array.isArray(data) ? data : [])
       } catch (err) {
         console.error(err)
 

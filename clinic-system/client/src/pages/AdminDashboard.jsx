@@ -28,6 +28,7 @@ const EMPTY_CLINIC_FORM = {
   district: '',
   municipality: '',
   services: '',
+  appointment_duration_minutes: '',
 }
 
 function createEmptyOperatingHours() {
@@ -37,6 +38,20 @@ function createEmptyOperatingHours() {
       close: '',
       closed: true,
     }
+    return hours
+  }, {})
+}
+
+function createDefaultOperatingHours() {
+  return WEEK_DAYS.reduce((hours, day) => {
+    const isWeekday = !['saturday', 'sunday'].includes(day)
+
+    hours[day] = {
+      open: isWeekday ? '07:30' : '',
+      close: isWeekday ? '16:30' : '',
+      closed: !isWeekday,
+    }
+
     return hours
   }, {})
 }
@@ -453,7 +468,7 @@ function formatClinicOperatingHours(operatingHours) {
 }
 
 function normaliseOperatingHours(operatingHours) {
-  const editableHours = createEmptyOperatingHours()
+  const editableHours = createDefaultOperatingHours()
 
   if (!operatingHours || typeof operatingHours !== 'object') {
     return editableHours
@@ -633,6 +648,10 @@ export default function AdminDashboard() {
       province: selectedClinic.province || '',
       district: selectedClinic.district || '',
       municipality: selectedClinic.municipality || '',
+      appointment_duration_minutes:
+        selectedClinic.appointment_duration_minutes == null
+          ? ''
+          : String(selectedClinic.appointment_duration_minutes),
       services: Array.isArray(selectedClinic.services)
         ? selectedClinic.services.join(', ')
         : selectedClinic.services || '',
@@ -769,6 +788,10 @@ export default function AdminDashboard() {
         body: JSON.stringify({
           admin_id: user.id,
           ...clinicForm,
+          appointment_duration_minutes:
+            clinicForm.appointment_duration_minutes === ''
+              ? null
+              : Number(clinicForm.appointment_duration_minutes),
           operating_hours: buildOperatingHoursPayload(operatingHoursForm),
           services: clinicForm.services
             .split(/[\n,]+/)
@@ -1210,6 +1233,23 @@ export default function AdminDashboard() {
                         />
                         <p className="admin-hint">
                           Example: HIV testing, Immunisation, Family planning
+                        </p>
+                      </label>
+
+                      <label className="edit-field" htmlFor="appointment-duration">
+                        Appointment duration minutes
+                        <input
+                          id="appointment-duration"
+                          min="1"
+                          max="240"
+                          name="appointment_duration_minutes"
+                          type="number"
+                          value={clinicForm.appointment_duration_minutes}
+                          onChange={handleClinicFormChange}
+                          placeholder="Default: 15"
+                        />
+                        <p className="admin-hint">
+                          Leave empty to use the backend default of 15 minutes.
                         </p>
                       </label>
                     </section>

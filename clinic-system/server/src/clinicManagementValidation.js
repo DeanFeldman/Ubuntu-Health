@@ -205,6 +205,16 @@ function isValidOperatingHours(operatingHours) {
 
   return true
 }
+
+function isValidAppointmentDurationMinutes(duration) {
+  if (duration === null) return true
+
+  return (
+    Number.isInteger(duration) &&
+    duration > 0 &&
+    duration <= 240
+  )
+}
 /*
 confirms:
 they are staff
@@ -212,6 +222,7 @@ the clinic name is a non-empty string (if provided)
 the facility type is a non-empty string (if provided)
 the services list is valid (if provided)
 the operating hours object is valid (if provided)
+the appointment duration is null or an integer between 1 and 240 minutes (if provided)
 
  */
 function validateClinicUpdatePayload(payload) {
@@ -231,6 +242,13 @@ function validateClinicUpdatePayload(payload) {
 
   if ('operating_hours' in payload && !isValidOperatingHours(payload.operating_hours)) {
     errors.push('Invalid operating hours')
+  }
+
+  if (
+    'appointment_duration_minutes' in payload &&
+    !isValidAppointmentDurationMinutes(payload.appointment_duration_minutes)
+  ) {
+    errors.push('Invalid appointment duration')
   }
 
   return {
@@ -260,5 +278,6 @@ module.exports = {
   isValidDayName,
   isValidDailyHours,
   isValidOperatingHours,
+  isValidAppointmentDurationMinutes,
   validateClinicUpdatePayload,
 }
