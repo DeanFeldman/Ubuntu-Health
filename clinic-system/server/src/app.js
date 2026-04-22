@@ -1642,6 +1642,43 @@ app.post('/api/appointments', async (req, res) => {
   }
 })
 
+app.get('/api/appointments/slots', async (req, res) => {
+  try {
+    const { clinic_id, date } = req.query
+
+    if (!clinic_id || !date) {
+      return res.status(400).json({ error: 'clinic_id and date are required' })
+    }
+
+    // generate all possible slots
+    const slots = []
+    for (let h = 8; h < 17; h++) {
+      for (const m of [0, 30]) {
+        const hh = String(h).padStart(2, '0')
+        const mm = String(m).padStart(2, '0')
+        slots.push(`${hh}:${mm}`)
+      }
+    }
+
+    // OPTIONAL: remove booked ones (basic version)
+    const { data: booked } = await supabase
+      .from('appointments')
+      .select('slot_datetime')
+      .eq('clinic_id', clinic_id)
+
+    const bookedTimes = (booked || []).map((b) =>
+      new Date(b.slot_datetime).toISOString().slice(11, 16)
+    )
+
+    const availableSlots = slots.filter((s) => !bookedTimes.includes(s))
+
+    res.json({ slots: availableSlots })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to fetch slots' })
+  }
+})
+
 // Serve built frontend
 const publicPath = path.join(__dirname, '..', 'public')
 app.use(express.static(publicPath))
