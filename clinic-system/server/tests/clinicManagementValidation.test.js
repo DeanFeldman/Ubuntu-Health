@@ -221,6 +221,14 @@ describe('clinicManagementValidation', () => {
       ])
     })
 
+    test('returns empty array for unsupported services input type', () => {
+      expect(normalizeServicesInput(123)).toEqual([])
+    })
+
+    test('returns empty array for undefined services input', () => {
+      expect(normalizeServicesInput(undefined)).toEqual([])
+    })
+
     test('accepts valid services string', () => {
       expect(areValidServices('General Care, Dental')).toBe(true)
     })
@@ -235,6 +243,27 @@ describe('clinicManagementValidation', () => {
 
     test('rejects empty services string', () => {
       expect(areValidServices(' , , ')).toBe(false)
+    })
+
+    test('rejects numeric-only service value', () => {
+      expect(areValidServices('3')).toBe(false)
+    })
+
+    test('rejects symbol-only service value', () => {
+      expect(areValidServices('@@@')).toBe(false)
+    })
+
+    test('rejects mixed invalid service values', () => {
+      expect(areValidServices(['123', '!!!'])).toBe(false)
+    })
+
+
+    test('rejects service array containing string without letters', () => {
+      expect(areValidServices(['!!!'])).toBe(false)
+    })
+
+    test('accepts service values containing letters', () => {
+      expect(areValidServices(['HIV Testing', 'TB Treatment'])).toBe(true)
     })
   })
 
@@ -289,6 +318,18 @@ describe('clinicManagementValidation', () => {
       expect(isValidDailyHours({ open: '16:00', close: '08:00' })).toBe(false)
     })
 
+    test('rejects daily hours when value is not an object', () => {
+      expect(isValidDailyHours('08:00-16:00')).toBe(false)
+    })
+
+    test('rejects daily hours when value is an array', () => {
+      expect(isValidDailyHours([])).toBe(false)
+    })
+
+    test('rejects daily hours when value is null', () => {
+      expect(isValidDailyHours(null)).toBe(false)
+    })
+
     test('accepts valid operating hours object', () => {
       expect(isValidOperatingHours(makeValidOperatingHours())).toBe(true)
     })
@@ -305,6 +346,18 @@ describe('clinicManagementValidation', () => {
       hours.monday = { open: '17:00', close: '08:00' }
 
       expect(isValidOperatingHours(hours)).toBe(false)
+    })
+
+    test('rejects operating hours when value is not an object', () => {
+      expect(isValidOperatingHours('closed')).toBe(false)
+    })
+
+    test('rejects operating hours when value is an array', () => {
+      expect(isValidOperatingHours([])).toBe(false)
+    })
+
+    test('rejects operating hours when value is null', () => {
+      expect(isValidOperatingHours(null)).toBe(false)
     })
   })
 
@@ -348,6 +401,28 @@ describe('clinicManagementValidation', () => {
     test('rejects invalid services list', () => {
       const result = validateClinicUpdatePayload({
         services: ' , ',
+      })
+
+      expect(result).toEqual({
+        valid: false,
+        errors: ['Invalid services list'],
+      })
+    })
+
+    test('rejects clinic update payload with numeric-only service', () => {
+      const result = validateClinicUpdatePayload({
+        services: '123',
+      })
+
+      expect(result).toEqual({
+        valid: false,
+        errors: ['Invalid services list'],
+      })
+    })
+
+    test('rejects clinic update payload with symbol-only service', () => {
+      const result = validateClinicUpdatePayload({
+        services: '@@@',
       })
 
       expect(result).toEqual({
