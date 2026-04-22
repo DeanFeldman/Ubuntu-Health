@@ -59,7 +59,9 @@ const styles = `
   object-fit: contain;
   display: block;
   flex-shrink: 0;
-  transform: none;
+  transform: scale(3.4);
+  margin-right: 12px;
+
 }
 
 .uh-nav-links {

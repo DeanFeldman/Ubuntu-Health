@@ -119,20 +119,38 @@ app.get('/api', (req, res) => {
 app.get('/api/clinics', async (req, res) => {
   try {
     const { province, district, municipality, facility_type, search } = req.query
+    const batchSize = 1000
+    let start = 0
+    let hasMore = true
+    const clinics = []
 
-    let query = supabase.from('clinics').select('*')
+    while (hasMore) {
+      let query = supabase
+        .from('clinics')
+        .select('*')
+        .range(start, start + batchSize - 1)
 
-    if (province) query = query.eq('province', province)
-    if (district) query = query.eq('district', district)
-    if (facility_type) query = query.eq('facility_type', facility_type)
-    if (municipality) query = query.eq('municipality', municipality)
-    if (search) query = query.ilike('name', `%${search}%`)
+      if (province) query = query.eq('province', province)
+      if (district) query = query.eq('district', district)
+      if (facility_type) query = query.eq('facility_type', facility_type)
+      if (municipality) query = query.eq('municipality', municipality)
+      if (search) query = query.ilike('name', `%${search}%`)
 
-    const { data, error } = await query
+      const { data, error } = await query
 
-    if (error) throw error
+      if (error) throw error
 
-    res.json({ clinics: data })
+      const currentBatch = data || []
+      clinics.push(...currentBatch)
+
+      if (currentBatch.length < batchSize) {
+        hasMore = false
+      } else {
+        start += batchSize
+      }
+    }
+
+    res.json({ clinics })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to fetch clinics' })
