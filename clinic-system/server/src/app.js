@@ -1571,6 +1571,66 @@ app.post('/api/patients', async (req, res) => {
   }
 })
 
+
+app.patch('/api/clinics/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { admin_id, name, province, district, municipality, facility_type, services, hours } = req.body
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+    if (!uuidRegex.test(id)) {
+      return res.status(400).json({ error: 'Invalid clinic ID format' })
+    }
+
+    if (!admin_id || !uuidRegex.test(admin_id)) {
+      return res.status(400).json({ error: 'Valid admin_id is required' })
+    }
+
+    const { data: admin, error: adminError } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('id', admin_id)
+      .maybeSingle()
+
+    if (adminError) throw adminError
+    if (!admin) {
+      return res.status(404).json({ error: 'Admin user not found' })
+    }
+
+    if (admin.role !== 'Admin') {
+      return res.status(403).json({ error: 'Only admins can update clinics' })
+    }
+
+    const updates = {}
+
+    if (name !== undefined) updates.name = name
+    if (province !== undefined) updates.province = province
+    if (district !== undefined) updates.district = district
+    if (municipality !== undefined) updates.municipality = municipality
+    if (facility_type !== undefined) updates.facility_type = facility_type
+    if (services !== undefined) updates.services = services
+    if (hours !== undefined) updates.hours = hours
+
+    const { data, error } = await supabase
+      .from('clinics')
+      .update(updates)
+      .eq('id', id)
+      .select('*')
+      .maybeSingle()
+
+    if (error) throw error
+    if (!data) {
+      return res.status(404).json({ error: 'Clinic not found' })
+    }
+
+    res.json({ clinic: data })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to update clinic' })
+  }
+})
+
 // Serve built frontend
 const publicPath = path.join(__dirname, '..', 'public')
 app.use(express.static(publicPath))
