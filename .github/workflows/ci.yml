@@ -54,7 +54,7 @@ jobs:
         run: npm run build
 
       - name: Upload client coverage to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./clinic-system/client/coverage/lcov.info
@@ -63,7 +63,7 @@ jobs:
           fail_ci_if_error: true
 
       - name: Upload server coverage to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./clinic-system/server/coverage/lcov.info
