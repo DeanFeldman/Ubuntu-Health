@@ -1387,6 +1387,57 @@ app.patch('/api/staff/:staffId/availability/:availabilityId', async (req, res) =
     return res.status(500).json({ error: 'Failed to update availability record' })
   }
 })
+// POST /api/patients — staff creates a patient record for a walk-in
+app.post('/api/patients', async (req, res) => {
+  try {
+    const { full_name, phone, email, date_of_birth, created_by } = req.body
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+    if (!full_name || full_name.trim() === '') {
+      return res.status(400).json({ error: 'full_name is required' })
+    }
+
+    if (!created_by) {
+      return res.status(400).json({ error: 'created_by is required' })
+    }
+
+    if (!uuidRegex.test(created_by)) {
+      return res.status(400).json({ error: 'Invalid created_by ID format' })
+    }
+
+    const { data: staffUser, error: staffError } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('id', created_by)
+      .maybeSingle()
+
+    if (staffError) throw staffError
+    if (!staffUser) return res.status(404).json({ error: 'Staff member not found' })
+    if (!['Staff', 'Admin'].includes(staffUser.role)) {
+      return res.status(403).json({ error: 'Only staff or admin can create patient records' })
+    }
+
+    const { data, error } = await supabase
+      .from('patients')
+      .insert({
+        full_name: full_name.trim(),
+        phone: phone || null,
+        email: email || null,
+        date_of_birth: date_of_birth || null,
+        created_by,
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+
+    return res.status(201).json({ patient: data })
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: 'Failed to create patient record' })
+  }
+})
 
 // Serve built frontend
 const publicPath = path.join(__dirname, '..', 'public')
