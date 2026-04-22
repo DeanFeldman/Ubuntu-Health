@@ -1143,17 +1143,6 @@ export default function AdminDashboard() {
                     Update facility type, services, and operating hours below, then save your changes.
                   </p>
 
-                  {clinicEditError && (
-                    <p className="admin-message admin-error" role="alert">
-                      {clinicEditError}
-                    </p>
-                  )}
-
-                  {clinicEditFeedback && (
-                    <p className="admin-message admin-feedback" role="status">
-                      {clinicEditFeedback}
-                    </p>
-                  )}
 
                   <section className="edit-clinic-container">
                     <label className="edit-clinic-name" htmlFor="clinic-name">
@@ -1189,7 +1178,6 @@ export default function AdminDashboard() {
                           id="province"
                           name="province"
                           value={clinicForm.province}
-                          onChange={handleClinicFormChange}
                         />
                       </label>
 
@@ -1199,7 +1187,6 @@ export default function AdminDashboard() {
                           id="district"
                           name="district"
                           value={clinicForm.district}
-                          onChange={handleClinicFormChange}
                         />
                       </label>
 
@@ -1209,7 +1196,6 @@ export default function AdminDashboard() {
                           id="municipality"
                           name="municipality"
                           value={clinicForm.municipality}
-                          onChange={handleClinicFormChange}
                         />
                       </label>
 
@@ -1281,14 +1267,30 @@ export default function AdminDashboard() {
 
                     <br />
 
-                    <button
-                      className="admin-btn admin-btn-approve"
-                      type="button"
-                      onClick={saveClinicChanges}
-                      disabled={savingClinic}
-                    >
-                      {savingClinic ? 'Saving...' : 'Save changes'}
-                    </button>
+                      <section style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '12px' }}>
+                        <button
+                          className="admin-btn admin-btn-approve"
+                          type="button"
+                          onClick={saveClinicChanges}
+                          disabled={savingClinic}
+                        >
+                          {savingClinic ? 'Saving...' : 'Save changes'}
+                        </button>
+
+                        {clinicEditError && (
+                          <span className="admin-error" role="alert">
+                            {clinicEditError}
+                          </span>
+                        )}
+
+                        {clinicEditFeedback && (
+                          <span className="admin-feedback" role="status">
+                            {clinicEditFeedback}
+                          </span>
+                        )}
+                      </section>
+
+
                   </section>
                 </section>
               </>
