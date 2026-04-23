@@ -38,29 +38,29 @@ function makeClinics() {
     },
   ]
 }
-function makeUsers() {
-  // return [
-  //   {
-  //     id: otherStaffId,
-  //     full_name: 'Sam Staff',
-  //     role: 'Clinic Staff',
-  //     clinic_id: null,
-  //   },
-  //   {
-  //     id: assignedStaffId,
-  //     full_name: 'Assigned Staff',
-  //     role: 'Clinic Staff',
-  //     clinic_id: clinicId,
-  //   },
-  //   {
-  //     id: '55555555-5555-5555-5555-555555555555',
-  //     full_name: 'Admin User',
-  //     role: 'Admin',
-  //     clinic_id: null,
-  //   },
-  // ]
-}
 
+function makeUsers() {
+  return [
+    {
+      id: '22222222-2222-2222-2222-222222222222',
+      full_name: 'Sam Staff',
+      role: 'Staff',
+      clinic_id: null,
+    },
+    {
+      id: '33333333-3333-3333-3333-333333333333',
+      full_name: 'Assigned Staff',
+      role: 'Staff',
+      clinic_id: clinicId, 
+    },
+    {
+      id: '55555555-5555-5555-5555-555555555555',
+      full_name: 'Admin User',
+      role: 'Admin',
+      clinic_id: null,
+    },
+  ]
+}
 function mockFetch({
   roleRequests = [],
   roleError = null,
