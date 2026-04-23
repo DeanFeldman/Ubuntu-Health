@@ -106,14 +106,14 @@ function getTimeFromAppointmentDatetime(slotDatetime) {
 async function fetchBookedSlotTimes(clinicId, date) {
   const { data: appointments, error: appointmentsError } = await supabase
     .from('appointments')
-    .select('appointment_time, slot_datetime')
+    .select('slot_id, appointment_time, slot_datetime')
     .eq('clinic_id', clinicId)
     .eq('appointment_date', date)
     .in('status', ['Pending', 'Confirmed'])
 
   if (appointmentsError) throw appointmentsError
 
-  return new Set(
+  const bookedTimes = new Set(
     (appointments || [])
       .map((appointment) =>
         getTimeFromAppointmentDatetime(
@@ -122,6 +122,34 @@ async function fetchBookedSlotTimes(clinicId, date) {
       )
       .filter(Boolean)
   )
+
+  const slotIds = [...new Set((appointments || []).map((appointment) => appointment.slot_id).filter(Boolean))]
+
+  if (slotIds.length === 0) {
+    return bookedTimes
+  }
+
+  const startOfDay = new Date(`${date}T00:00:00.000Z`)
+  const startOfNextDay = new Date(startOfDay)
+  startOfNextDay.setUTCDate(startOfNextDay.getUTCDate() + 1)
+
+  const { data: slots, error: slotsError } = await supabase
+    .from('slots')
+    .select('id, slot_datetime')
+    .in('id', slotIds)
+    .gte('slot_datetime', startOfDay.toISOString())
+    .lt('slot_datetime', startOfNextDay.toISOString())
+
+  if (slotsError) throw slotsError
+
+  ;(slots || []).forEach((slot) => {
+    const normalizedTime = getTimeFromAppointmentDatetime(slot.slot_datetime)
+    if (normalizedTime) {
+      bookedTimes.add(normalizedTime)
+    }
+  })
+
+  return bookedTimes
 }
 
 async function findOrCreateClinicSlot(clinicId, slotDatetimeIso) {
