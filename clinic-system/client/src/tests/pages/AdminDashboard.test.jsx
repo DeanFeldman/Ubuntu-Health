@@ -422,7 +422,8 @@ describe('AdminDashboard', () => {
     await user.selectOptions(await screen.findByLabelText('Choose a clinic'), clinicId)
     await user.click(await screen.findByRole('button', { name: 'Unassign' }))
 
-    //expect(await screen.findByText('Staff unassigned successfully.')).toBeInTheDocument()  })
+    //expect(await screen.findByText('Staff unassigned successfully.')).toBeInTheDocument()  
+    })
 
   test('shows unassign error feedback when backend rejects removal', async () => {
     const user = userEvent.setup()
@@ -582,5 +583,4 @@ expect(alerts.some(el => el.textContent.includes('API route not found'))).toBe(t
 
     expect(await screen.findByText('Failed to load users')).toBeInTheDocument()
   })
-})
 })
