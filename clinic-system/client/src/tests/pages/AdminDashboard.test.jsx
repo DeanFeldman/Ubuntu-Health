@@ -12,9 +12,8 @@ jest.mock('../../lib/getApiBase', () => jest.fn())
 
 const clinicId = '11111111-1111-1111-1111-111111111111'
 const otherStaffId = '22222222-2222-2222-2222-222222222222'
-const assignedStaffId = '44444444-4444-4444-4444-444444444444'
 const adminId = '33333333-3333-3333-3333-333333333333'
-//create data we will use in our tests - a clinic and some users (one assigned staff, one unassigned staff and one admin)
+const assignedStaffId = '44444444-4444-4444-4444-444444444444'
 
 function makeClinics() {
   return [
@@ -42,25 +41,26 @@ function makeClinics() {
 function makeUsers() {
   return [
     {
-      id: '22222222-2222-2222-2222-222222222222',
+      id: otherStaffId,
       full_name: 'Sam Staff',
       role: 'Staff',
       clinic_id: null,
     },
     {
-      id: '33333333-3333-3333-3333-333333333333',
+      id: assignedStaffId,
       full_name: 'Assigned Staff',
       role: 'Staff',
-      clinic_id: clinicId, 
+      clinic_id: clinicId,
     },
     {
-      id: '55555555-5555-5555-5555-555555555555',
+      id: adminId,
       full_name: 'Admin User',
       role: 'Admin',
       clinic_id: null,
     },
   ]
 }
+
 function mockFetch({
   roleRequests = [],
   roleError = null,
@@ -350,7 +350,6 @@ describe('AdminDashboard', () => {
 
     expect(await screen.findByDisplayValue('Clinic')).toBeInTheDocument()
     expect(screen.getByDisplayValue('General Consultation, HIV Testing')).toBeInTheDocument()
-    // expect(screen.getByText('Assigned Staff')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Unassign' })).toBeInTheDocument()
   })
 
@@ -362,7 +361,7 @@ describe('AdminDashboard', () => {
         {
           id: otherStaffId,
           full_name: 'Sam Staff',
-          role: 'Clinic Staff',
+          role: 'Staff',
           clinic_id: null,
         },
       ],
@@ -422,8 +421,10 @@ describe('AdminDashboard', () => {
     await user.selectOptions(await screen.findByLabelText('Choose a clinic'), clinicId)
     await user.click(await screen.findByRole('button', { name: 'Unassign' }))
 
-    //expect(await screen.findByText('Staff unassigned successfully.')).toBeInTheDocument()  
-    })
+    expect(
+      await screen.findByText('Assigned Staff unassigned from clinic')
+    ).toBeInTheDocument()
+  })
 
   test('shows unassign error feedback when backend rejects removal', async () => {
     const user = userEvent.setup()
@@ -434,7 +435,9 @@ describe('AdminDashboard', () => {
     await user.selectOptions(await screen.findByLabelText('Choose a clinic'), clinicId)
     await user.click(await screen.findByRole('button', { name: 'Unassign' }))
 
-    //expect(await screen.findByText('Staff member is not assigned to a clinic')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Staff member is not assigned to a clinic')
+    ).toBeInTheDocument()
   })
 
   test('allows editing clinic name field', async () => {
@@ -565,7 +568,7 @@ describe('AdminDashboard', () => {
     render(<AdminDashboard />)
 
     const alerts = await screen.findAllByRole('alert')
-expect(alerts.some(el => el.textContent.includes('API route not found'))).toBe(true)
+    expect(alerts.some((el) => el.textContent.includes('API route not found'))).toBe(true)
   })
 
   test('shows error when clinics fail to load', async () => {
@@ -583,4 +586,115 @@ expect(alerts.some(el => el.textContent.includes('API route not found'))).toBe(t
 
     expect(await screen.findByText('Failed to load users')).toBeInTheDocument()
   })
+
+
+test('shows feedback when approving a role request fails', async () => {
+  const user = userEvent.setup()
+
+  mockFetch({
+    approveOk: false,
+    roleRequests: [
+      {
+        id: 'req-1',
+        requested_role: 'Staff',
+        created_at: '2026-01-01',
+        users: {
+          full_name: 'Test Admin',
+          email: 'test@example.com',
+          role: 'Patient',
+        },
+      },
+    ],
+  })
+
+  render(<AdminDashboard />)
+
+  await user.click(await screen.findByRole('button', { name: 'Approve' }))
+
+  expect(await screen.findByText('Failed to approve role request')).toBeInTheDocument()
+})
+test('shows feedback when rejecting a role request fails', async () => {
+  const user = userEvent.setup()
+
+  mockFetch({
+    rejectOk: false,
+    roleRequests: [
+      {
+        id: 'req-1',
+        requested_role: 'Staff',
+        created_at: '2026-01-01',
+        users: {
+          full_name: 'Test Admin',
+          email: 'test@example.com',
+          role: 'Patient',
+        },
+      },
+    ],
+  })
+
+  render(<AdminDashboard />)
+
+  await user.click(await screen.findByRole('button', { name: 'Reject' }))
+
+  expect(await screen.findByText('Failed to reject role request')).toBeInTheDocument()
+})
+test('unassign success updates the clinic staff list', async () => {
+  const user = userEvent.setup()
+  mockFetch()
+
+  render(<AdminDashboard />)
+
+  await user.selectOptions(await screen.findByLabelText('Choose a clinic'), clinicId)
+
+  expect(screen.getByText('Assigned Staff')).toBeInTheDocument()
+
+  await user.click(screen.getByRole('button', { name: 'Unassign' }))
+
+  expect(await screen.findByText('Assigned Staff unassigned from clinic')).toBeInTheDocument()
+  expect(await screen.findByText('No staff assigned yet.')).toBeInTheDocument()
+})
+/*
+test('allows editing appointment duration', async () => {
+  const user = userEvent.setup()
+  mockFetch()
+
+  render(<AdminDashboard />)
+
+  await user.selectOptions(await screen.findByLabelText('Choose a clinic'), clinicId)
+
+  const durationInput = screen.getByLabelText('Appointment duration minutes')
+  await user.clear(durationInput)
+  await user.type(durationInput, '30')
+
+  expect(durationInput).toHaveValue(30)
+})
+*/
+test('shows read-only clinic location fields for the selected clinic', async () => {
+  const user = userEvent.setup()
+  mockFetch()
+
+  render(<AdminDashboard />)
+
+  await user.selectOptions(await screen.findByLabelText('Choose a clinic'), clinicId)
+
+  expect(screen.getByDisplayValue('Gauteng')).toBeInTheDocument()
+  expect(screen.getByDisplayValue('Johannesburg')).toBeInTheDocument()
+  expect(screen.getByDisplayValue('Region F')).toBeInTheDocument()
+})
+test('does not fetch dashboard data when there is no logged in user id', () => {
+  useAuth.mockReturnValue({ user: null })
+  global.fetch = jest.fn()
+
+  render(<AdminDashboard />)
+
+  expect(global.fetch).not.toHaveBeenCalled()
+})
+test('does not fetch data when there is no logged in user id', () => {
+  useAuth.mockReturnValue({ user: null })
+  global.fetch = jest.fn()
+
+  render(<AdminDashboard />)
+
+  expect(global.fetch).not.toHaveBeenCalled()
+})
 })
