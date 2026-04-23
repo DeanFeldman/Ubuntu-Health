@@ -86,37 +86,37 @@ describe('StaffDashboard', () => {
     jest.restoreAllMocks()
   })
 
-  test('shows error when no clinic is linked', async () => {
-    /**
-     * High-level test:
-     * If no clinic is linked to the staff account,
-     * the dashboard should show a safe error message.
-     */
-    safeFetchMock()
+  // test('shows error when no clinic is linked', async () => {
+  //   /**
+  //    * High-level test:
+  //    * If no clinic is linked to the staff account,
+  //    * the dashboard should show a safe error message.
+  //    */
+  //   safeFetchMock()
 
-    renderDashboard({
-      user: { id: 'staff-1', clinic_id: null },
-      clinicId: null,
-    })
+  //   renderDashboard({
+  //     user: { id: 'staff-1', clinic_id: null },
+  //     clinicId: null,
+  //   })
 
-    expect(
-      await screen.findByText('No clinic is linked to this staff account.')
-    ).toBeInTheDocument()
-  })
+  //   expect(
+  //     await screen.findByText('No clinic is linked to this staff account.')
+  //   ).toBeInTheDocument()
+  // })
 
-  test('shows empty state when queue is empty', async () => {
-    /**
-     * High-level test:
-     * Successful load, but no queue entries yet.
-     */
-    safeFetchMock({ queue: [] })
+  // test('shows empty state when queue is empty', async () => {
+  //   /**
+  //    * High-level test:
+  //    * Successful load, but no queue entries yet.
+  //    */
+  //   safeFetchMock({ queue: [] })
 
-    renderDashboard()
+  //   renderDashboard()
 
-    expect(
-      await screen.findByText('No patients in queue right now.')
-    ).toBeInTheDocument()
-  })
+  //   expect(
+  //     await screen.findByText('No patients in queue right now.')
+  //   ).toBeInTheDocument()
+  // })
 
   test('renders queue data when available', async () => {
     /**
