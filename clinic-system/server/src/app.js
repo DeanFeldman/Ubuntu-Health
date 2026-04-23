@@ -1825,46 +1825,6 @@ app.post('/api/appointments', async (req, res) => {
   }
 })
 
-app.post('/api/appointments', async (req, res) => {
-  try {
-    const { clinic_id, patient_id, slot_id, service } = req.body
-
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-    if (!clinic_id || !patient_id || !slot_id) {
-      return res.status(400).json({
-        error: 'clinic_id, patient_id and slot_id are required',
-      })
-    }
-
-    if (!uuidRegex.test(clinic_id) || !uuidRegex.test(patient_id) || !uuidRegex.test(slot_id)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
-
-    const { data, error } = await supabase
-      .from('appointments')
-      .insert({
-        clinic_id,
-        patient_id,
-        slot_id,
-        status: 'Confirmed',
-        service: service || null,
-      })
-      .select('*')
-      .single()
-
-    if (error) throw error
-
-    res.status(201).json({
-      message: 'Appointment booked successfully',
-      appointment: data,
-    })
-  } catch (err) {
-    console.error('APPOINTMENT ERROR:', err)
-    res.status(500).json({ error: 'Failed to create appointment' })
-  }
-})
-
 // Serve built frontend
 const publicPath = path.join(__dirname, '..', 'public')
 app.use(express.static(publicPath))
