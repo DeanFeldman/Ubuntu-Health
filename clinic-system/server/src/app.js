@@ -101,6 +101,65 @@ function getTimeFromAppointmentDatetime(slotDatetime) {
   return `${String(parsedDate.getHours()).padStart(2, '0')}:${String(parsedDate.getMinutes()).padStart(2, '0')}`
 }
 
+async function fetchBookedSlotTimes(clinicId, startIso, endIso) {
+  const { data: appointments, error: appointmentsError } = await supabase
+    .from('appointments')
+    .select('slot_id')
+    .eq('clinic_id', clinicId)
+    .in('status', ['Pending', 'Confirmed'])
+
+  if (appointmentsError) throw appointmentsError
+
+  const slotIds = [...new Set((appointments || []).map((appointment) => appointment.slot_id).filter(Boolean))]
+
+  if (slotIds.length === 0) {
+    return new Set()
+  }
+
+  const { data: slots, error: slotsError } = await supabase
+    .from('slots')
+    .select('id, slot_datetime')
+    .in('id', slotIds)
+    .gte('slot_datetime', startIso)
+    .lt('slot_datetime', endIso)
+
+  if (slotsError) throw slotsError
+
+  return new Set(
+    (slots || [])
+      .map((slot) => getTimeFromAppointmentDatetime(slot.slot_datetime))
+      .filter(Boolean)
+  )
+}
+
+async function findOrCreateClinicSlot(clinicId, slotDatetimeIso) {
+  const { data: existingSlot, error: existingSlotError } = await supabase
+    .from('slots')
+    .select('id, slot_datetime')
+    .eq('clinic_id', clinicId)
+    .eq('slot_datetime', slotDatetimeIso)
+    .maybeSingle()
+
+  if (existingSlotError) throw existingSlotError
+
+  if (existingSlot) {
+    return existingSlot
+  }
+
+  const { data: createdSlot, error: createdSlotError } = await supabase
+    .from('slots')
+    .insert({
+      clinic_id: clinicId,
+      slot_datetime: slotDatetimeIso,
+    })
+    .select('id, slot_datetime')
+    .single()
+
+  if (createdSlotError) throw createdSlotError
+
+  return createdSlot
+}
+
 async function resequenceQueue(clinicId) {
   const { data: activeEntries, error: fetchError } = await supabase
     .from('queue_entries')
@@ -1628,7 +1687,7 @@ app.get('/api/appointments/slots', async (req, res) => {
 
     const { data: clinic, error: clinicError } = await supabase
       .from('clinics')
-      .select('id, operating_hours, appointment_duration_minutes')
+      .select('*')
       .eq('id', clinic_id)
       .maybeSingle()
 
@@ -1656,20 +1715,10 @@ app.get('/api/appointments/slots', async (req, res) => {
       return res.status(400).json({ error: 'Invalid date format' })
     }
 
-    const { data: appointments, error: appointmentsError } = await supabase
-      .from('appointments')
-      .select('slot_datetime')
-      .eq('clinic_id', clinic_id)
-      .gte('slot_datetime', startOfDay.toISOString())
-      .lt('slot_datetime', startOfNextDay.toISOString())
-      .in('status', ['Pending', 'Confirmed'])
-
-    if (appointmentsError) throw appointmentsError
-
-    const bookedTimes = new Set(
-      (appointments || [])
-        .map((appointment) => getTimeFromAppointmentDatetime(appointment.slot_datetime))
-        .filter(Boolean)
+    const bookedTimes = await fetchBookedSlotTimes(
+      clinic_id,
+      startOfDay.toISOString(),
+      startOfNextDay.toISOString()
     )
 
     return res.json(dailySlots.filter((slot) => !bookedTimes.has(slot)))
@@ -1703,7 +1752,7 @@ app.post('/api/appointments', async (req, res) => {
 
     const { data: clinic, error: clinicError } = await supabase
       .from('clinics')
-      .select('id, operating_hours, appointment_duration_minutes')
+      .select('*')
       .eq('id', clinic_id)
       .maybeSingle()
 
@@ -1725,11 +1774,16 @@ app.post('/api/appointments', async (req, res) => {
       })
     }
 
+    const slotRecord = await findOrCreateClinicSlot(
+      clinic_id,
+      slot_datetime.toISOString()
+    )
+
     const { data: existingAppointment, error: existingError } = await supabase
       .from('appointments')
       .select('id')
       .eq('clinic_id', clinic_id)
-      .eq('slot_datetime', slot_datetime.toISOString())
+      .eq('slot_id', slotRecord.id)
       .in('status', ['Pending', 'Confirmed'])
       .maybeSingle()
 
@@ -1744,7 +1798,7 @@ app.post('/api/appointments', async (req, res) => {
       .insert({
         clinic_id,
         patient_id,
-        slot_datetime: slot_datetime.toISOString(),
+        slot_id: slotRecord.id,
         status: 'Confirmed',
         booked_by,
       })
