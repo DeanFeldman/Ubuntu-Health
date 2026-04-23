@@ -261,6 +261,114 @@ const styles = `
   .sd-toast--visible { opacity: 1; }
   .sd-toast--success { border-left: 3px solid #15803D; color: #15803D; }
   .sd-toast--error   { border-left: 3px solid #B91C1C; color: #B91C1C; }
+
+  /* ── Add new patient popup ── */
+  .sd-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(17, 24, 39, 0.45);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    padding: 24px;
+  }
+  .sd-dialog {
+    background: var(--uh-surface);
+    border-radius: 22px;
+    box-shadow: 0 24px 64px rgba(17, 24, 39, 0.18);
+    padding: 32px;
+    width: 100%;
+    max-width: 440px;
+    animation: sd-pop 0.18s ease;
+  }
+  @keyframes sd-pop {
+    from { opacity: 0; transform: scale(0.94) translateY(8px); }
+    to   { opacity: 1; transform: scale(1)    translateY(0); }
+  }
+  .sd-dialog-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    background: #EFF6FF;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+    font-size: 22px;
+  }
+  .sd-dialog-title {
+    font-size: 1.1rem;
+    font-weight: 800;
+    margin: 0 0 4px;
+    color: var(--uh-text);
+  }
+  .sd-dialog-subtitle {
+    font-size: 13px;
+    color: var(--uh-muted);
+    margin: 0 0 20px;
+  }
+  .sd-dialog-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 14px;
+  }
+  .sd-dialog-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--uh-muted);
+  }
+  .sd-dialog-input {
+    height: 44px;
+    border: 1.5px solid var(--uh-border);
+    border-radius: 10px;
+    padding: 0 13px;
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--uh-text);
+    background: var(--uh-surface);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .sd-dialog-input:focus {
+    border-color: #2563EB;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  }
+  .sd-dialog-input--error { border-color: #DC2626 !important; }
+  .sd-dialog-error-text { font-size: 12px; color: #DC2626; }
+  .sd-dialog-submit-error {
+    background: #FEF2F2;
+    border: 1px solid #FECACA;
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: #DC2626;
+    font-size: 13px;
+    font-weight: 500;
+    margin-top: 14px;
+  }
+  .sd-dialog-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 24px;
+  }
+  .sd-dialog-actions .sd-act-btn {
+    flex: 1;
+    text-align: center;
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+  .sd-act-btn--primary {
+    background: #023474;
+    color: #fff;
+    border-color: #023474;
+  }
+  .sd-act-btn--primary:hover:not(:disabled) {
+    background: #012a5e;
+    border-color: #012a5e;
+  }
+  .sd-act-btn--primary:disabled { opacity: 0.5; cursor: not-allowed; }
 `
 const DAYS = [
   { label: 'Monday', value: 0 },
@@ -325,6 +433,15 @@ export default function StaffDashboard() {
   const [allPatients, setAllPatients] = useState([])
   const [selectedPatientId, setSelectedPatientId] = useState('')
   const [addPatientLoading, setAddPatientLoading] = useState(false)
+
+  // ── Add new patient popup ──
+  const [showAddPatientPopup, setShowAddPatientPopup] = useState(false)
+  const [newPatientName, setNewPatientName] = useState('')
+  const [newPatientEmail, setNewPatientEmail] = useState('')
+  const [newPatientNameError, setNewPatientNameError] = useState('')
+  const [newPatientEmailError, setNewPatientEmailError] = useState('')
+  const [addingPatient, setAddingPatient] = useState(false)
+  const [addPatientError, setAddPatientError] = useState('')
 
 
   const [availability, setAvailability] = useState(createDefaultAvailability())
@@ -690,6 +807,53 @@ const handleAddPatientToQueue = async () => {
   }
 }  
 
+const handleAddNewPatient = async () => {
+  let valid = true
+  setNewPatientNameError('')
+  setNewPatientEmailError('')
+  setAddPatientError('')
+
+  if (!newPatientName.trim()) {
+    setNewPatientNameError('Name is required.')
+    valid = false
+  }
+  if (!newPatientEmail.trim()) {
+    setNewPatientEmailError('Email is required.')
+    valid = false
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newPatientEmail.trim())) {
+    setNewPatientEmailError('Enter a valid email address.')
+    valid = false
+  }
+  if (!valid) return
+
+  setAddingPatient(true)
+  try {
+    const res = await fetch(`${API_BASE}/api/patients`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        full_name: newPatientName.trim(),
+        email: newPatientEmail.trim(),
+        created_by: user.id,
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || 'Failed to create patient.')
+
+    const created = data.patient
+    setAllPatients(prev => [...prev, created])
+    setSelectedPatientId(created.id)
+    setShowAddPatientPopup(false)
+    setNewPatientName('')
+    setNewPatientEmail('')
+    showToast(`${created.full_name} added as a new patient.`, 'success')
+  } catch (err) {
+    setAddPatientError(err.message)
+  } finally {
+    setAddingPatient(false)
+  }
+}
+
 const handleGoToBooking = async () => {
   if (!resolvedClinicId) {
     showToast('No clinic is linked to this staff account.', 'error')
@@ -749,13 +913,30 @@ const handleGoToBooking = async () => {
 
         <section className="sd-panel">
           <header className="sd-panel-header">
-           <button
-              className="sd-act-btn"
-              type="button"
-              onClick={handleGoToBooking}
-            >
-              Book an appointment
-            </button>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button
+                className="sd-act-btn"
+                type="button"
+                onClick={handleGoToBooking}
+              >
+                Book an appointment
+              </button>
+
+              <button
+                className="sd-act-btn"
+                type="button"
+                onClick={() => {
+                  setNewPatientName('')
+                  setNewPatientEmail('')
+                  setNewPatientNameError('')
+                  setNewPatientEmailError('')
+                  setAddPatientError('')
+                  setShowAddPatientPopup(true)
+                }}
+              >
+                + Add new patient
+              </button>
+            </div>
 
             <form
               onSubmit={e => {
@@ -959,6 +1140,70 @@ const handleGoToBooking = async () => {
       
       
       <Toast message={toast.message} type={toast.type} visible={toast.visible} />
+
+      {/* ── Add new patient popup ── */}
+      {showAddPatientPopup && (
+        <div
+          className="sd-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-patient-title"
+          onClick={e => { if (e.target === e.currentTarget) setShowAddPatientPopup(false) }}
+        >
+          <div className="sd-dialog">
+            <div className="sd-dialog-icon">🧑‍⚕️</div>
+            <h2 className="sd-dialog-title" id="add-patient-title">Add New Patient</h2>
+            <p className="sd-dialog-subtitle">Enter the patient's details to create their record.</p>
+
+            <div className="sd-dialog-field">
+              <label className="sd-dialog-label" htmlFor="sd-new-patient-name">Full name</label>
+              <input
+                id="sd-new-patient-name"
+                className={`sd-dialog-input ${newPatientNameError ? 'sd-dialog-input--error' : ''}`}
+                type="text"
+                placeholder="e.g. Amara Dlamini"
+                value={newPatientName}
+                onChange={e => { setNewPatientName(e.target.value); setNewPatientNameError('') }}
+              />
+              {newPatientNameError && <span className="sd-dialog-error-text">{newPatientNameError}</span>}
+            </div>
+
+            <div className="sd-dialog-field">
+              <label className="sd-dialog-label" htmlFor="sd-new-patient-email">Email address</label>
+              <input
+                id="sd-new-patient-email"
+                className={`sd-dialog-input ${newPatientEmailError ? 'sd-dialog-input--error' : ''}`}
+                type="email"
+                placeholder="e.g. amara@example.com"
+                value={newPatientEmail}
+                onChange={e => { setNewPatientEmail(e.target.value); setNewPatientEmailError('') }}
+              />
+              {newPatientEmailError && <span className="sd-dialog-error-text">{newPatientEmailError}</span>}
+            </div>
+
+            {addPatientError && (
+              <div className="sd-dialog-submit-error" role="alert">⚠ {addPatientError}</div>
+            )}
+
+            <div className="sd-dialog-actions">
+              <button
+                className="sd-act-btn"
+                onClick={() => setShowAddPatientPopup(false)}
+                disabled={addingPatient}
+              >
+                Cancel
+              </button>
+              <button
+                className="sd-act-btn sd-act-btn--primary"
+                onClick={handleAddNewPatient}
+                disabled={addingPatient}
+              >
+                {addingPatient ? 'Saving…' : 'Add Patient'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
