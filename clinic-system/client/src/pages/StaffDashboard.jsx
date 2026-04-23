@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import getApiBase from '../lib/getApiBase'
+import { useNavigate } from 'react-router-dom'
 
 const styles = `
   .sd-page {
@@ -226,6 +227,7 @@ export default function StaffDashboard() {
   const { user, clinicId, loading: authLoading } = useAuth()
   const resolvedClinicId = clinicId || user?.clinic_id || null
   const API_BASE = getApiBase()
+  const navigate = useNavigate()
 
   const [queue, setQueue] = useState([])
   const [fetchLoading, setFetchLoading] = useState(true)
@@ -446,6 +448,34 @@ const handleAddPatientToQueue = async () => {
   }
 }  
 
+const handleGoToBooking = async () => {
+  if (!resolvedClinicId) {
+    showToast('No clinic is linked to this staff account.', 'error')
+    return
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/clinics`, {
+      headers: { Accept: 'application/json' },
+    })
+
+    const data = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to load clinic.')
+    }
+
+    const clinic = (data.clinics || []).find(c => c.id === resolvedClinicId)
+
+    if (!clinic) {
+      throw new Error('Assigned clinic not found.')
+    }
+
+    navigate('/booking', { state: { clinic } })
+  } catch (err) {
+    showToast(err.message, 'error')
+  }
+}
   const stats = {
     total: queue.length,
     waiting: queue.filter(entry => entry.status === 'Waiting').length,
@@ -477,7 +507,13 @@ const handleAddPatientToQueue = async () => {
 
         <section className="sd-panel">
           <header className="sd-panel-header">
-            <h2 className="sd-panel-title">Patients</h2>
+           <button
+              className="sd-act-btn"
+              type="button"
+              onClick={handleGoToBooking}
+            >
+              Book an appointment
+            </button>
 
             <form
               onSubmit={e => {
