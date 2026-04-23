@@ -193,12 +193,96 @@ const styles = `
     opacity: 0;
     transition: opacity 0.2s;
   }
+  .sd-availability {
+    margin-top: 24px;
+    background: var(--uh-surface);
+    border: 1px solid var(--uh-border);
+    border-radius: 12px;
+    box-shadow: var(--uh-shadow);
+    overflow: hidden;
+  }
 
+  .sd-availability-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--uh-border);
+  }
+
+  .sd-availability-grid {
+    display: grid;
+    gap: 12px;
+    padding: 16px 20px 20px;
+  }
+
+  .sd-availability-row {
+    display: grid;
+    grid-template-columns: 140px 120px 1fr 1fr auto;
+    gap: 10px;
+    align-items: center;
+    padding: 12px;
+    border: 1px solid var(--uh-border);
+    border-radius: 10px;
+    background: var(--uh-bg);
+  }
+
+  .sd-availability-day {
+    font-weight: 600;
+    color: var(--uh-text);
+  }
+
+  .sd-availability-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--uh-text);
+  }
+
+  .sd-availability-input {
+    height: 40px;
+    border: 1px solid var(--uh-border);
+    border-radius: 8px;
+    padding: 0 10px;
+    font: inherit;
+    background: white;
+    color: var(--uh-text);
+  }
+
+  .sd-availability-error {
+    color: #B91C1C;
+    font-size: 12px;
+    margin-top: 4px;
+  }
+
+  @media (max-width: 820px) {
+    .sd-availability-row {
+      grid-template-columns: 1fr;
+    }
+  }
   .sd-toast--visible { opacity: 1; }
   .sd-toast--success { border-left: 3px solid #15803D; color: #15803D; }
   .sd-toast--error   { border-left: 3px solid #B91C1C; color: #B91C1C; }
 `
+const DAYS = [
+  { label: 'Monday', value: 0 },
+  { label: 'Tuesday', value: 1 },
+  { label: 'Wednesday', value: 2 },
+  { label: 'Thursday', value: 3 },
+  { label: 'Friday', value: 4 },
+  { label: 'Saturday', value: 5 },
+  { label: 'Sunday', value: 6 },
+]
 
+function createDefaultAvailability() {
+  return DAYS.map(day => ({
+    day_of_week: day.value,
+    day_label: day.label,
+    id: null,
+    start_time: '08:00',
+    end_time: '17:00',
+    is_available: false,
+    error: '',
+  }))
+}
 const STATUS_SEQUENCE = ['Waiting', 'In Consultation', 'Complete']
 
 const BADGE_CLASS = {
@@ -242,12 +326,169 @@ export default function StaffDashboard() {
   const [selectedPatientId, setSelectedPatientId] = useState('')
   const [addPatientLoading, setAddPatientLoading] = useState(false)
 
+
+  const [availability, setAvailability] = useState(createDefaultAvailability())
+  const [availabilityLoading, setAvailabilityLoading] = useState(false)
+  const [availabilitySaving, setAvailabilitySaving] = useState(false)
+
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type, visible: true })
     setTimeout(() => {
       setToast(current => ({ ...current, visible: false }))
     }, 3000)
   }, [])
+
+    const validateAvailabilityRow = row => {
+    if (!row.is_available) return ''
+
+    if (!row.start_time || !row.end_time) {
+      return 'Start and end time are required.'
+    }
+
+    if (row.start_time >= row.end_time) {
+      return 'Start time must be before end time.'
+    }
+
+    return ''
+  }
+
+  const fetchAvailability = useCallback(async () => {
+    if (authLoading || !user?.id) return
+
+    setAvailabilityLoading(true)
+
+    try {
+      const res = await fetch(`${API_BASE}/api/staff/${user.id}/availability`, {
+        headers: { Accept: 'application/json' },
+      })
+
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to load availability.')
+      }
+
+      const byDay = new Map((data.availability || []).map(item => [item.day_of_week, item]))
+
+      setAvailability(
+        DAYS.map(day => {
+          const existing = byDay.get(day.value)
+
+          return {
+            day_of_week: day.value,
+            day_label: day.label,
+            id: existing?.id || null,
+            start_time: existing?.start_time?.slice(0, 5) || '08:00',
+            end_time: existing?.end_time?.slice(0, 5) || '17:00',
+            is_available: existing?.is_available || false,
+            error: '',
+          }
+        })
+      )
+    } catch (err) {
+      showToast(err.message, 'error')
+    } finally {
+      setAvailabilityLoading(false)
+    }
+  }, [authLoading, user?.id, API_BASE, showToast])
+
+  const updateAvailabilityField = (dayOfWeek, field, value) => {
+    setAvailability(current =>
+      current.map(row => {
+        if (row.day_of_week !== dayOfWeek) return row
+
+        const updated = {
+          ...row,
+          [field]: value,
+        }
+
+        return {
+          ...updated,
+          error: validateAvailabilityRow(updated),
+        }
+      })
+    )
+  }
+
+  const handleSaveAvailability = async () => {
+    if (!user?.id) return
+
+    const prepared = availability.map(row => ({
+      ...row,
+      error: validateAvailabilityRow(row),
+    }))
+
+    setAvailability(prepared)
+
+    if (prepared.some(row => row.error)) {
+      showToast('Please fix availability errors first.', 'error')
+      return
+    }
+
+    setAvailabilitySaving(true)
+
+    try {
+      for (const row of prepared) {
+        const payload = {
+          start_time: row.start_time,
+          end_time: row.end_time,
+          is_available: row.is_available,
+        }
+
+        if (row.id) {
+          const res = await fetch(
+            `${API_BASE}/api/staff/${user.id}/availability/${row.id}`,
+            {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+              },
+              body: JSON.stringify(payload),
+            }
+          )
+
+          const body = await res.json().catch(() => ({}))
+
+          if (!res.ok) {
+            throw new Error(body.error || `Failed to update ${row.day_label}.`)
+          }
+        } else {
+          const res = await fetch(`${API_BASE}/api/staff/${user.id}/availability`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+            },
+            body: JSON.stringify({
+              day_of_week: row.day_of_week,
+              start_time: row.start_time,
+              end_time: row.end_time,
+              is_available: row.is_available,
+            }),
+          })
+
+          const body = await res.json().catch(() => ({}))
+
+          if (!res.ok) {
+            if (body.error?.includes('already exists')) {
+              continue
+            }
+            throw new Error(body.error || `Failed to create ${row.day_label}.`)
+          }
+        }
+      }
+
+      await fetchAvailability()
+      showToast('Availability saved successfully.', 'success')
+    } catch (err) {
+      showToast(err.message, 'error')
+    } finally {
+      setAvailabilitySaving(false)
+    }
+  }
+
+  
 
   const fetchQueue = useCallback(async () => {
     if (authLoading) return
@@ -327,7 +568,8 @@ useEffect(() => {
   fetchQueue()
   fetchCompletedCount()
   fetchPatients()
-}, [fetchQueue, fetchCompletedCount, fetchPatients])
+  fetchAvailability()
+}, [fetchQueue, fetchCompletedCount, fetchPatients, fetchAvailability])
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -637,8 +879,85 @@ const handleGoToBooking = async () => {
             </section>
           )}
         </section>
+      
+          
+          <section className="sd-availability">
+        <header className="sd-availability-header">
+          <h2 className="sd-panel-title">Availability</h2>
+          <p className="sd-stat-label">Set the days and times you are available for bookings.</p>
+        </header>
+
+        {availabilityLoading ? (
+          <p className="sd-empty">Loading availability…</p>
+        ) : (
+          <section className="sd-availability-grid">
+            {availability.map(row => (
+              <section key={row.day_of_week} className="sd-availability-row">
+                <span className="sd-availability-day">{row.day_label}</span>
+
+                <label className="sd-availability-toggle">
+                  <input
+                    type="checkbox"
+                    checked={row.is_available}
+                    onChange={e =>
+                      updateAvailabilityField(row.day_of_week, 'is_available', e.target.checked)
+                    }
+                  />
+                  Available
+                </label>
+
+                <label>
+                  <span className="sr-only">{row.day_label} start time</span>
+                  <input
+                    type="time"
+                    className="sd-availability-input"
+                    value={row.start_time}
+                    disabled={!row.is_available}
+                    onChange={e =>
+                      updateAvailabilityField(row.day_of_week, 'start_time', e.target.value)
+                    }
+                  />
+                </label>
+
+                <label>
+                  <span className="sr-only">{row.day_label} end time</span>
+                  <input
+                    type="time"
+                    className="sd-availability-input"
+                    value={row.end_time}
+                    disabled={!row.is_available}
+                    onChange={e =>
+                      updateAvailabilityField(row.day_of_week, 'end_time', e.target.value)
+                    }
+                  />
+                </label>
+
+                <section>
+                  {row.error ? (
+                    <p className="sd-availability-error">{row.error}</p>
+                  ) : (
+                    <span className="sd-stat-label">Ready</span>
+                  )}
+                </section>
+              </section>
+            ))}
+
+            <button
+              type="button"
+              className="sd-act-btn"
+              onClick={handleSaveAvailability}
+              disabled={availabilitySaving}
+            >
+              {availabilitySaving ? 'Saving…' : 'Save availability'}
+            </button>
+          </section>
+        )}
       </section>
 
+
+      </section>
+      
+      
       <Toast message={toast.message} type={toast.type} visible={toast.visible} />
     </>
   )
