@@ -10,14 +10,12 @@ import StaffDashboard from './pages/StaffDashboard'
 import AdminDashboard from './pages/AdminDashboard'
 import QueuePage from './pages/QueuePage'
 import BookingPage from './pages/BookingPage'
-import PrivacyPage from './pages/PrivacyPage'
 
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/privacy" element={<PrivacyPage />} />
       <Route element={<Layout />}>
         <Route path="/" element={<Navigate to="/clinic" replace />} />
 

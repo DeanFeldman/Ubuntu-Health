@@ -1,33 +1,23 @@
-import getApiBase from '../../lib/getApiBase'
+import getApiBase, { resolveApiBase } from '../../lib/getApiBase'
 
 describe('getApiBase', () => {
-  const realWindow = global.window
-
-  afterEach(() => {
-    global.window = realWindow
+  test('resolveApiBase returns injected API base for non-localhost hosts', () => {
+    expect(
+      resolveApiBase('example.com', 'https://ubuntu-health-api.example.com')
+    ).toBe('https://ubuntu-health-api.example.com')
   })
 
-  test('returns API base when defined on window', () => {
-    const mockWindow = Object.create(realWindow)
-    mockWindow.__API_BASE__ = 'http://localhost:8080'
-    mockWindow.location = { hostname: 'example.com' }
-
-    global.window = mockWindow
-
-    expect(getApiBase()).toBe('http://localhost:8080')
+  test('resolveApiBase uses localhost URL for localhost', () => {
+    expect(
+      resolveApiBase('localhost', 'https://ubuntu-health-api.example.com')
+    ).toBe('http://localhost:8080')
   })
 
-  test('falls back to localhost URL when no API base is defined', () => {
-    const mockWindow = Object.create(realWindow)
-    delete mockWindow.__API_BASE__
-    mockWindow.location = { hostname: 'localhost' }
-
-    global.window = mockWindow
-
-    expect(getApiBase()).toBe('http://localhost:8080')
+  test('resolveApiBase falls back to empty string for non-localhost when no API base is defined', () => {
+    expect(resolveApiBase('example.com', '')).toBe('')
   })
 
-  test('non-localhost fallback is not tested due to jsdom limitations', () => {
-  expect(true).toBe(true)
-})
+  test('getApiBase returns a string', () => {
+    expect(typeof getApiBase()).toBe('string')
+  })
 })
