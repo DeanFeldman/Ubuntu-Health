@@ -92,7 +92,17 @@ describe('appointment scheduling routes', () => {
     test('excludes already booked appointment times', async () => {
       const appointmentBuilder = makeQueryBuilder()
       appointmentBuilder.in.mockResolvedValue({
-        data: [{ slot_datetime: '2026-04-20T07:45:00.000Z' }],
+        data: [{ slot_id: '123e4567-e89b-12d3-a456-426614174010' }],
+        error: null,
+      })
+      const slotBuilder = makeQueryBuilder()
+      slotBuilder.lt.mockResolvedValue({
+        data: [
+          {
+            id: '123e4567-e89b-12d3-a456-426614174010',
+            slot_datetime: '2026-04-20T07:45:00.000Z',
+          },
+        ],
         error: null,
       })
 
@@ -105,6 +115,7 @@ describe('appointment scheduling routes', () => {
           },
         }),
         appointments: appointmentBuilder,
+        slots: slotBuilder,
       })
 
       const res = await request(app)
@@ -114,6 +125,31 @@ describe('appointment scheduling routes', () => {
       expect(res.status).toBe(200)
       expect(res.body).toContain('07:30')
       expect(res.body).not.toContain('07:45')
+    })
+
+    test('uses clinic-specific operating hours and appointment duration', async () => {
+      const appointmentBuilder = makeQueryBuilder()
+      appointmentBuilder.in.mockResolvedValue({ data: [], error: null })
+
+      setupSupabaseHandlers({
+        clinics: makeQueryBuilder({
+          data: {
+            id: clinicId,
+            operating_hours: {
+              monday: { open: '09:10', close: '10:10' },
+            },
+            appointment_duration_minutes: 20,
+          },
+        }),
+        appointments: appointmentBuilder,
+      })
+
+      const res = await request(app)
+        .get('/api/appointments/slots')
+        .query({ clinic_id: clinicId, date: '2026-04-20' })
+
+      expect(res.status).toBe(200)
+      expect(res.body).toEqual(['09:10', '09:30', '09:50'])
     })
 
     test('respects defaults and returns empty array for closed days', async () => {
@@ -211,7 +247,60 @@ describe('appointment scheduling routes', () => {
       )
     })
 
+    test('accepts times aligned to clinic-specific duration', async () => {
+      const slotLookupBuilder = makeQueryBuilder({ data: null })
+      const slotInsertBuilder = makeQueryBuilder({
+        data: {
+          id: '123e4567-e89b-12d3-a456-426614174020',
+          slot_datetime: '2026-04-20T09:30:00.000Z',
+        },
+      })
+      const appointmentLookupBuilder = makeQueryBuilder({ data: null })
+      const appointmentInsertBuilder = makeQueryBuilder({
+        data: { id: '123e4567-e89b-12d3-a456-426614174021' },
+      })
+
+      setupSupabaseHandlers({
+        clinics: makeQueryBuilder({
+          data: {
+            id: clinicId,
+            operating_hours: {
+              monday: { open: '09:10', close: '10:10' },
+            },
+            appointment_duration_minutes: 20,
+          },
+        }),
+        slots: [slotLookupBuilder, slotInsertBuilder],
+        appointments: [appointmentLookupBuilder, appointmentInsertBuilder],
+      })
+
+      const res = await request(app)
+        .post('/api/appointments')
+        .send({
+          clinic_id: clinicId,
+          patient_id: patientId,
+          date: '2026-04-20',
+          time: '09:30',
+          booked_by: bookedBy,
+        })
+
+      expect(res.status).not.toBe(400)
+      expect(res.body.error).not.toBe(
+        'Selected time is outside clinic hours or does not match the appointment duration'
+      )
+    })
+
     test('rejects an already booked valid time', async () => {
+      const slotLookupBuilder = makeQueryBuilder({
+        data: {
+          id: '123e4567-e89b-12d3-a456-426614174030',
+          slot_datetime: '2026-04-20T07:45:00.000Z',
+        },
+      })
+      const appointmentLookupBuilder = makeQueryBuilder({
+        data: { id: '123e4567-e89b-12d3-a456-426614174099' },
+      })
+
       setupSupabaseHandlers({
         clinics: makeQueryBuilder({
           data: {
@@ -220,9 +309,8 @@ describe('appointment scheduling routes', () => {
             appointment_duration_minutes: null,
           },
         }),
-        appointments: makeQueryBuilder({
-          data: { id: '123e4567-e89b-12d3-a456-426614174099' },
-        }),
+        slots: slotLookupBuilder,
+        appointments: appointmentLookupBuilder,
       })
 
       const res = await request(app)

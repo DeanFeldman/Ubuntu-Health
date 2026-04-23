@@ -37,30 +37,49 @@ function getDefaultAppointmentDuration() {
   return DEFAULT_APPOINTMENT_DURATION_MINUTES
 }
 
-function normalizeOperatingHours(operating_hours) {
-  if (operating_hours == null) {
-    return getDefaultOperatingHours()
+function logScheduleDebug(message, payload) {
+  if (process.env.DEBUG_CLINIC_SCHEDULE !== 'true') {
+    return
   }
 
-  return operating_hours
+  console.debug(`[clinicSchedule] ${message}`, payload)
+}
+
+function normalizeOperatingHours(operating_hours) {
+  const normalizedOperatingHours =
+    operating_hours ?? getDefaultOperatingHours()
+
+  logScheduleDebug('operating_hours normalization', {
+    before: operating_hours,
+    after: normalizedOperatingHours,
+  })
+
+  return normalizedOperatingHours
 }
 
 function normalizeAppointmentDuration(duration) {
-  if (duration == null) {
-    return getDefaultAppointmentDuration()
-  }
+  const normalizedDuration = duration ?? getDefaultAppointmentDuration()
 
-  return duration
+  logScheduleDebug('appointment_duration_minutes normalization', {
+    before: duration,
+    after: normalizedDuration,
+  })
+
+  return normalizedDuration
 }
 
 function resolveClinicSchedule(clinicRow) {
   const row = clinicRow || {}
+  logScheduleDebug('raw clinic data from database', row)
+
+  const operating_hours = normalizeOperatingHours(row.operating_hours)
+  const appointment_duration_minutes = normalizeAppointmentDuration(
+    row.appointment_duration_minutes
+  )
 
   return {
-    operating_hours: normalizeOperatingHours(row.operating_hours),
-    appointment_duration_minutes: normalizeAppointmentDuration(
-      row.appointment_duration_minutes
-    ),
+    operating_hours,
+    appointment_duration_minutes,
   }
 }
 
@@ -101,6 +120,14 @@ function generateDailySlots({
 }) {
   const normalizedHours = normalizeOperatingHours(operating_hours)
   const duration = normalizeAppointmentDuration(appointment_duration_minutes)
+  logScheduleDebug('slot generation schedule', {
+    date,
+    operating_hours_before_normalization: operating_hours,
+    operating_hours_after_normalization: normalizedHours,
+    appointment_duration_minutes_before_normalization:
+      appointment_duration_minutes,
+    appointment_duration_minutes_after_normalization: duration,
+  })
   const weekday = getWeekdayName(date)
 
   if (!weekday || !Number.isFinite(duration) || duration <= 0) {

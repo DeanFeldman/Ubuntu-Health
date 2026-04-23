@@ -36,6 +36,28 @@ describe('clinicSchedule', () => {
     })
   })
 
+  test('keeps clinic-specific schedule values when they are present', () => {
+    const operating_hours = {
+      monday: { open: '09:10', close: '10:10' },
+      tuesday: { open: '', close: '' },
+      wednesday: { open: '', close: '' },
+      thursday: { open: '', close: '' },
+      friday: { open: '', close: '' },
+      saturday: { open: '', close: '' },
+      sunday: { open: '', close: '' },
+    }
+
+    expect(
+      resolveClinicSchedule({
+        operating_hours,
+        appointment_duration_minutes: 20,
+      })
+    ).toEqual({
+      operating_hours,
+      appointment_duration_minutes: 20,
+    })
+  })
+
   test('generates 15-minute slots and stops before closing time', () => {
     const slots = generateDailySlots({
       date: '2026-04-20',
@@ -46,6 +68,18 @@ describe('clinicSchedule', () => {
     expect(slots.slice(0, 4)).toEqual(['07:30', '07:45', '08:00', '08:15'])
     expect(slots.at(-1)).toBe('16:15')
     expect(slots).not.toContain('16:30')
+  })
+
+  test('generates slots from clinic-specific hours and duration', () => {
+    const slots = generateDailySlots({
+      date: '2026-04-20',
+      operating_hours: {
+        monday: { open: '09:10', close: '10:10' },
+      },
+      appointment_duration_minutes: 20,
+    })
+
+    expect(slots).toEqual(['09:10', '09:30', '09:50'])
   })
 
   test('returns an empty list for closed days', () => {
