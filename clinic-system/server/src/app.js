@@ -103,53 +103,35 @@ function getTimeFromAppointmentDatetime(slotDatetime) {
   return `${String(parsedDate.getHours()).padStart(2, '0')}:${String(parsedDate.getMinutes()).padStart(2, '0')}`
 }
 
-async function fetchBookedSlotTimes(clinicId, date) {
+async function fetchBookedSlotTimes(clinicId, startIso, endIso) {
   const { data: appointments, error: appointmentsError } = await supabase
     .from('appointments')
-    .select('slot_id, appointment_time, slot_datetime')
+    .select('slot_id')
     .eq('clinic_id', clinicId)
-    .eq('appointment_date', date)
     .in('status', ['Pending', 'Confirmed'])
 
   if (appointmentsError) throw appointmentsError
 
-  const bookedTimes = new Set(
-    (appointments || [])
-      .map((appointment) =>
-        getTimeFromAppointmentDatetime(
-          appointment.appointment_time || appointment.slot_datetime
-        )
-      )
-      .filter(Boolean)
-  )
-
   const slotIds = [...new Set((appointments || []).map((appointment) => appointment.slot_id).filter(Boolean))]
 
   if (slotIds.length === 0) {
-    return bookedTimes
+    return new Set()
   }
-
-  const startOfDay = new Date(`${date}T00:00:00.000Z`)
-  const startOfNextDay = new Date(startOfDay)
-  startOfNextDay.setUTCDate(startOfNextDay.getUTCDate() + 1)
 
   const { data: slots, error: slotsError } = await supabase
     .from('slots')
     .select('id, slot_datetime')
     .in('id', slotIds)
-    .gte('slot_datetime', startOfDay.toISOString())
-    .lt('slot_datetime', startOfNextDay.toISOString())
+    .gte('slot_datetime', startIso)
+    .lt('slot_datetime', endIso)
 
   if (slotsError) throw slotsError
 
-  ;(slots || []).forEach((slot) => {
-    const normalizedTime = getTimeFromAppointmentDatetime(slot.slot_datetime)
-    if (normalizedTime) {
-      bookedTimes.add(normalizedTime)
-    }
-  })
-
-  return bookedTimes
+  return new Set(
+    (slots || [])
+      .map((slot) => getTimeFromAppointmentDatetime(slot.slot_datetime))
+      .filter(Boolean)
+  )
 }
 
 async function findOrCreateClinicSlot(clinicId, slotDatetimeIso) {
@@ -1719,12 +1701,19 @@ app.get('/api/appointments/slots', async (req, res) => {
       return res.json([])
     }
 
-    const startOfDay = new Date(`${date}T00:00:00`)
+    const startOfDay = new Date(`${date}T00:00:00.000Z`)
     if (Number.isNaN(startOfDay.getTime())) {
       return res.status(400).json({ error: 'Invalid date format' })
     }
 
-    const bookedTimes = await fetchBookedSlotTimes(clinic_id, date)
+    const startOfNextDay = new Date(startOfDay)
+    startOfNextDay.setUTCDate(startOfNextDay.getUTCDate() + 1)
+
+    const bookedTimes = await fetchBookedSlotTimes(
+      clinic_id,
+      startOfDay.toISOString(),
+      startOfNextDay.toISOString()
+    )
 
     return res.json(dailySlots.filter((slot) => !bookedTimes.has(slot)))
   } catch (err) {
@@ -1780,12 +1769,16 @@ app.post('/api/appointments', async (req, res) => {
       })
     }
 
+    const slotRecord = await findOrCreateClinicSlot(
+      clinic_id,
+      slot_datetime.toISOString()
+    )
+
     const { data: existingAppointment, error: existingError } = await supabase
       .from('appointments')
       .select('id')
       .eq('clinic_id', clinic_id)
-      .eq('appointment_date', date)
-      .eq('appointment_time', normalizedTime)
+      .eq('slot_id', slotRecord.id)
       .in('status', ['Pending', 'Confirmed'])
       .maybeSingle()
 
@@ -1795,21 +1788,13 @@ app.post('/api/appointments', async (req, res) => {
       return res.status(409).json({ error: 'This slot is already booked' })
     }
 
-    const slotRecord = await findOrCreateClinicSlot(
-      clinic_id,
-      slot_datetime.toISOString()
-    )
-
     const { data, error } = await supabase
       .from('appointments')
       .insert({
         clinic_id,
         patient_id,
         slot_id: slotRecord.id,
-        appointment_date: date,
-        appointment_time: normalizedTime,
         status: 'Confirmed',
-        booked_by,
       })
       .select('*')
       .single()
