@@ -1,5 +1,5 @@
 export const ROLE_PERMISSIONS = {
-  Admin: ['admin', 'staff', 'clinic'],
+  Admin: ['admin', 'clinic'],
   Staff: ['staff', 'clinic'],
   Patient: ['clinic'],
 }
