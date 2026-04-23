@@ -9,9 +9,15 @@ jest.mock('@supabase/supabase-js', () => {
   const mockFrom = jest.fn()
 
   mockSingle.mockResolvedValue({ data: null, error: null })
-  mockEq.mockReturnValue({ maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }), select: mockSelect, eq: mockEq })
+  mockEq.mockReturnValue({
+    maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
+    select: mockSelect,
+    eq: mockEq,
+  })
   mockSelect.mockReturnValue({ eq: mockEq, single: mockSingle })
-  mockInsert.mockReturnValue({ select: jest.fn().mockReturnValue({ single: mockSingle }) })
+  mockInsert.mockReturnValue({
+    select: jest.fn().mockReturnValue({ single: mockSingle }),
+  })
   mockFrom.mockReturnValue({ select: mockSelect, insert: mockInsert, eq: mockEq })
 
   return {
@@ -26,15 +32,35 @@ describe('POST /api/patients', () => {
   it('returns 400 when full_name is missing', async () => {
     const res = await request(app)
       .post('/api/patients')
-      .send({ created_by: VALID_UUID })
+      .send({
+        email: 'john@example.com',
+        created_by: VALID_UUID,
+      })
+
     expect(res.status).toBe(400)
     expect(res.body).toHaveProperty('error', 'full_name is required')
+  })
+
+  it('returns 400 when email is missing', async () => {
+    const res = await request(app)
+      .post('/api/patients')
+      .send({
+        full_name: 'John Doe',
+        created_by: VALID_UUID,
+      })
+
+    expect(res.status).toBe(400)
+    expect(res.body).toHaveProperty('error', 'email is required')
   })
 
   it('returns 400 when created_by is missing', async () => {
     const res = await request(app)
       .post('/api/patients')
-      .send({ full_name: 'John Doe' })
+      .send({
+        full_name: 'John Doe',
+        email: 'john@example.com',
+      })
+
     expect(res.status).toBe(400)
     expect(res.body).toHaveProperty('error', 'created_by is required')
   })
@@ -42,8 +68,26 @@ describe('POST /api/patients', () => {
   it('returns 400 when created_by is not a valid UUID', async () => {
     const res = await request(app)
       .post('/api/patients')
-      .send({ full_name: 'John Doe', created_by: INVALID_UUID })
+      .send({
+        full_name: 'John Doe',
+        email: 'john@example.com',
+        created_by: INVALID_UUID,
+      })
+
     expect(res.status).toBe(400)
     expect(res.body).toHaveProperty('error', 'Invalid created_by ID format')
+  })
+
+  it('returns 400 when email is invalid', async () => {
+    const res = await request(app)
+      .post('/api/patients')
+      .send({
+        full_name: 'John Doe',
+        email: 'not-an-email',
+        created_by: VALID_UUID,
+      })
+
+    expect(res.status).toBe(400)
+    expect(res.body).toHaveProperty('error', 'Invalid email format')
   })
 })
