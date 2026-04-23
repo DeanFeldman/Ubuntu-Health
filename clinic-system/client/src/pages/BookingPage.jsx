@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import getApiBase from '../lib/getApiBase'
@@ -411,13 +411,58 @@ const styles = `
     flex-shrink: 0;
   }
   @keyframes bp-spin { to { transform: rotate(360deg); } }
+
+  .bp-toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    min-width: 240px;
+    max-width: 360px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.98);
+    border: 1px solid var(--uh-border);
+    box-shadow: 0 12px 30px rgba(17, 24, 39, 0.14);
+    font-size: 13px;
+    font-weight: 600;
+    opacity: 0;
+    transform: translateY(-8px);
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    z-index: 120;
+  }
+  .bp-toast--visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .bp-toast--success {
+    border-left: 3px solid #15803D;
+    color: #15803D;
+  }
+  .bp-toast--error {
+    border-left: 3px solid #B91C1C;
+    color: #B91C1C;
+  }
 `
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
+function Toast({ message, type, visible }) {
+  return (
+    <div
+      className={`bp-toast${visible ? ' bp-toast--visible' : ''}${type ? ` bp-toast--${type}` : ''}`}
+      role="status"
+      aria-live="polite"
+    >
+      {message}
+    </div>
+  )
+}
+
 export default function BookingPage() {
   const API_BASE_URL = getApiBase()
   const { user, role } = useAuth()
+  const currentUser = user
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -445,9 +490,19 @@ export default function BookingPage() {
   // ── UI state ──
   const [showConfirm, setShowConfirm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [booked, setBooked] = useState(false)
   const [bookedDetails, setBookedDetails] = useState(null)
+  const [toast, setToast] = useState({ message: '', type: '', visible: false })
+
+  const showToast = useCallback((message, type = 'success') => {
+    setToast({ message, type, visible: true })
+    window.clearTimeout(showToast.timeoutId)
+    showToast.timeoutId = window.setTimeout(() => {
+      setToast((current) => ({ ...current, visible: false }))
+    }, 2600)
+  }, [])
 
   // ── Fetch patients list for staff dropdown ──
   useEffect(() => {
@@ -536,16 +591,28 @@ export default function BookingPage() {
   }
 
   const canProceed = useMemo(() => {
+    if (!clinic?.id) return false
     if (!selectedDate || !selectedSlot) return false
-    if (!clinic) return false
     if (isStaff) {
       if (showNewPatient) {
-        return newPatientName.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newPatientEmail.trim())
+        return (
+          !!newPatientName.trim() &&
+          /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newPatientEmail.trim())
+        )
       }
-      return !!selectedPatientId
+      return !!bookingPatientId
     }
-    return true
-  }, [selectedDate, selectedSlot, clinic, isStaff, showNewPatient, newPatientName, newPatientEmail, selectedPatientId])
+    return !!bookingPatientId
+  }, [
+    selectedDate,
+    selectedSlot,
+    clinic?.id,
+    isStaff,
+    showNewPatient,
+    newPatientName,
+    newPatientEmail,
+    bookingPatientId,
+  ])
 
   // ── Open confirmation popup ──
   function handleReviewBooking() {
@@ -556,12 +623,52 @@ export default function BookingPage() {
 
   // ── Final booking submission ──
   async function handleConfirmBooking() {
+    if (isSubmitting) {
+      return
+    }
+
+    if (!selectedSlot) {
+      setSubmitError('Please select a time slot')
+      showToast('Please select a time slot', 'error')
+      return
+    }
+
+    if (!selectedDate) {
+      setSubmitError('Invalid booking details')
+      showToast('Invalid booking details', 'error')
+      return
+    }
+
+    if (!clinic?.id) {
+      setSubmitError('Invalid booking details')
+      showToast('Invalid booking details', 'error')
+      return
+    }
+
+    if (new Date(`${selectedDate}T${selectedSlot}`) < new Date()) {
+      setSubmitError('Cannot book a past time slot')
+      showToast('Cannot book a past time slot', 'error')
+      return
+    }
+
+    if (isStaff && showNewPatient) {
+      if (!validateNewPatient()) {
+        setSubmitError('Missing patient information')
+        showToast('Missing patient information', 'error')
+        return
+      }
+    } else if (!bookingPatientId) {
+      setSubmitError('Missing patient information')
+      showToast('Missing patient information', 'error')
+      return
+    }
+
     setSubmitting(true)
+    setIsSubmitting(true)
     setSubmitError('')
 
     try {
-      let patientId = bookingPatientId
-      let patientName = isStaff ? selectedPatient?.full_name : user?.full_name ?? user?.email
+      let resolvedBookingPatientId = bookingPatientId
 
       // If staff is creating a new patient, create them first
       if (isStaff && showNewPatient) {
@@ -571,13 +678,15 @@ export default function BookingPage() {
           body: JSON.stringify({
             full_name: newPatientName.trim(),
             email: newPatientEmail.trim(),
-            created_by: user.id,
+            created_by: currentUser.id,
           }),
         })
         const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Failed to create patient.')
-        patientId = data.patient?.id
-        patientName = newPatientName.trim()
+        if (!res.ok) throw new Error(data.error || 'Booking failed. Please try again.')
+        resolvedBookingPatientId = data.patient?.id
+        if (!resolvedBookingPatientId) {
+          throw new Error('Missing patient information')
+        }
       }
 
       // Book the appointment slot
@@ -586,27 +695,31 @@ export default function BookingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           clinic_id: clinic.id,
-          patient_id: patientId,
+          patient_id: resolvedBookingPatientId,
           date: selectedDate,
           time: selectedSlot,
-          booked_by: user.id,
+          booked_by: currentUser.id,
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Booking failed.')
+      if (!res.ok) throw new Error(data.error || 'Booking failed. Please try again.')
 
       setBookedDetails({
         clinicName: clinic.name,
         date: selectedDate,
         time: selectedSlot,
-        patientName,
       })
+      setSubmitError('')
       setShowConfirm(false)
       setBooked(true)
+      showToast('Appointment booked successfully', 'success')
     } catch (err) {
-      setSubmitError(err.message || 'Something went wrong. Please try again.')
+      const message = err?.message || 'Booking failed. Please try again.'
+      setSubmitError(message)
+      showToast(message, 'error')
     } finally {
       setSubmitting(false)
+      setIsSubmitting(false)
     }
   }
 
@@ -642,6 +755,7 @@ export default function BookingPage() {
     return (
       <>
         <style>{styles}</style>
+        <Toast message={toast.message} type={toast.type} visible={toast.visible} />
         <div className="bp-page">
           <div className="bp-card bp-success">
             <div className="bp-success-icon">🎉</div>
@@ -665,6 +779,7 @@ export default function BookingPage() {
   return (
     <>
       <style>{styles}</style>
+      <Toast message={toast.message} type={toast.type} visible={toast.visible} />
 
       <div className="bp-page">
 
@@ -895,16 +1010,16 @@ export default function BookingPage() {
               <button
                 className="bp-btn bp-btn-secondary"
                 onClick={() => setShowConfirm(false)}
-                disabled={submitting}
+                disabled={isSubmitting}
               >
                 Cancel
               </button>
               <button
                 className="bp-btn bp-btn-primary"
                 onClick={handleConfirmBooking}
-                disabled={submitting}
+                disabled={isSubmitting}
               >
-                {submitting ? 'Booking…' : 'Confirm'}
+                {isSubmitting ? 'Booking…' : 'Confirm'}
               </button>
             </div>
           </div>
