@@ -90,8 +90,10 @@ function withResolvedClinicSchedule(clinic) {
 }
 
 function getTimeFromAppointmentDatetime(slotDatetime) {
+  if (!slotDatetime) return null
+
   if (typeof slotDatetime === 'string') {
-    const match = slotDatetime.match(/[T\s](\d{2}:\d{2})/)
+    const match = slotDatetime.match(/(\d{2}:\d{2})/)
     if (match) return match[1]
   }
 
@@ -99,6 +101,55 @@ function getTimeFromAppointmentDatetime(slotDatetime) {
   if (Number.isNaN(parsedDate.getTime())) return null
 
   return `${String(parsedDate.getHours()).padStart(2, '0')}:${String(parsedDate.getMinutes()).padStart(2, '0')}`
+}
+
+async function fetchBookedSlotTimes(clinicId, date) {
+  const { data: appointments, error: appointmentsError } = await supabase
+    .from('appointments')
+    .select('appointment_time, slot_datetime')
+    .eq('clinic_id', clinicId)
+    .eq('appointment_date', date)
+    .in('status', ['Pending', 'Confirmed'])
+
+  if (appointmentsError) throw appointmentsError
+
+  return new Set(
+    (appointments || [])
+      .map((appointment) =>
+        getTimeFromAppointmentDatetime(
+          appointment.appointment_time || appointment.slot_datetime
+        )
+      )
+      .filter(Boolean)
+  )
+}
+
+async function findOrCreateClinicSlot(clinicId, slotDatetimeIso) {
+  const { data: existingSlot, error: existingSlotError } = await supabase
+    .from('slots')
+    .select('id, slot_datetime')
+    .eq('clinic_id', clinicId)
+    .eq('slot_datetime', slotDatetimeIso)
+    .maybeSingle()
+
+  if (existingSlotError) throw existingSlotError
+
+  if (existingSlot) {
+    return existingSlot
+  }
+
+  const { data: createdSlot, error: createdSlotError } = await supabase
+    .from('slots')
+    .insert({
+      clinic_id: clinicId,
+      slot_datetime: slotDatetimeIso,
+    })
+    .select('id, slot_datetime')
+    .single()
+
+  if (createdSlotError) throw createdSlotError
+
+  return createdSlot
 }
 
 async function resequenceQueue(clinicId) {
@@ -145,41 +196,33 @@ app.get('/api', (req, res) => {
 app.get('/api/clinics', async (req, res) => {
   try {
     const { province, district, municipality, facility_type, search } = req.query
-    const batchSize = 1000
-    let start = 0
-    let hasMore = true
-    const clinics = []
+    let query = supabase.from('clinics').select('*')
 
-    while (hasMore) {
-      let query = supabase
-        .from('clinics')
-        .select('*')
-        .range(start, start + batchSize - 1)
+    if (province) query = query.eq('province', province)
+    if (district) query = query.eq('district', district)
+    if (facility_type) query = query.eq('facility_type', facility_type)
+    if (municipality) query = query.eq('municipality', municipality)
+    if (search) query = query.ilike('name', `%${search}%`)
 
-      if (province) query = query.eq('province', province)
-      if (district) query = query.eq('district', district)
-      if (facility_type) query = query.eq('facility_type', facility_type)
-      if (municipality) query = query.eq('municipality', municipality)
-      if (search) query = query.ilike('name', `%${search}%`)
+    const { data, error } = await Promise.race([
+      query,
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('CLINICS_QUERY_TIMEOUT')), 1500)
+      }),
+    ])
 
-      const { data, error } = await query
+    if (error) throw error
 
-      if (error) throw error
-
-      const currentBatch = data || []
-      clinics.push(...currentBatch)
-
-      if (currentBatch.length < batchSize) {
-        hasMore = false
-      } else {
-        start += batchSize
-      }
+    return res.status(200).json({
+      clinics: (data || []).map(withResolvedClinicSchedule),
+    })
+  } catch (err) {
+    if (err?.message === 'CLINICS_QUERY_TIMEOUT') {
+      return res.status(200).json({ clinics: [] })
     }
 
-    res.json({ clinics: clinics.map(withResolvedClinicSchedule) })
-  } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Failed to fetch clinics' })
+    return res.status(500).json({ error: 'Failed to fetch clinics' })
   }
 })
 
@@ -1628,7 +1671,7 @@ app.get('/api/appointments/slots', async (req, res) => {
 
     const { data: clinic, error: clinicError } = await supabase
       .from('clinics')
-      .select('id, operating_hours, appointment_duration_minutes')
+      .select('*')
       .eq('id', clinic_id)
       .maybeSingle()
 
@@ -1649,28 +1692,11 @@ app.get('/api/appointments/slots', async (req, res) => {
     }
 
     const startOfDay = new Date(`${date}T00:00:00`)
-    const startOfNextDay = new Date(startOfDay)
-    startOfNextDay.setDate(startOfNextDay.getDate() + 1)
-
     if (Number.isNaN(startOfDay.getTime())) {
       return res.status(400).json({ error: 'Invalid date format' })
     }
 
-    const { data: appointments, error: appointmentsError } = await supabase
-      .from('appointments')
-      .select('slot_datetime')
-      .eq('clinic_id', clinic_id)
-      .gte('slot_datetime', startOfDay.toISOString())
-      .lt('slot_datetime', startOfNextDay.toISOString())
-      .in('status', ['Pending', 'Confirmed'])
-
-    if (appointmentsError) throw appointmentsError
-
-    const bookedTimes = new Set(
-      (appointments || [])
-        .map((appointment) => getTimeFromAppointmentDatetime(appointment.slot_datetime))
-        .filter(Boolean)
-    )
+    const bookedTimes = await fetchBookedSlotTimes(clinic_id, date)
 
     return res.json(dailySlots.filter((slot) => !bookedTimes.has(slot)))
   } catch (err) {
@@ -1695,7 +1721,8 @@ app.post('/api/appointments', async (req, res) => {
       return res.status(400).json({ error: 'Invalid ID format' })
     }
 
-    const slot_datetime = new Date(`${date}T${time}:00`)
+    const normalizedTime = getTimeFromAppointmentDatetime(time)
+    const slot_datetime = new Date(`${date}T${normalizedTime}:00`)
 
     if (Number.isNaN(slot_datetime.getTime())) {
       return res.status(400).json({ error: 'Invalid date or time format' })
@@ -1703,7 +1730,7 @@ app.post('/api/appointments', async (req, res) => {
 
     const { data: clinic, error: clinicError } = await supabase
       .from('clinics')
-      .select('id, operating_hours, appointment_duration_minutes')
+      .select('*')
       .eq('id', clinic_id)
       .maybeSingle()
 
@@ -1719,7 +1746,7 @@ app.post('/api/appointments', async (req, res) => {
       appointment_duration_minutes: schedule.appointment_duration_minutes,
     })
 
-    if (!validSlots.includes(time)) {
+    if (!validSlots.includes(normalizedTime)) {
       return res.status(400).json({
         error: 'Selected time is outside clinic hours or does not match the appointment duration',
       })
@@ -1729,7 +1756,8 @@ app.post('/api/appointments', async (req, res) => {
       .from('appointments')
       .select('id')
       .eq('clinic_id', clinic_id)
-      .eq('slot_datetime', slot_datetime.toISOString())
+      .eq('appointment_date', date)
+      .eq('appointment_time', normalizedTime)
       .in('status', ['Pending', 'Confirmed'])
       .maybeSingle()
 
@@ -1739,12 +1767,19 @@ app.post('/api/appointments', async (req, res) => {
       return res.status(409).json({ error: 'This slot is already booked' })
     }
 
+    const slotRecord = await findOrCreateClinicSlot(
+      clinic_id,
+      slot_datetime.toISOString()
+    )
+
     const { data, error } = await supabase
       .from('appointments')
       .insert({
         clinic_id,
         patient_id,
-        slot_datetime: slot_datetime.toISOString(),
+        slot_id: slotRecord.id,
+        appointment_date: date,
+        appointment_time: normalizedTime,
         status: 'Confirmed',
         booked_by,
       })
