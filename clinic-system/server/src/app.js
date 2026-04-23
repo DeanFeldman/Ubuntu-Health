@@ -1436,7 +1436,6 @@ app.get('/api/users', async (req, res) => {
   }
 })
 
-
 app.post('/api/queue/:clinicId/add-patient', async (req, res) => {
   try {
     const { clinicId } = req.params
@@ -1624,40 +1623,55 @@ app.patch('/api/staff/:staffId/availability/:availabilityId', async (req, res) =
 })
 
 // POST /api/patients — staff creates a patient record for a walk-in
+const { validatePatientInput } = require('./patientValidation')
+
 app.post('/api/patients', async (req, res) => {
   try {
     const { full_name, phone, email, date_of_birth, created_by } = req.body
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!full_name || full_name.trim() === '') {
-      return res.status(400).json({ error: 'full_name is required' })
+
+    const validation = validatePatientInput({ full_name, email, created_by })
+    if (!validation.valid) {
+      return res.status(validation.status).json({ error: validation.error })
     }
-    if (!created_by) {
-      return res.status(400).json({ error: 'created_by is required' })
-    }
-    if (!uuidRegex.test(created_by)) {
-      return res.status(400).json({ error: 'Invalid created_by ID format' })
-    }
+
     const { data: staffUser, error: staffError } = await supabase
       .from('users')
       .select('id, role')
       .eq('id', created_by)
       .maybeSingle()
+
     if (staffError) throw staffError
     if (!staffUser) return res.status(404).json({ error: 'Staff member not found' })
     if (!['Staff', 'Admin'].includes(staffUser.role)) {
       return res.status(403).json({ error: 'Only staff or admin can create patient records' })
     }
+
+    const normalizedEmail = email.trim().toLowerCase()
+
+    const { data: existingPatient, error: existingError } = await supabase
+      .from('patients')
+      .select('id')
+      .eq('email', normalizedEmail)
+      .maybeSingle()
+
+    if (existingError) throw existingError
+
+    if (existingPatient) {
+      return res.status(409).json({ error: 'A patient with this email already exists' })
+    }
+
     const { data, error } = await supabase
       .from('patients')
       .insert({
         full_name: full_name.trim(),
         phone: phone || null,
-        email: email || null,
+        email: normalizedEmail,
         date_of_birth: date_of_birth || null,
         created_by,
       })
       .select()
       .single()
+
     if (error) throw error
     return res.status(201).json({ patient: data })
   } catch (err) {
