@@ -10,19 +10,6 @@ import getApiBase from '../lib/getApiBase'
  * Slots run from 08:00–17:00 in 30-minute increments.
  * In a real system these would come from /api/appointments/slots.
  */
-function generateSlots(dateStr) {
-  if (!dateStr) return []
-  const slots = []
-  for (let h = 8; h < 17; h++) {
-    for (const m of [0, 30]) {
-      const hh = String(h).padStart(2, '0')
-      const mm = String(m).padStart(2, '0')
-      slots.push(`${hh}:${mm}`)
-    }
-  }
-  return slots
-}
-
 function formatTime(timeStr) {
   if (!timeStr) return ''
   const [h, m] = timeStr.split(':').map(Number)
@@ -479,16 +466,19 @@ export default function BookingPage() {
   // ── Generated slots for the selected date ──
   const [slots, setSlots] = useState([])
   const [slotsLoading, setSlotsLoading] = useState(false)
+  const [slotsError, setSlotsError] = useState('')
   
 
   useEffect(() => {
     if (!selectedDate || !clinic?.id) {
       setSlots([])
+      setSlotsError('')
       return
     }
 
     async function fetchSlots() {
       setSlotsLoading(true)
+      setSlotsError('')
 
       try {
         const res = await fetch(
@@ -503,7 +493,8 @@ export default function BookingPage() {
       } catch (err) {
         console.error(err)
 
-        setSlots(generateSlots(selectedDate))
+        setSlots([])
+        setSlotsError(err.message || 'Failed to load available appointment slots.')
       } finally {
         setSlotsLoading(false)
       }
@@ -807,6 +798,11 @@ export default function BookingPage() {
             <div className="bp-no-slots">
               <strong>Pick a date first</strong>
               Available slots will appear here once you choose a date.
+            </div>
+          ) : slotsError ? (
+            <div className="bp-no-slots" role="alert">
+              <strong>Unable to load slots</strong>
+              {slotsError}
             </div>
           ) : slots.length === 0 ? (
             <div className="bp-no-slots">
