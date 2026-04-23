@@ -326,5 +326,49 @@ describe('appointment scheduling routes', () => {
       expect(res.status).toBe(409)
       expect(res.body.error).toBe('This slot is already booked')
     })
+
+    test('stores appointments using slot_id without extra appointment columns', async () => {
+      const slotLookupBuilder = makeQueryBuilder({ data: null })
+      const slotInsertBuilder = makeQueryBuilder({
+        data: {
+          id: '123e4567-e89b-12d3-a456-426614174040',
+          slot_datetime: '2026-04-20T07:45:00.000Z',
+        },
+      })
+      const appointmentLookupBuilder = makeQueryBuilder({ data: null })
+      const appointmentInsertBuilder = makeQueryBuilder({
+        data: { id: '123e4567-e89b-12d3-a456-426614174041' },
+      })
+
+      setupSupabaseHandlers({
+        clinics: makeQueryBuilder({
+          data: {
+            id: clinicId,
+            operating_hours: null,
+            appointment_duration_minutes: null,
+          },
+        }),
+        slots: [slotLookupBuilder, slotInsertBuilder],
+        appointments: [appointmentLookupBuilder, appointmentInsertBuilder],
+      })
+
+      const res = await request(app)
+        .post('/api/appointments')
+        .send({
+          clinic_id: clinicId,
+          patient_id: patientId,
+          date: '2026-04-20',
+          time: '07:45',
+          booked_by: bookedBy,
+        })
+
+      expect(res.status).toBe(201)
+      expect(appointmentInsertBuilder.insert).toHaveBeenCalledWith({
+        clinic_id: clinicId,
+        patient_id: patientId,
+        slot_id: '123e4567-e89b-12d3-a456-426614174040',
+        status: 'Confirmed',
+      })
+    })
   })
 })

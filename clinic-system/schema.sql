@@ -22,6 +22,13 @@ create table clinics (
   latitude numeric,
   longitude numeric,
   operating_hours jsonb,  -- flexible JSON structure for hours per day of week
+  appointment_duration_minutes integer check (
+    appointment_duration_minutes is null
+    or (
+      appointment_duration_minutes > 0
+      and appointment_duration_minutes <= 240
+    )
+  ),
   created_at timestamp default now()
 );
 
@@ -38,6 +45,19 @@ create table users (
   clinic_id uuid references clinics(id),
   created_at timestamp default now(),
   updated_at timestamp default now()
+);
+
+-- Patients
+-- Walk-in patient records created by staff/admin users.
+create table patients (
+  id uuid default gen_random_uuid() primary key,
+  full_name text not null,
+  phone text,
+  email text,
+  date_of_birth date,
+  created_by uuid references users(id),
+  linked_user_id uuid references users(id),
+  created_at timestamp default now()
 );
 
 -- Slots
@@ -60,6 +80,9 @@ create table appointments (
   patient_id uuid references users(id),
   clinic_id uuid references clinics(id),
   slot_id uuid references slots(id),
+  appointment_date date,
+  appointment_time text,
+  booked_by uuid references users(id),
   status text default 'Pending' check (
     status in ('Pending', 'Confirmed', 'Cancelled', 'Rescheduled', 'No-show')
   ),
@@ -87,6 +110,20 @@ create table queue_entries (
 create unique index unique_active_queue_per_patient
 on queue_entries (patient_id)
 where status <> 'Complete';
+
+-- Clinic Requests
+-- Staff can request access to a clinic, and admins can approve or reject those requests.
+create table clinic_requests (
+  id uuid default gen_random_uuid() primary key,
+  staff_user_id uuid not null references users(id),
+  clinic_id uuid not null references clinics(id),
+  status text not null default 'pending' check (
+    status in ('pending', 'approved', 'rejected')
+  ),
+  created_at timestamp with time zone not null default now(),
+  reviewed_at timestamp with time zone,
+  reviewed_by uuid references users(id)
+);
 
 -- ─── FUTURE SPRINT TABLES ─────────────────────────────────────────────────────
 
