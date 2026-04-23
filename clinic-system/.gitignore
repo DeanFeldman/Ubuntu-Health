@@ -1,21 +1,27 @@
+# dependencies
 node_modules/
 client/node_modules/
 server/node_modules/
-client/coverage/
-server/coverage/
+
+# build outputs
 dist/
 build/
 client/dist/
 server/dist/
 
+# coverage
+client/coverage/
+server/coverage/
+
+# env files (ignore real ones)
 .env
 .env.*
 client/.env
 client/.env.*
 server/.env
 server/.env.*
+
+# BUT keep examples
 !.env.example
 !client/.env.example
-!server/.env.exampleclient/.env
-server/.env
-.env
+!server/.env.example
