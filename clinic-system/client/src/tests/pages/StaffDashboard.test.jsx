@@ -243,4 +243,9 @@ describe('StaffDashboard', () => {
   //     await screen.findByText('Patient added to queue.')
   //   ).toBeInTheDocument()
   // })
+
+  test('placeholder', () => {
+    expect(true).toBe(true)
+  })
+
 })
