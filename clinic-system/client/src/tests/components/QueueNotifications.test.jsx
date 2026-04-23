@@ -64,7 +64,7 @@ describe('QueueNotifications', () => {
     expect(global.fetch).not.toHaveBeenCalled()
   })
 
-  //Test 3: Successful API response rendering
+  //Test 3 Successful API response rendering
   test('renders notifications when API returns data', async () => {
     global.fetch.mockResolvedValue({
       ok: true,
