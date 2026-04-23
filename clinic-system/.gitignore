@@ -25,3 +25,8 @@ server/.env.*
 !.env.example
 !client/.env.example
 !server/.env.example
+
+# IDE / OS
+.vscode/
+.DS_Store
+Thumbs.db

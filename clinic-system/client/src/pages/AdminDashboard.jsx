@@ -621,7 +621,7 @@ export default function AdminDashboard() {
         setStaffUsers(
           (usersBody.users || []).filter((currentUser) => {
             const role = currentUser.role?.trim().toLowerCase()
-            return role && (role.includes('staff') || role === 'admin')
+            return role === 'staff'
           })
         )
       } catch (err) {

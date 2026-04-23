@@ -15,7 +15,8 @@ jest.mock('../../Utils/Permissions', () => ({
 function renderProtectedRoute(props = {}) {
   return render(
     <MemoryRouter>
-      <ProtectedRoute routeName="queue" {...props}>
+      {/* <ProtectedRoute routeName="queue" {...props}> */}
+      <ProtectedRoute routeName="staff" {...props}>
         <div>Protected Content</div>
       </ProtectedRoute>
     </MemoryRouter>
