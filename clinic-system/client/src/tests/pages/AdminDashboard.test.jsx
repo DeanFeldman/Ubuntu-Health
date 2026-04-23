@@ -583,3 +583,4 @@ expect(alerts.some(el => el.textContent.includes('API route not found'))).toBe(t
     expect(await screen.findByText('Failed to load users')).toBeInTheDocument()
   })
 })
+})
