@@ -144,6 +144,179 @@ describe('PatientDashboard', () => {
     })
   })
 
+  test('navigates to booking when book appointment button is clicked', async () => {
+    /**
+     * Verifies the booking action:
+     * clicking Book Appointment navigates to the booking page
+     * with the selected clinic in route state.
+     */
+    const user = userEvent.setup()
+
+    mockFetch({
+      clinics: [
+        {
+          id: 'clinic-1',
+          name: 'Test Clinic',
+          municipality: 'Cape Town',
+          district: 'Metro',
+          province: 'Western Cape',
+          facility_type: 'Clinic',
+        },
+      ],
+    })
+
+    render(<PatientDashboard />)
+
+    const button = await screen.findByRole('button', {
+      name: /Book appointment at Test Clinic/i,
+    })
+
+    await user.click(button)
+
+    expect(mockNavigate).toHaveBeenCalledWith('/booking', {
+      state: {
+        clinic: expect.objectContaining({
+          id: 'clinic-1',
+          name: 'Test Clinic',
+        }),
+      },
+    })
+  })
+
+  test('filters clinics by search text', async () => {
+    /**
+     * Verifies free-text search filters clinics
+     * by name, municipality, or address.
+     */
+    const user = userEvent.setup()
+
+    mockFetch({
+      clinics: [
+        {
+          id: 'clinic-1',
+          name: 'Test Clinic',
+          municipality: 'Cape Town',
+          district: 'Metro',
+          province: 'Western Cape',
+          facility_type: 'Clinic',
+          address: '123 Main Road',
+        },
+        {
+          id: 'clinic-2',
+          name: 'Other Clinic',
+          municipality: 'Durban',
+          district: 'eThekwini',
+          province: 'KwaZulu-Natal',
+          facility_type: 'Hospital',
+          address: '45 Beach Road',
+        },
+      ],
+    })
+
+    render(<PatientDashboard />)
+
+    expect(await screen.findByText('Test Clinic')).toBeInTheDocument()
+    expect(screen.getByText('Other Clinic')).toBeInTheDocument()
+
+    await user.type(
+      screen.getByPlaceholderText(/Name, municipality or address/i),
+      'Cape Town'
+    )
+
+    expect(screen.getByText('Test Clinic')).toBeInTheDocument()
+    expect(screen.queryByText('Other Clinic')).not.toBeInTheDocument()
+  })
+
+  test('filters clinics by province', async () => {
+    /**
+     * Verifies dropdown filtering by province.
+     */
+    const user = userEvent.setup()
+
+    mockFetch({
+      clinics: [
+        {
+          id: 'clinic-1',
+          name: 'Cape Clinic',
+          municipality: 'Cape Town',
+          district: 'Metro',
+          province: 'Western Cape',
+          facility_type: 'Clinic',
+        },
+        {
+          id: 'clinic-2',
+          name: 'Durban Clinic',
+          municipality: 'Durban',
+          district: 'eThekwini',
+          province: 'KwaZulu-Natal',
+          facility_type: 'Clinic',
+        },
+      ],
+    })
+
+    render(<PatientDashboard />)
+
+    expect(await screen.findByText('Cape Clinic')).toBeInTheDocument()
+    expect(screen.getByText('Durban Clinic')).toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText('Province'), 'Western Cape')
+
+    expect(screen.getByText('Cape Clinic')).toBeInTheDocument()
+    expect(screen.queryByText('Durban Clinic')).not.toBeInTheDocument()
+  })
+
+  /*test('renders clinic services when available', async () => {
+    /**
+     * Verifies services are displayed when present
+     * on the clinic record.
+     *//*
+    mockFetch({
+      clinics: [
+        {
+          id: 'clinic-1',
+          name: 'Test Clinic',
+          municipality: 'Cape Town',
+          district: 'Metro',
+          province: 'Western Cape',
+          facility_type: 'Clinic',
+          services: ['General Care', 'Vaccination'],
+        },
+      ],
+    })
+
+    render(<PatientDashboard />)
+
+    expect(await screen.findByText('Test Clinic')).toBeInTheDocument()
+    expect(screen.getByRole('listitem', { name: 'General Care' })).toBeInTheDocument()
+    expect(screen.getByRole('listitem', { name: 'Vaccination' })).toBeInTheDocument()
+  })*/
+
+  test('renders clinic even when optional fields are missing', async () => {
+    /**
+     * Verifies a clinic still renders correctly
+     * when optional fields like address or services are absent.
+     */
+    mockFetch({
+      clinics: [
+        {
+          id: 'clinic-1',
+          name: 'Minimal Clinic',
+          municipality: 'Cape Town',
+          district: 'Metro',
+          province: 'Western Cape',
+          facility_type: 'Clinic',
+        },
+      ],
+    })
+
+    render(<PatientDashboard />)
+
+    expect(await screen.findByText('Minimal Clinic')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Join queue at Minimal Clinic/i })
+    ).toBeInTheDocument()
+  })
+
   test('shows error message when clinic fetch fails', async () => {
     /**
      * Verifies the dashboard shows an error message
