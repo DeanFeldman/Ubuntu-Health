@@ -115,10 +115,19 @@ describe('AuthContext', () => {
       if (table === 'users') {
         return makeUsersQuery()
       }
-
       if (table === 'role_requests') {
         return makeRoleRequestsQuery()
       }
+      if (table === 'patients') {
+        return {
+          select: jest.fn().mockReturnThis(),
+          eq: jest.fn().mockReturnThis(),
+          is: jest.fn().mockReturnThis(),
+          update: jest.fn().mockReturnThis(),
+          maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
+        }
+      }
+      throw new Error(`Unexpected table: ${table}`)
 
       throw new Error(`Unexpected table: ${table}`)
     })

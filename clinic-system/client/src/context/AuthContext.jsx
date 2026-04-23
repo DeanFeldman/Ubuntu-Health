@@ -23,11 +23,26 @@ async function fetchOrCreateUser(authUser) {
 
     if (existingUser) {
       console.log('DB USER:', existingUser)
-
-      setUser(existingUser)   
+      setUser(existingUser)
       setRole(existingUser.role)
-
       return existingUser.role
+    }
+
+    // Check if a ghost patient record exists with the same email
+    if (authUser.email) {
+      const { data: existingPatient } = await supabase
+        .from('patients')
+        .select('id')
+        .eq('email', authUser.email)
+        .is('linked_user_id', null)
+        .maybeSingle()
+
+      if (existingPatient) {
+        await supabase
+          .from('patients')
+          .update({ linked_user_id: authUser.id })
+          .eq('id', existingPatient.id)
+      }
     }
 
     const { data: newUser, error: insertError } = await supabase
@@ -43,9 +58,8 @@ async function fetchOrCreateUser(authUser) {
 
     if (insertError) throw insertError
 
-    setUser(newUser) 
+    setUser(newUser)
     setRole(newUser.role)
-
     return newUser.role
   } catch (err) {
     console.error('Error fetching/creating user:', err)
