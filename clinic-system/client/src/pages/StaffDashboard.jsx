@@ -385,12 +385,26 @@ function createDefaultAvailability() {
     day_of_week: day.value,
     day_label: day.label,
     id: null,
-    start_time: '08:00',
-    end_time: '17:00',
+    start_time: '',
+    end_time: '',
     is_available: false,
     error: '',
   }))
 }
+
+function getClinicDayHours(clinic, dayLabel) {
+  if (!clinic) return { start_time: '', end_time: '' }
+
+  const day = dayLabel.toLowerCase()
+  const hours = clinic.operating_hours || clinic.hours || {}
+  const dayHours = hours[day]
+
+  return {
+    start_time: dayHours?.open?.slice(0, 5) || '',
+    end_time: dayHours?.close?.slice(0, 5) || '',
+  }
+}
+
 const STATUS_SEQUENCE = ['Waiting', 'In Consultation', 'Complete']
 
 const BADGE_CLASS = {
@@ -448,6 +462,8 @@ export default function StaffDashboard() {
   const [availabilityLoading, setAvailabilityLoading] = useState(false)
   const [availabilitySaving, setAvailabilitySaving] = useState(false)
 
+  const [clinicDetails, setClinicDetails] = useState(null)
+
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type, visible: true })
     setTimeout(() => {
@@ -469,8 +485,29 @@ export default function StaffDashboard() {
     return ''
   }
 
+  const fetchClinicDetails = useCallback(async () => {
+  if (authLoading || !resolvedClinicId) return
+
+  try {
+    const res = await fetch(`${API_BASE}/api/clinics/${resolvedClinicId}`, {
+      headers: { Accept: 'application/json' },
+    })
+
+    const data = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to load clinic details.')
+    }
+
+    setClinicDetails(data.clinic)
+  } catch (err) {
+    showToast(err.message, 'error')
+  }
+}, [authLoading, resolvedClinicId, API_BASE, showToast])
+
+
   const fetchAvailability = useCallback(async () => {
-    if (authLoading || !user?.id) return
+    if (authLoading || !user?.id || !clinicDetails) return
 
     setAvailabilityLoading(true)
 
@@ -491,15 +528,18 @@ export default function StaffDashboard() {
         DAYS.map(day => {
           const existing = byDay.get(day.value)
 
+          const clinicHours = getClinicDayHours(clinicDetails, day.label)
+
           return {
             day_of_week: day.value,
             day_label: day.label,
             id: existing?.id || null,
-            start_time: existing?.start_time?.slice(0, 5) || '08:00',
-            end_time: existing?.end_time?.slice(0, 5) || '17:00',
+            start_time: clinicHours.start_time,
+            end_time: clinicHours.end_time,
             is_available: existing?.is_available || false,
             error: '',
           }
+
         })
       )
     } catch (err) {
@@ -507,7 +547,13 @@ export default function StaffDashboard() {
     } finally {
       setAvailabilityLoading(false)
     }
-  }, [authLoading, user?.id, API_BASE, showToast])
+  }, [authLoading, user?.id, API_BASE, showToast,clinicDetails])
+
+  useEffect(() => {
+  if (clinicDetails) {
+    fetchAvailability()
+  }
+}, [clinicDetails, fetchAvailability])
 
   const updateAvailabilityField = (dayOfWeek, field, value) => {
     setAvailability(current =>
@@ -631,8 +677,8 @@ export default function StaffDashboard() {
       }
 
       setQueue(Array.isArray(data.queue) ? data.queue : [])
-      console.log('FIRST ENTRY PATIENT:', data.queue[0]?.patient)
-      console.log('FIRST ENTRY NAME:', data.queue[0]?.patient?.full_name)
+      // console.log('FIRST ENTRY PATIENT:', data.queue[0]?.patient)
+      // console.log('FIRST ENTRY NAME:', data.queue[0]?.patient?.full_name)
     } catch (err) {
       setFetchError(err.message)
     } finally {
@@ -681,12 +727,12 @@ const fetchPatients = useCallback(async () => {
 }, [authLoading, API_BASE])
 
 
-useEffect(() => {
-  fetchQueue()
-  fetchCompletedCount()
-  fetchPatients()
-  fetchAvailability()
-}, [fetchQueue, fetchCompletedCount, fetchPatients, fetchAvailability])
+  useEffect(() => {
+    fetchQueue()
+    fetchCompletedCount()
+    fetchPatients()
+    fetchClinicDetails()
+  }, [fetchQueue, fetchCompletedCount, fetchPatients, fetchClinicDetails])
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -1062,7 +1108,9 @@ const handleGoToBooking = async () => {
         </section>
       
           
-          <section className="sd-availability">
+        {resolvedClinicId && (
+        <section className="sd-availability">
+
         <header className="sd-availability-header">
           <h2 className="sd-panel-title">Availability</h2>
           <p className="sd-stat-label">Set the days and times you are available for bookings.</p>
@@ -1130,10 +1178,10 @@ const handleGoToBooking = async () => {
               disabled={availabilitySaving}
             >
               {availabilitySaving ? 'Saving…' : 'Save availability'}
-            </button>
+            </button> 
           </section>
         )}
-      </section>
+      </section>)}
 
 
       </section>
