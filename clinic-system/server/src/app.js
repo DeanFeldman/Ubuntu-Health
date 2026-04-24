@@ -1648,17 +1648,29 @@ app.post('/api/patients', async (req, res) => {
 
     const normalizedEmail = email.trim().toLowerCase()
 
-    const { data: existingPatient, error: existingError } = await supabase
-      .from('patients')
-      .select('id')
-      .eq('email', normalizedEmail)
-      .maybeSingle()
+    const { data: existingPatient, error: existingPatientError } = await supabase
+  .from('patients')
+  .select('id')
+  .eq('email', normalizedEmail)
+  .maybeSingle()
 
-    if (existingError) throw existingError
+  if (existingPatientError) throw existingPatientError
 
-    if (existingPatient) {
-      return res.status(409).json({ error: 'A patient with this email already exists' })
-    }
+  if (existingPatient) {
+    return res.status(409).json({ error: 'A patient with this email already exists' })
+  }
+
+  const { data: existingUser, error: existingUserError } = await supabase
+    .from('users')
+    .select('id')
+    .eq('email', normalizedEmail)
+    .maybeSingle()
+
+  if (existingUserError) throw existingUserError
+
+  if (existingUser) {
+    return res.status(409).json({ error: 'A user with this email already exists' })
+  }
 
     const { data, error } = await supabase
       .from('patients')

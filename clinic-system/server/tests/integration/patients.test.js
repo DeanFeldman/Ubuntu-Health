@@ -1,9 +1,13 @@
 const request = require('supertest')
 const app = require('../../src/app')
 
+const VALID_UUID = '0b0d9f9a-9a5e-47fe-92e0-7d1696e41464'
+const INVALID_UUID = 'not-a-uuid'
+
 let mockDb = {
-  user: { id: '0b0d9f9a-9a5e-47fe-92e0-7d1696e41464', role: 'Staff' },
+  user: { id: VALID_UUID, role: 'Staff' },
   existingPatient: null,
+  existingUser: null,
   insertedPatient: { id: 'patient-123', full_name: 'John Doe' },
 }
 
@@ -13,14 +17,20 @@ jest.mock('@supabase/supabase-js', () => {
       from: (table) => {
         return {
           select: () => ({
-            eq: () => ({
+            eq: (column) => ({
               maybeSingle: async () => {
-                if (table === 'users') {
+                if (table === 'users' && column === 'id') {
                   return { data: mockDb.user, error: null }
                 }
+
+                if (table === 'users' && column === 'email') {
+                  return { data: mockDb.existingUser, error: null }
+                }
+
                 if (table === 'patients') {
                   return { data: mockDb.existingPatient, error: null }
                 }
+
                 return { data: null, error: null }
               },
             }),
@@ -42,20 +52,17 @@ jest.mock('@supabase/supabase-js', () => {
     })),
   }
 })
-const VALID_UUID = '0b0d9f9a-9a5e-47fe-92e0-7d1696e41464'
-const INVALID_UUID = 'not-a-uuid'
 
 beforeEach(() => {
   mockDb = {
     user: { id: VALID_UUID, role: 'Staff' },
     existingPatient: null,
+    existingUser: null,
     insertedPatient: { id: 'patient-123', full_name: 'John Doe' },
   }
 })
 
-
 describe('POST /api/patients', () => {
-
   it('returns 400 when full_name is missing', async () => {
     const res = await request(app).post('/api/patients').send({
       email: 'john@example.com',
@@ -108,7 +115,6 @@ describe('POST /api/patients', () => {
     expect(res.body).toHaveProperty('error', 'Invalid email format')
   })
 
-
   it('returns 404 when created_by user not found', async () => {
     mockDb.user = null
 
@@ -133,8 +139,8 @@ describe('POST /api/patients', () => {
     expect(res.status).toBe(403)
   })
 
-  it('returns 409 when email already exists', async () => {
-    mockDb.existingPatient = { id: 'existing-id' }
+  it('returns 409 when email already exists in patients table', async () => {
+    mockDb.existingPatient = { id: 'existing-patient-id' }
 
     const res = await request(app).post('/api/patients').send({
       full_name: 'John Doe',
@@ -143,9 +149,27 @@ describe('POST /api/patients', () => {
     })
 
     expect(res.status).toBe(409)
-    expect(res.body).toHaveProperty('error')
+    expect(res.body).toHaveProperty(
+      'error',
+      'A patient with this email already exists'
+    )
   })
 
+  it('returns 409 when email already exists in users table', async () => {
+    mockDb.existingUser = { id: 'existing-user-id' }
+
+    const res = await request(app).post('/api/patients').send({
+      full_name: 'John Doe',
+      email: 'john@example.com',
+      created_by: VALID_UUID,
+    })
+
+    expect(res.status).toBe(409)
+    expect(res.body).toHaveProperty(
+      'error',
+      'A user with this email already exists'
+    )
+  })
 
   it('returns 201 and created patient for valid input', async () => {
     const res = await request(app).post('/api/patients').send({
