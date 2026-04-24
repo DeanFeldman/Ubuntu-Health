@@ -122,7 +122,6 @@ async function fetchBookedSlotTimes(clinicId, startIso, endIso) {
     .from('slots')
     .select('id, slot_datetime')
     .in('id', slotIds)
-    .gte('slot_datetime', startIso)
     .lt('slot_datetime', endIso)
 
   if (slotsError) throw slotsError
@@ -1744,24 +1743,7 @@ app.post('/api/appointments', async (req, res) => {
       return res.status(400).json({ error: 'Invalid ID format' })
     }
 
-    const { data: bookingUser, error: bookingUserError } = await supabase
-      .from('users')
-      .select('id, role, clinic_id')
-      .eq('id', booked_by)
-      .maybeSingle()
-
-    if (bookingUserError) throw bookingUserError
-
-    if (!bookingUser) {
-      return res.status(404).json({ error: 'Booking user not found' })
-    }
-
-    if (bookingUser.role === 'Staff' && bookingUser.clinic_id !== clinic_id) {
-      return res.status(403).json({
-        error: 'Staff can only book appointments for their assigned clinic',
-      })
-    }
-
+    
     const normalizedTime = getTimeFromAppointmentDatetime(time)
     const slot_datetime = new Date(`${date}T${normalizedTime}:00`)
 
@@ -1832,6 +1814,63 @@ app.post('/api/appointments', async (req, res) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to create appointment' })
+  }
+})
+
+
+
+app.get('/api/appointments/patient/:patientId', async (req, res) => {
+  try {
+    const { patientId } = req.params
+
+    const { data: appointments, error: appointmentError } = await supabase
+      .from('appointments')
+      .select('id, patient_id, clinic_id, slot_id, status, service')
+      .eq('patient_id', patientId)
+
+    if (appointmentError) throw appointmentError
+
+    const slotIds = [...new Set((appointments || []).map(a => a.slot_id).filter(Boolean))]
+    const clinicIds = [...new Set((appointments || []).map(a => a.clinic_id).filter(Boolean))]
+
+    const { data: slots, error: slotError } = await supabase
+      .from('slots')
+      .select('id, slot_datetime')
+      .in('id', slotIds)
+
+    if (slotError) throw slotError
+
+    const { data: clinics, error: clinicError } = await supabase
+      .from('clinics')
+      .select('id, name')
+      .in('id', clinicIds)
+
+    if (clinicError) throw clinicError
+
+    const slotsById = Object.fromEntries((slots || []).map(slot => [slot.id, slot]))
+    const clinicsById = Object.fromEntries((clinics || []).map(clinic => [clinic.id, clinic]))
+
+    const now = new Date()
+
+    const allAppointments = (appointments || [])
+      .map(appointment => ({
+        id: appointment.id,
+        patient_id: appointment.patient_id,
+        clinic_id: appointment.clinic_id,
+        status: appointment.status || 'Confirmed',
+        service: appointment.service || null,
+        clinic_name: clinicsById[appointment.clinic_id]?.name || 'Clinic',
+        slot_datetime: slotsById[appointment.slot_id]?.slot_datetime || null,
+      }))
+      .sort((a, b) => {
+        if (!a.slot_datetime) return 1
+        if (!b.slot_datetime) return -1
+        return new Date(a.slot_datetime) - new Date(b.slot_datetime)
+      })
+    res.json({ appointments: allAppointments })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to fetch patient appointments' })
   }
 })
 

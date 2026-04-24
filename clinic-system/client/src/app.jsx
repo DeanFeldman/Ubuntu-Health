@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
-
+import PatientAppointments from './pages/PatientAppointments'
 
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -62,6 +62,16 @@ export default function App() {
           element={
             <ProtectedRoute routeName="clinic">
               <BookingPage />
+            </ProtectedRoute>
+          }
+        />
+
+
+        <Route
+          path="/appointments"
+          element={
+            <ProtectedRoute routeName="clinic">
+              <PatientAppointments />
             </ProtectedRoute>
           }
         />
