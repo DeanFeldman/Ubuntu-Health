@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { canAccess } from '../Utils/Permissions'
 import logo from '../assets/logo.png'
 
+
 const styles = `
   :root {
     --uh-primary: #2563EB;
@@ -156,6 +157,7 @@ export default function Layout() {
   const isLoginPage = location.pathname === '/login'
   const isQueuePage = location.pathname === '/queue'
   const isBookingPage = location.pathname === '/booking'
+  const isAppointmentsPage = location.pathname === '/appointments'
 
   const handleLogout = async () => {
     await logout()
@@ -164,7 +166,7 @@ export default function Layout() {
   const showRequestStaff = role === 'Patient'
   const showRequestAdmin = role === 'Staff'
 
-  const isFlowPage = isQueuePage || isBookingPage
+  const isFlowPage = isQueuePage || isBookingPage || isAppointmentsPage
 
   return (
   <>
@@ -197,14 +199,17 @@ export default function Layout() {
                   <li><NavLink to="/clinic">Clinic</NavLink></li>
                 )}
                 {user && (
-                  <li><NavLink to="/queue">Queue</NavLink></li>
+                  <>
+                    <li><NavLink to="/queue">Queue</NavLink></li>
+                    <li><NavLink to="/appointments">Appointments</NavLink></li>
+                  </>
                 )}
               </ul>
           )}
 
           {user && (
             <menu className="uh-nav-actions">
-              {(isQueuePage || isBookingPage) && (
+              {isFlowPage && (
                 <li>
                   <button
                     className="uh-btn uh-btn-secondary"
@@ -215,7 +220,7 @@ export default function Layout() {
                 </li>
               )}
 
-              {!isBookingPage && showRequestStaff && (
+              {!isFlowPage && showRequestStaff && (
                 <li>
                   <button
                     className="uh-btn uh-btn-secondary"
@@ -226,7 +231,7 @@ export default function Layout() {
                 </li>
               )}
 
-              {!isBookingPage && showRequestAdmin && (
+              {!isFlowPage && showRequestAdmin && (
                 <li>
                   <button
                     className="uh-btn uh-btn-secondary"
@@ -237,7 +242,7 @@ export default function Layout() {
                 </li>
               )}
 
-              {!isBookingPage && (
+              {!isFlowPage && (
                 <li>
                   <button
                     className="uh-btn uh-btn-primary"
