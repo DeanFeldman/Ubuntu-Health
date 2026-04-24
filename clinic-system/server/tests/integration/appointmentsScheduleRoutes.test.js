@@ -7,6 +7,9 @@ const clinicId = '123e4567-e89b-12d3-a456-426614174000'
 const patientId = '123e4567-e89b-12d3-a456-426614174001'
 const bookedBy = '123e4567-e89b-12d3-a456-426614174002'
 
+const FUTURE_MONDAY = '2099-05-11'
+const FUTURE_SATURDAY = '2099-05-16'
+
 function makeQueryBuilder({ data = null, error = null } = {}) {
   return {
     select: jest.fn().mockReturnThis(),
@@ -45,7 +48,7 @@ jest.mock('@supabase/supabase-js', () => ({
   })),
 }))
 
-jest.mock('../src/queueNotificationService', () => ({
+jest.mock('../../src/queueNotificationService', () => ({
   configureQueueNotificationService: jest.fn(),
   checkAndTriggerNotifications: jest.fn(() => []),
 }))
@@ -61,7 +64,7 @@ describe('appointment scheduling routes', () => {
     process.env.SUPABASE_KEY = 'test-key'
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role'
 
-    app = require('../src/app')
+    app = require('../../src/app')
   })
 
   describe('GET /api/appointments/slots', () => {
@@ -82,7 +85,7 @@ describe('appointment scheduling routes', () => {
 
       const res = await request(app)
         .get('/api/appointments/slots')
-        .query({ clinic_id: clinicId, date: '2026-04-20' })
+        .query({ clinic_id: clinicId, date: FUTURE_MONDAY })
 
       expect(res.status).toBe(200)
       expect(res.body.slice(0, 4)).toEqual(['07:30', '07:45', '08:00', '08:15'])
@@ -95,12 +98,13 @@ describe('appointment scheduling routes', () => {
         data: [{ slot_id: '123e4567-e89b-12d3-a456-426614174010' }],
         error: null,
       })
+
       const slotBuilder = makeQueryBuilder()
       slotBuilder.lt.mockResolvedValue({
         data: [
           {
             id: '123e4567-e89b-12d3-a456-426614174010',
-            slot_datetime: '2026-04-20T07:45:00.000Z',
+            slot_datetime: `${FUTURE_MONDAY}T07:45:00.000Z`,
           },
         ],
         error: null,
@@ -120,7 +124,7 @@ describe('appointment scheduling routes', () => {
 
       const res = await request(app)
         .get('/api/appointments/slots')
-        .query({ clinic_id: clinicId, date: '2026-04-20' })
+        .query({ clinic_id: clinicId, date: FUTURE_MONDAY })
 
       expect(res.status).toBe(200)
       expect(res.body).toContain('07:30')
@@ -146,7 +150,7 @@ describe('appointment scheduling routes', () => {
 
       const res = await request(app)
         .get('/api/appointments/slots')
-        .query({ clinic_id: clinicId, date: '2026-04-20' })
+        .query({ clinic_id: clinicId, date: FUTURE_MONDAY })
 
       expect(res.status).toBe(200)
       expect(res.body).toEqual(['09:10', '09:30', '09:50'])
@@ -165,7 +169,7 @@ describe('appointment scheduling routes', () => {
 
       const res = await request(app)
         .get('/api/appointments/slots')
-        .query({ clinic_id: clinicId, date: '2026-04-25' })
+        .query({ clinic_id: clinicId, date: FUTURE_SATURDAY })
 
       expect(res.status).toBe(200)
       expect(res.body).toEqual([])
@@ -175,7 +179,25 @@ describe('appointment scheduling routes', () => {
       const res = await request(app).get('/api/appointments/slots')
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toBe('clinic_id and date are required')
+      expect(res.body.error).toBe('clinic_id is required')
+    })
+
+    test('returns 400 when date is missing', async () => {
+      const res = await request(app)
+        .get('/api/appointments/slots')
+        .query({ clinic_id: clinicId })
+
+      expect(res.status).toBe(400)
+      expect(res.body.error).toBe('date is required')
+    })
+
+    test('returns 400 when date is in the past', async () => {
+      const res = await request(app)
+        .get('/api/appointments/slots')
+        .query({ clinic_id: clinicId, date: '2020-01-01' })
+
+      expect(res.status).toBe(400)
+      expect(res.body.error).toBe('Past dates cannot be used for slot retrieval')
     })
 
     test('returns 404 when clinic is not found', async () => {
@@ -185,7 +207,7 @@ describe('appointment scheduling routes', () => {
 
       const res = await request(app)
         .get('/api/appointments/slots')
-        .query({ clinic_id: clinicId, date: '2026-04-20' })
+        .query({ clinic_id: clinicId, date: FUTURE_MONDAY })
 
       expect(res.status).toBe(404)
       expect(res.body.error).toBe('Clinic not found')
@@ -209,7 +231,7 @@ describe('appointment scheduling routes', () => {
         .send({
           clinic_id: clinicId,
           patient_id: patientId,
-          date: '2026-04-20',
+          date: FUTURE_MONDAY,
           time: '17:00',
           booked_by: bookedBy,
         })
@@ -236,7 +258,7 @@ describe('appointment scheduling routes', () => {
         .send({
           clinic_id: clinicId,
           patient_id: patientId,
-          date: '2026-04-20',
+          date: FUTURE_MONDAY,
           time: '07:40',
           booked_by: bookedBy,
         })
@@ -252,7 +274,7 @@ describe('appointment scheduling routes', () => {
       const slotInsertBuilder = makeQueryBuilder({
         data: {
           id: '123e4567-e89b-12d3-a456-426614174020',
-          slot_datetime: '2026-04-20T09:30:00.000Z',
+          slot_datetime: `${FUTURE_MONDAY}T09:30:00.000Z`,
         },
       })
       const appointmentLookupBuilder = makeQueryBuilder({ data: null })
@@ -279,7 +301,7 @@ describe('appointment scheduling routes', () => {
         .send({
           clinic_id: clinicId,
           patient_id: patientId,
-          date: '2026-04-20',
+          date: FUTURE_MONDAY,
           time: '09:30',
           booked_by: bookedBy,
         })
@@ -294,7 +316,7 @@ describe('appointment scheduling routes', () => {
       const slotLookupBuilder = makeQueryBuilder({
         data: {
           id: '123e4567-e89b-12d3-a456-426614174030',
-          slot_datetime: '2026-04-20T07:45:00.000Z',
+          slot_datetime: `${FUTURE_MONDAY}T07:45:00.000Z`,
         },
       })
       const appointmentLookupBuilder = makeQueryBuilder({
@@ -318,7 +340,7 @@ describe('appointment scheduling routes', () => {
         .send({
           clinic_id: clinicId,
           patient_id: patientId,
-          date: '2026-04-20',
+          date: FUTURE_MONDAY,
           time: '07:45',
           booked_by: bookedBy,
         })
@@ -332,7 +354,7 @@ describe('appointment scheduling routes', () => {
       const slotInsertBuilder = makeQueryBuilder({
         data: {
           id: '123e4567-e89b-12d3-a456-426614174040',
-          slot_datetime: '2026-04-20T07:45:00.000Z',
+          slot_datetime: `${FUTURE_MONDAY}T07:45:00.000Z`,
         },
       })
       const appointmentLookupBuilder = makeQueryBuilder({ data: null })
@@ -357,7 +379,7 @@ describe('appointment scheduling routes', () => {
         .send({
           clinic_id: clinicId,
           patient_id: patientId,
-          date: '2026-04-20',
+          date: FUTURE_MONDAY,
           time: '07:45',
           booked_by: bookedBy,
         })

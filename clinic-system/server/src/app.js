@@ -1691,18 +1691,14 @@ app.post('/api/patients', async (req, res) => {
     return res.status(500).json({ error: 'Failed to create patient record' })
   }
 })
-
+const { validateSlotRetrievalInput } = require('./appointmentSlotValidation')
 app.get('/api/appointments/slots', async (req, res) => {
   try {
     const { clinic_id, date } = req.query
 
-    if (!clinic_id || !date) {
-      return res.status(400).json({ error: 'clinic_id and date are required' })
-    }
-
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(clinic_id)) {
-      return res.status(400).json({ error: 'Invalid clinic ID format' })
+    const validation = validateSlotRetrievalInput({ clinic_id, date })
+    if (!validation.valid) {
+      return res.status(validation.status).json({ error: validation.error })
     }
 
     const { data: clinic, error: clinicError } = await supabase
