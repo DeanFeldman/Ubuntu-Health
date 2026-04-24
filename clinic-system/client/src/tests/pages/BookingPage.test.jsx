@@ -227,4 +227,28 @@ describe('BookingPage', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument()
     expect(screen.queryByText('Appointment Booked!')).not.toBeInTheDocument()
   })
+
+  test('date input prevents selecting past dates using min attribute', () => {
+  setupFetchMock()
+  renderPage()
+
+  const dateInput = screen.getByLabelText('Appointment date')
+
+  expect(dateInput).toHaveAttribute('min')
+  expect(dateInput.getAttribute('min')).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+})
+
+test('shows slot API error when available slots fail to load', async () => {
+  const user = userEvent.setup()
+  setupFetchMock({
+    slotsOk: false,
+  })
+
+  renderPage()
+
+  await user.type(screen.getByLabelText('Appointment date'), '2099-05-10')
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load slots')
+  expect(screen.getByText('Failed to load slots')).toBeInTheDocument()
+})
 })
