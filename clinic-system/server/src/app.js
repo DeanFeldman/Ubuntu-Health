@@ -1744,6 +1744,24 @@ app.post('/api/appointments', async (req, res) => {
       return res.status(400).json({ error: 'Invalid ID format' })
     }
 
+    const { data: bookingUser, error: bookingUserError } = await supabase
+      .from('users')
+      .select('id, role, clinic_id')
+      .eq('id', booked_by)
+      .maybeSingle()
+
+    if (bookingUserError) throw bookingUserError
+
+    if (!bookingUser) {
+      return res.status(404).json({ error: 'Booking user not found' })
+    }
+
+    if (bookingUser.role === 'Staff' && bookingUser.clinic_id !== clinic_id) {
+      return res.status(403).json({
+        error: 'Staff can only book appointments for their assigned clinic',
+      })
+    }
+
     const normalizedTime = getTimeFromAppointmentDatetime(time)
     const slot_datetime = new Date(`${date}T${normalizedTime}:00`)
 
