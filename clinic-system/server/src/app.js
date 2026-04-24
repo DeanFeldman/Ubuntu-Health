@@ -1818,10 +1818,16 @@ app.post('/api/appointments', async (req, res) => {
 })
 
 
-
 app.get('/api/appointments/patient/:patientId', async (req, res) => {
   try {
     const { patientId } = req.params
+
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+    if (!uuidRegex.test(patientId)) {
+      return res.status(400).json({ error: 'Invalid patient ID format' })
+    }
 
     const { data: appointments, error: appointmentError } = await supabase
       .from('appointments')
@@ -1830,33 +1836,50 @@ app.get('/api/appointments/patient/:patientId', async (req, res) => {
 
     if (appointmentError) throw appointmentError
 
-    const slotIds = [...new Set((appointments || []).map(a => a.slot_id).filter(Boolean))]
-    const clinicIds = [...new Set((appointments || []).map(a => a.clinic_id).filter(Boolean))]
+    if (!appointments || appointments.length === 0) {
+      return res.json({ appointments: [] })
+    }
 
-    const { data: slots, error: slotError } = await supabase
-      .from('slots')
-      .select('id, slot_datetime')
-      .in('id', slotIds)
+    const slotIds = [
+      ...new Set(appointments.map((appointment) => appointment.slot_id).filter(Boolean)),
+    ]
 
-    if (slotError) throw slotError
+    const clinicIds = [
+      ...new Set(appointments.map((appointment) => appointment.clinic_id).filter(Boolean)),
+    ]
 
-    const { data: clinics, error: clinicError } = await supabase
-      .from('clinics')
-      .select('id, name')
-      .in('id', clinicIds)
+    let slotsById = {}
 
-    if (clinicError) throw clinicError
+    if (slotIds.length > 0) {
+      const { data: slots, error: slotError } = await supabase
+        .from('slots')
+        .select('id, slot_datetime')
+        .in('id', slotIds)
 
-    const slotsById = Object.fromEntries((slots || []).map(slot => [slot.id, slot]))
-    const clinicsById = Object.fromEntries((clinics || []).map(clinic => [clinic.id, clinic]))
+      if (slotError) throw slotError
 
-    const now = new Date()
+      slotsById = Object.fromEntries((slots || []).map((slot) => [slot.id, slot]))
+    }
 
-    const allAppointments = (appointments || [])
-      .map(appointment => ({
+    let clinicsById = {}
+
+    if (clinicIds.length > 0) {
+      const { data: clinics, error: clinicError } = await supabase
+        .from('clinics')
+        .select('id, name')
+        .in('id', clinicIds)
+
+      if (clinicError) throw clinicError
+
+      clinicsById = Object.fromEntries((clinics || []).map((clinic) => [clinic.id, clinic]))
+    }
+
+    const allAppointments = appointments
+      .map((appointment) => ({
         id: appointment.id,
         patient_id: appointment.patient_id,
         clinic_id: appointment.clinic_id,
+        slot_id: appointment.slot_id,
         status: appointment.status || 'Confirmed',
         service: appointment.service || null,
         clinic_name: clinicsById[appointment.clinic_id]?.name || 'Clinic',
@@ -1867,12 +1890,14 @@ app.get('/api/appointments/patient/:patientId', async (req, res) => {
         if (!b.slot_datetime) return -1
         return new Date(a.slot_datetime) - new Date(b.slot_datetime)
       })
+
     res.json({ appointments: allAppointments })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to fetch patient appointments' })
   }
 })
+
 
 // Serve built frontend
 const publicPath = path.join(__dirname, '..', 'public')
