@@ -1504,7 +1504,7 @@ app.post('/api/queue/:clinicId/add-patient', async (req, res) => {
     res.status(500).json({ error: 'Failed to add patient to queue' })
   }
 })
-
+const { validateAvailabilityCreateInput, validateAvailabilityUpdateInput,} = require('./staffAvailabilityValidation')
 // GET /api/staff/:staffId/availability — retrieve staff availability
 app.get('/api/staff/:staffId/availability', async (req, res) => {
   try {
@@ -1531,21 +1531,10 @@ app.post('/api/staff/:staffId/availability', async (req, res) => {
   try {
     const { staffId } = req.params
     const { day_of_week, start_time, end_time, is_available } = req.body
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(staffId)) {
-      return res.status(400).json({ error: 'Invalid staff ID format' })
-    }
-    if (day_of_week === undefined || day_of_week === null) {
-      return res.status(400).json({ error: 'day_of_week is required' })
-    }
-    if (!Number.isInteger(day_of_week) || day_of_week < 0 || day_of_week > 6) {
-      return res.status(400).json({ error: 'day_of_week must be an integer between 0 and 6' })
-    }
-    if (!start_time || !end_time) {
-      return res.status(400).json({ error: 'start_time and end_time are required' })
-    }
-    if (start_time >= end_time) {
-      return res.status(400).json({ error: 'start_time must be before end_time' })
+    const validation = validateAvailabilityCreateInput({ staffId, day_of_week, start_time, end_time })
+
+    if (!validation.valid) {
+      return res.status(validation.status).json({ error: validation.error })
     }
     const { data: staffUser, error: userError } = await supabase
       .from('users')
@@ -1585,15 +1574,9 @@ app.patch('/api/staff/:staffId/availability/:availabilityId', async (req, res) =
   try {
     const { staffId, availabilityId } = req.params
     const { start_time, end_time, is_available } = req.body
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(staffId) || !uuidRegex.test(availabilityId)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
-    if (!start_time && !end_time && is_available === undefined) {
-      return res.status(400).json({ error: 'At least one field must be provided to update' })
-    }
-    if (start_time && end_time && start_time >= end_time) {
-      return res.status(400).json({ error: 'start_time must be before end_time' })
+    const validation = validateAvailabilityUpdateInput({staffId,availabilityId,start_time,end_time,is_available,})
+    if (!validation.valid) {
+      return res.status(validation.status).json({ error: validation.error })
     }
     const { data: existing, error: fetchError } = await supabase
       .from('staff_availability')
@@ -1691,6 +1674,7 @@ app.post('/api/patients', async (req, res) => {
     return res.status(500).json({ error: 'Failed to create patient record' })
   }
 })
+
 const { validateSlotRetrievalInput } = require('./appointmentSlotValidation')
 app.get('/api/appointments/slots', async (req, res) => {
   try {

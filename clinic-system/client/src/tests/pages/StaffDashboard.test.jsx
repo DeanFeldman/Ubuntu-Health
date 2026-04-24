@@ -290,4 +290,48 @@ describe('StaffDashboard', () => {
       await screen.findByText('Please fix availability errors first.')
     ).toBeInTheDocument()
   })
+
+test('handles empty availability state without crashing', async () => {
+  setupFetchMock({ availability: [] })
+
+  renderDashboard()
+
+  expect(await screen.findByText('Availability')).toBeInTheDocument()
+
+  expect(
+    screen.getByText('Set the days and times you are available for bookings.')
+  ).toBeInTheDocument()
+
+  expect(await screen.findByText('Monday')).toBeInTheDocument()
+  expect(await screen.findByText('Sunday')).toBeInTheDocument()
+
+  expect(
+    screen.getByRole('button', { name: /save availability/i })
+  ).toBeInTheDocument()
+})
+test('renders existing availability data correctly', async () => {
+  setupFetchMock({
+    availability: [
+      {
+        id: 'availability-1',
+        day_of_week: 0,
+        start_time: '09:00:00',
+        end_time: '15:30:00',
+        is_available: true,
+      },
+    ],
+  })
+
+  renderDashboard()
+
+  await screen.findByText('Availability')
+
+  // Check at least one checkbox is checked (instead of assuming index)
+  const checkboxes = await screen.findAllByRole('checkbox')
+  expect(checkboxes.some((cb) => cb.checked)).toBe(true)
+
+  expect(screen.getByDisplayValue('09:00')).toBeInTheDocument()
+  expect(screen.getByDisplayValue('15:30')).toBeInTheDocument()
+})
+  
 })
