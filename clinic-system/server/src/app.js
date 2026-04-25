@@ -5,6 +5,8 @@ const { createClient } = require('@supabase/supabase-js')
 require('dotenv').config()
 
 const app = express()
+const DEFAULT_ESTIMATED_WAIT_APPOINTMENT_DURATION = 15
+const ESTIMATED_WAIT_FALLBACK_MESSAGE = 'Estimated wait time may be inaccurate'
 const {
   checkAndTriggerNotifications,
   configureQueueNotificationService,
@@ -86,6 +88,94 @@ function withResolvedClinicSchedule(clinic) {
     ...clinic,
     operating_hours: schedule.operating_hours,
     appointment_duration_minutes: schedule.appointment_duration_minutes,
+  }
+}
+
+async function fetchClinicQueueMetrics(clinicId) {
+  const { data: clinic, error: clinicError } = await supabase
+    .from('clinics')
+    .select('appointment_duration_minutes')
+    .eq('id', clinicId)
+    .maybeSingle()
+
+  if (clinicError) throw clinicError
+  if (!clinic) return null
+
+  const rawAppointmentDuration = Number(clinic.appointment_duration_minutes)
+  const hasAppointmentDuration =
+    Number.isFinite(rawAppointmentDuration) && rawAppointmentDuration > 0
+  const appointmentDuration = hasAppointmentDuration
+    ? rawAppointmentDuration
+    : DEFAULT_ESTIMATED_WAIT_APPOINTMENT_DURATION
+
+  const { count, error: staffError } = await supabase
+    .from('users')
+    .select('id', { count: 'exact', head: true })
+    .eq('clinic_id', clinicId)
+    .in('role', ['Staff', 'Admin'])
+
+  if (staffError) throw staffError
+
+  const rawStaffCount = Number(count)
+  const hasStaffCount = Number.isFinite(rawStaffCount) && rawStaffCount > 0
+
+  return {
+    appointmentDuration,
+    staffCount: hasStaffCount ? rawStaffCount : 1,
+    fallbackUsed: !hasAppointmentDuration || !hasStaffCount,
+  }
+}
+
+function calculateEstimatedWaitTime({
+  patientsAhead,
+  appointmentDuration,
+  staffCount,
+}) {
+  const safePatientsAhead = Math.max(Number(patientsAhead) || 0, 0)
+  const rawAppointmentDuration = Number(appointmentDuration)
+  const rawStaffCount = Number(staffCount)
+  const hasAppointmentDuration =
+    Number.isFinite(rawAppointmentDuration) && rawAppointmentDuration > 0
+  const hasStaffCount = Number.isFinite(rawStaffCount) && rawStaffCount > 0
+  const safeAppointmentDuration = hasAppointmentDuration
+    ? rawAppointmentDuration
+    : DEFAULT_ESTIMATED_WAIT_APPOINTMENT_DURATION
+  const safeStaffCount = hasStaffCount ? rawStaffCount : 1
+  const estimatedWaitTime =
+    safePatientsAhead === 0
+      ? 0
+      : Math.ceil((safePatientsAhead * safeAppointmentDuration) / safeStaffCount)
+
+  return {
+    estimatedWaitTime,
+    fallbackUsed: !hasAppointmentDuration || !hasStaffCount,
+  }
+}
+
+async function fetchWaitingQueuePosition(clinicId, patientId) {
+  const { data, error } = await supabase
+    .from('queue_entries')
+    .select('position')
+    .eq('clinic_id', clinicId)
+    .eq('patient_id', patientId)
+    .eq('status', 'Waiting')
+    .maybeSingle()
+
+  if (error) throw error
+  if (!data) return null
+
+  const { count: patientsAhead, error: countError } = await supabase
+    .from('queue_entries')
+    .select('*', { count: 'exact', head: true })
+    .eq('clinic_id', clinicId)
+    .eq('status', 'Waiting')
+    .lt('position', data.position)
+
+  if (countError) throw countError
+
+  return {
+    position: data.position,
+    patientsAhead: patientsAhead || 0,
   }
 }
 
@@ -235,6 +325,32 @@ app.get('/api/clinics', async (req, res) => {
   }
 })
 
+// GET /api/clinics/:id/queue-metrics
+app.get('/api/clinics/:id/queue-metrics', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(id)) {
+      return res.status(400).json({ error: 'Invalid clinic ID format' })
+    }
+
+    const metrics = await fetchClinicQueueMetrics(id)
+
+    if (!metrics) {
+      return res.status(404).json({ error: 'Clinic not found' })
+    }
+
+    return res.json({
+      appointmentDuration: metrics.appointmentDuration,
+      staffCount: metrics.staffCount,
+    })
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: 'Failed to fetch clinic queue metrics' })
+  }
+})
+
 // GET /api/clinics/:id
 app.get('/api/clinics/:id', async (req, res) => {
   try {
@@ -324,6 +440,46 @@ app.get('/api/queue/:clinicId', async (req, res) => {
 })
 
 
+// GET /api/queue/:clinicId/estimated-wait-time/:patientId — retrieve a patient's estimated wait time
+app.get('/api/queue/:clinicId/estimated-wait-time/:patientId', async (req, res) => {
+  try {
+    const { clinicId, patientId } = req.params
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(clinicId) || !uuidRegex.test(patientId)) {
+      return res.status(400).json({ error: 'Invalid ID format' })
+    }
+
+    const queuePosition = await fetchWaitingQueuePosition(clinicId, patientId)
+
+    if (!queuePosition) {
+      return res.status(404).json({ error: 'No active queue entry found for this patient' })
+    }
+
+    const queueMetrics = await fetchClinicQueueMetrics(clinicId)
+    const appointmentDuration =
+      queueMetrics?.appointmentDuration ??
+      DEFAULT_ESTIMATED_WAIT_APPOINTMENT_DURATION
+    const staffCount = queueMetrics?.staffCount ?? 1
+    const waitEstimate = calculateEstimatedWaitTime({
+      patientsAhead: queuePosition.patientsAhead,
+      appointmentDuration,
+      staffCount,
+    })
+
+    return res.json({
+      position: queuePosition.position,
+      patientsAhead: queuePosition.patientsAhead,
+      appointmentDuration,
+      staffCount,
+      estimatedWaitTime: waitEstimate.estimatedWaitTime,
+    })
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: 'Failed to fetch estimated wait time' })
+  }
+})
+
 // GET /api/queue/:clinicId/position/:patientId — retrieve a patient's position in the queue
 app.get('/api/queue/:clinicId/position/:patientId', async (req, res) => {
   try {
@@ -334,18 +490,34 @@ app.get('/api/queue/:clinicId/position/:patientId', async (req, res) => {
       return res.status(400).json({ error: 'Invalid ID format' })
     }
 
-    const { data, error } = await supabase
-      .from('queue_entries')
-      .select('position')
-      .eq('clinic_id', clinicId)
-      .eq('patient_id', patientId)
-      .eq('status', 'Waiting')
-      .maybeSingle()
+    const queuePosition = await fetchWaitingQueuePosition(clinicId, patientId)
 
-    if (error) throw error
-    if (!data) return res.status(404).json({ error: 'No active queue entry found for this patient' })
+    if (!queuePosition) {
+      return res.status(404).json({ error: 'No active queue entry found for this patient' })
+    }
 
-    res.json({ position: data.position })
+    const queueMetrics = await fetchClinicQueueMetrics(clinicId)
+    const appointmentDuration =
+      queueMetrics?.appointmentDuration ??
+      DEFAULT_ESTIMATED_WAIT_APPOINTMENT_DURATION
+    const staffCount = queueMetrics?.staffCount ?? 1
+    const waitEstimate = calculateEstimatedWaitTime({
+      patientsAhead: queuePosition.patientsAhead,
+      appointmentDuration,
+      staffCount,
+    })
+
+    const response = {
+      position: queuePosition.position,
+      patientsAhead: queuePosition.patientsAhead,
+      estimatedWaitTime: waitEstimate.estimatedWaitTime,
+    }
+
+    if (queueMetrics?.fallbackUsed || waitEstimate.fallbackUsed || !queueMetrics) {
+      response.message = ESTIMATED_WAIT_FALLBACK_MESSAGE
+    }
+
+    res.json(response)
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to fetch queue position' })

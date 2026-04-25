@@ -38,6 +38,26 @@ describe('Queue GET endpoints', () => {
 
     if (res.statusCode === 200) {
       expect(res.body).toHaveProperty('position')
+      expect(res.body).toHaveProperty('patientsAhead')
+      expect(res.body).toHaveProperty('estimatedWaitTime')
+    }
+  }, 15000)
+
+  test('GET /api/queue/:clinicId/estimated-wait-time/:patientId with invalid ids returns 400 or 500', async () => {
+    const res = await request(app).get(`/api/queue/${invalidId}/estimated-wait-time/${invalidId}`)
+    expect([400, 500]).toContain(res.statusCode)
+  })
+
+  test('GET /api/queue/:clinicId/estimated-wait-time/:patientId with valid ids returns 200, 404 or 500', async () => {
+    const res = await request(app).get(`/api/queue/${validClinicId}/estimated-wait-time/${validPatientId}`)
+    expect([200, 404, 500]).toContain(res.statusCode)
+
+    if (res.statusCode === 200) {
+      expect(res.body).toHaveProperty('position')
+      expect(res.body).toHaveProperty('patientsAhead')
+      expect(res.body).toHaveProperty('appointmentDuration')
+      expect(res.body).toHaveProperty('staffCount')
+      expect(res.body).toHaveProperty('estimatedWaitTime')
     }
   }, 15000)
 

@@ -427,6 +427,23 @@ const fetchQueue = useCallback(async () => {
       return
     }
 
+    let waitData = null
+
+    try {
+      const waitRes = await fetch(
+        `${API_BASE}/api/queue/${clinicId}/estimated-wait-time/${patientId}`,
+        {
+          headers: { Accept: 'application/json' },
+        }
+      )
+
+      if (waitRes.ok) {
+        waitData = await waitRes.json().catch(() => null)
+      }
+    } catch {
+      waitData = null
+    }
+
     // Display position is recalculated from active rows so completed/skipped patients do not count.
     const visibleQueue = fullQueue
       .filter(entry => ['Waiting', 'Called', 'In Consultation'].includes(entry.status))
@@ -471,6 +488,7 @@ const fetchQueue = useCallback(async () => {
       position: displayPosition,
       people_ahead: peopleAhead,
       clinic_name: clinicName,
+      estimated_wait_minutes: waitData?.estimatedWaitTime ?? null,
     })
   } catch (err) {
     setFetchError(err.message)

@@ -167,6 +167,82 @@ describe('QueuePage join flow', () => {
       screen.getByRole('button', { name: 'Browse clinics' })
     ).toBeInTheDocument()
   })
+
+  test('displays estimated wait time returned by backend', async () => {
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          queue: [
+            {
+              id: 'entry-1',
+              clinic_id: 'clinic-123',
+              patient_id: 'patient-123',
+              clinic_name: 'Test Clinic',
+              position: 2,
+              status: 'Waiting',
+              joined_at: '2026-04-16T10:00:00.000Z',
+            },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          position: 2,
+          patientsAhead: 1,
+          appointmentDuration: 15,
+          staffCount: 1,
+          estimatedWaitTime: 15,
+        }),
+      })
+
+    render(<QueuePage />)
+
+    expect(await screen.findByText('Estimated wait')).toBeInTheDocument()
+    expect(screen.getByText('15 min')).toBeInTheDocument()
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/queue/clinic-123/estimated-wait-time/patient-123'),
+      expect.objectContaining({
+        headers: { Accept: 'application/json' },
+      })
+    )
+  })
+
+  test('hides estimated wait row when backend wait time request fails', async () => {
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          queue: [
+            {
+              id: 'entry-1',
+              clinic_id: 'clinic-123',
+              patient_id: 'patient-123',
+              clinic_name: 'Test Clinic',
+              position: 2,
+              status: 'Waiting',
+              joined_at: '2026-04-16T10:00:00.000Z',
+            },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: async () => ({ error: 'Failed to fetch estimated wait time' }),
+      })
+
+    render(<QueuePage />)
+
+    expect(await screen.findByText('Track your live queue position.')).toBeInTheDocument()
+    expect(screen.queryByText('Estimated wait')).not.toBeInTheDocument()
+  })
+
   test('staff can request clinic access from the join modal', async () => {
   const user = userEvent.setup()
 
