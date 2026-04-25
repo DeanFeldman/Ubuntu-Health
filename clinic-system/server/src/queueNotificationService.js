@@ -49,7 +49,7 @@ function getPositionNotification(oldEntry, newEntry) {
 
 function getStatusNotification(oldEntry, newEntry) {
   // Consultation is a one-time transition alert, not a repeated status reminder.
-  if (oldEntry?.status === CONSULTATION_STATUS) return null
+  if (oldEntry?.status !== 'Waiting') return null
   if (newEntry?.status !== CONSULTATION_STATUS) return null
 
   return {

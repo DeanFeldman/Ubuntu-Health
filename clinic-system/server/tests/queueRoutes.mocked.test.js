@@ -854,6 +854,170 @@ describe('Mocked app.js route branches', () => {
     expect(res.body).toEqual({ error: 'Failed to fetch queue notifications' })
   })
 
+  test('PATCH queue status sends call notification on Waiting to In Consultation', async () => {
+    scenario.maybeSingle.queue_entries = [
+      {
+        data: { status: 'Waiting' },
+        error: null,
+      },
+    ]
+
+    scenario.thenable.queue_entries = [
+      // oldQueue snapshot before update
+      {
+        data: [
+          {
+            id: validQueueEntryId,
+            clinic_id: validClinicId,
+            patient_id: validPatientId,
+            position: 1,
+            status: 'Waiting',
+          },
+        ],
+        error: null,
+      },
+      // resequence active waiting/called entries
+      { data: [], error: null },
+      // resequence verification snapshot
+      { data: [], error: null },
+      // newQueue snapshot after update
+      {
+        data: [
+          {
+            id: validQueueEntryId,
+            clinic_id: validClinicId,
+            patient_id: validPatientId,
+            position: 0,
+            status: 'In Consultation',
+          },
+        ],
+        error: null,
+      },
+    ]
+
+    scenario.single.queue_entries = [
+      {
+        data: {
+          id: validQueueEntryId,
+          clinic_id: validClinicId,
+          patient_id: validPatientId,
+          position: 0,
+          status: 'In Consultation',
+        },
+        error: null,
+      },
+    ]
+
+    scenario.single.queue_notifications = [
+      {
+        data: {
+          id: 'queue-notification-1',
+          type: 'IN_CONSULTATION',
+        },
+        error: null,
+      },
+    ]
+
+    scenario.thenable.notifications = [
+      { data: null, error: null },
+    ]
+
+    const res = await request(app)
+      .patch(`/api/queue/${validClinicId}/entry/${validQueueEntryId}/status`)
+      .send({ status: 'In Consultation' })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body.queue_notifications).toEqual([
+      {
+        id: 'queue-notification-1',
+        type: 'IN_CONSULTATION',
+      },
+    ])
+
+    const queueNotificationBuilder = createdBuilders.find(
+      (builder) => builder.table === 'queue_notifications'
+    )
+    expect(queueNotificationBuilder.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queue_entry_id: validQueueEntryId,
+        patient_id: validPatientId,
+        clinic_id: validClinicId,
+        type: 'IN_CONSULTATION',
+        position: null,
+      })
+    )
+
+    const notificationBuilder = createdBuilders.find(
+      (builder) => builder.table === 'notifications'
+    )
+    expect(notificationBuilder.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: validPatientId,
+        type: 'queue_alert',
+        channel: 'push',
+        message: 'You are being called — please make your way to the consultation room.',
+        delivered: false,
+      })
+    )
+  })
+
+  test('PATCH queue status does not notify on In Consultation to Complete', async () => {
+    scenario.maybeSingle.queue_entries = [
+      {
+        data: { status: 'In Consultation' },
+        error: null,
+      },
+    ]
+
+    scenario.thenable.queue_entries = [
+      // oldQueue snapshot before update
+      {
+        data: [
+          {
+            id: validQueueEntryId,
+            clinic_id: validClinicId,
+            patient_id: validPatientId,
+            position: 0,
+            status: 'In Consultation',
+          },
+        ],
+        error: null,
+      },
+      // resequence active waiting/called entries
+      { data: [], error: null },
+      // resequence verification snapshot
+      { data: [], error: null },
+      // newQueue snapshot after complete status is excluded
+      { data: [], error: null },
+    ]
+
+    scenario.single.queue_entries = [
+      {
+        data: {
+          id: validQueueEntryId,
+          clinic_id: validClinicId,
+          patient_id: validPatientId,
+          position: 0,
+          status: 'Complete',
+        },
+        error: null,
+      },
+    ]
+
+    const res = await request(app)
+      .patch(`/api/queue/${validClinicId}/entry/${validQueueEntryId}/status`)
+      .send({ status: 'Complete' })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body.queue_notifications).toEqual([])
+    expect(
+      createdBuilders.some((builder) => builder.table === 'queue_notifications')
+    ).toBe(false)
+    expect(
+      createdBuilders.some((builder) => builder.table === 'notifications')
+    ).toBe(false)
+  })
+
   /**
    * Completed count:
    * invalid clinic id should fail validation immediately.
