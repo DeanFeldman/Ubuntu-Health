@@ -111,6 +111,15 @@ describe('queue notification transition detection', () => {
       },
     ])
   })
+
+  test('does not notify when a non-waiting entry enters consultation', () => {
+    const rows = getQueueNotificationRows(
+      [{ ...baseEntry, id: 'entry-1', position: 4, status: 'Called' }],
+      [{ ...baseEntry, id: 'entry-1', position: 4, status: 'In Consultation' }]
+    )
+
+    expect(rows).toEqual([])
+  })
 })
 
 describe('checkAndTriggerNotifications', () => {
@@ -235,6 +244,15 @@ describe('queue notification additional edge cases', () => {
   test('does not duplicate consultation notifications', () => {
     const rows = getQueueNotificationRows(
       [{ ...baseEntry, id: 'entry-1', status: 'In Consultation' }],
+      [{ ...baseEntry, id: 'entry-1', status: 'In Consultation' }]
+    )
+
+    expect(rows).toEqual([])
+  })
+
+  test('does not notify when a new consultation entry has no waiting history', () => {
+    const rows = getQueueNotificationRows(
+      [],
       [{ ...baseEntry, id: 'entry-1', status: 'In Consultation' }]
     )
 

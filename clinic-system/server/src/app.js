@@ -1013,27 +1013,25 @@ app.patch('/api/queue/:clinicId/entry/:entryId/status', async (req, res) => {
 
     if (updateError) throw updateError
 
-if (['In Consultation', 'Complete'].includes(status)) {
-  await resequenceQueue(clinicId)
-}
+    if (['In Consultation', 'Complete'].includes(status)) {
+      await resequenceQueue(clinicId)
+    }
     
 
     const queueNotifications = await triggerQueueNotificationsForClinicSafely(clinicId, oldQueue)
 
-    // Insert notification for the patient on status change
-    const notificationMessages = {
-      'Called': 'You are being called — please make your way to the consultation room.',
-      'Complete': 'Your visit is complete. Thank you for using Ubuntu Health.'
-    }
+    const shouldNotifyPatientCalled =
+      currentEntry.status === 'Waiting' &&
+      updatedEntry.status === 'In Consultation'
 
-    if (notificationMessages[status]) {
+    if (shouldNotifyPatientCalled) {
       await supabase
         .from('notifications')
         .insert({
           user_id: updatedEntry.patient_id,
           type: 'queue_alert',
           channel: 'push',
-          message: notificationMessages[status],
+          message: 'You are being called — please make your way to the consultation room.',
           sent_at: new Date().toISOString(),
           delivered: false
         })
