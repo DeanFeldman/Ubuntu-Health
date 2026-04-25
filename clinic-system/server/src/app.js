@@ -1900,14 +1900,11 @@ app.get('/api/appointments/patient/:patientId', async (req, res) => {
 
 app.get('/api/appointments/clinic/:clinicId', async (req, res) => {
   try {
-    if (!supabase) {
-      return res.status(500).json({ error: 'Supabase not configured' })
-    }
-
     const { clinicId } = req.params
     const { date } = req.query
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
     if (!uuidRegex.test(clinicId)) {
       return res.status(400).json({ error: 'Invalid clinic ID format' })
@@ -1917,33 +1914,92 @@ app.get('/api/appointments/clinic/:clinicId', async (req, res) => {
       return res.status(400).json({ error: 'Date is required' })
     }
 
-    const start = `${date}T00:00:00`
-    const end = `${date}T23:59:59`
-
-    const { data, error } = await supabase
+    const { data: appointments, error: appointmentError } = await supabase
       .from('appointments')
-      .select(`
-        id,
-        clinic_id,
-        patient_id,
-        slot_datetime,
-        status,
-        patient:users!appointments_patient_id_fkey (
-          id,
-          full_name,
-          email
-        )
-      `)
+      .select('id, patient_id, clinic_id, slot_id, status, service')
       .eq('clinic_id', clinicId)
-      .gte('slot_datetime', start)
-      .lte('slot_datetime', end)
-      .order('slot_datetime', { ascending: true })
 
-    if (error) throw error
+    if (appointmentError) throw appointmentError
 
-    res.json({ appointments: data || [] })
+    if (!appointments || appointments.length === 0) {
+      return res.json({ appointments: [] })
+    }
+
+    const slotIds = [
+      ...new Set(appointments.map(appointment => appointment.slot_id).filter(Boolean)),
+    ]
+
+    const patientIds = [
+      ...new Set(appointments.map(appointment => appointment.patient_id).filter(Boolean)),
+    ]
+
+    let slotsById = {}
+
+    if (slotIds.length > 0) {
+      const { data: slots, error: slotError } = await supabase
+        .from('slots')
+        .select('id, slot_datetime')
+        .in('id', slotIds)
+
+      if (slotError) throw slotError
+
+      slotsById = Object.fromEntries((slots || []).map(slot => [slot.id, slot]))
+    }
+
+    let usersById = {}
+
+    if (patientIds.length > 0) {
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('id, full_name, email')
+        .in('id', patientIds)
+
+      if (usersError) throw usersError
+
+      usersById = Object.fromEntries((users || []).map(user => [user.id, user]))
+    }
+
+    let patientsById = {}
+
+    if (patientIds.length > 0) {
+      const { data: patients, error: patientsError } = await supabase
+        .from('patients')
+        .select('id, full_name, email')
+        .in('id', patientIds)
+
+      if (patientsError) throw patientsError
+
+      patientsById = Object.fromEntries((patients || []).map(patient => [patient.id, patient]))
+    }
+
+    const filteredAppointments = appointments
+      .map(appointment => {
+        const slotDatetime = slotsById[appointment.slot_id]?.slot_datetime || null
+        const patient =
+          usersById[appointment.patient_id] ||
+          patientsById[appointment.patient_id] ||
+          null
+
+        return {
+          id: appointment.id,
+          patient_id: appointment.patient_id,
+          clinic_id: appointment.clinic_id,
+          slot_id: appointment.slot_id,
+          status: appointment.status || 'Confirmed',
+          service: appointment.service || null,
+          slot_datetime: slotDatetime,
+          patient,
+        }
+      })
+      .filter(appointment => {
+        if (!appointment.slot_datetime) return false
+        return appointment.slot_datetime.slice(0, 10) === date
+      })
+      .sort((a, b) => new Date(a.slot_datetime) - new Date(b.slot_datetime))
+
+    res.json({ appointments: filteredAppointments })
   } catch (err) {
-    console.error(err)
+    console.error('Failed to fetch clinic appointments:', err)
     res.status(500).json({ error: 'Failed to fetch clinic appointments' })
   }
 })

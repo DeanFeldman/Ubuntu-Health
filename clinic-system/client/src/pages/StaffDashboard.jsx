@@ -1106,13 +1106,6 @@ const handleGoToBooking = async () => {
         <section className="sd-panel">
           <header className="sd-panel-header">
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <button
-                className="sd-act-btn"
-                type="button"
-                onClick={handleGoToBooking}
-              >
-                Book an appointment
-              </button>
 
               <button
                 className="sd-act-btn"
