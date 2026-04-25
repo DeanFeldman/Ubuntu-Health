@@ -464,6 +464,23 @@ export default function StaffDashboard() {
 
   const [clinicDetails, setClinicDetails] = useState(null)
 
+
+  const [appointmentDate, setAppointmentDate] = useState(() =>
+    new Date().toISOString().slice(0, 10)
+  )
+  const [appointments, setAppointments] = useState([])
+  const [appointmentsLoading, setAppointmentsLoading] = useState(false)
+  const [appointmentsError, setAppointmentsError] = useState(null)
+
+  const [cancelAppointmentLoading, setCancelAppointmentLoading] = useState(null)
+  const [rescheduleAppointmentLoading, setRescheduleAppointmentLoading] = useState(null)
+
+  const [showReschedulePopup, setShowReschedulePopup] = useState(false)
+  const [selectedAppointment, setSelectedAppointment] = useState(null)
+  const [rescheduleDate, setRescheduleDate] = useState('')
+  const [rescheduleTime, setRescheduleTime] = useState('')
+  const [rescheduleError, setRescheduleError] = useState('')
+
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type, visible: true })
     setTimeout(() => {
@@ -652,6 +669,34 @@ export default function StaffDashboard() {
   }
 
   
+const fetchAppointmentsByDate = useCallback(async () => {
+  if (authLoading || !resolvedClinicId || !appointmentDate) return
+
+  setAppointmentsLoading(true)
+  setAppointmentsError(null)
+
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/appointments/clinic/${resolvedClinicId}?date=${appointmentDate}`,
+      {
+        headers: { Accept: 'application/json' },
+      }
+    )
+
+    const data = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to load appointments.')
+    }
+
+    setAppointments(Array.isArray(data.appointments) ? data.appointments : [])
+  } catch (err) {
+    setAppointmentsError(err.message)
+  } finally {
+    setAppointmentsLoading(false)
+  }
+}, [authLoading, resolvedClinicId, appointmentDate, API_BASE])
+
 
   const fetchQueue = useCallback(async () => {
     if (authLoading) return
@@ -727,12 +772,19 @@ const fetchPatients = useCallback(async () => {
 }, [authLoading, API_BASE])
 
 
-  useEffect(() => {
-    fetchQueue()
-    fetchCompletedCount()
-    fetchPatients()
-    fetchClinicDetails()
-  }, [fetchQueue, fetchCompletedCount, fetchPatients, fetchClinicDetails])
+useEffect(() => {
+  fetchQueue()
+  fetchCompletedCount()
+  fetchPatients()
+  fetchClinicDetails()
+  fetchAppointmentsByDate()
+}, [
+  fetchQueue,
+  fetchCompletedCount,
+  fetchPatients,
+  fetchClinicDetails,
+  fetchAppointmentsByDate,
+])
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -817,6 +869,100 @@ const fetchPatients = useCallback(async () => {
       setRemoveLoading(null)
     }
   }
+
+
+  const handleCancelAppointment = async appointment => {
+  setCancelAppointmentLoading(appointment.id)
+
+  try {
+    const res = await fetch(`${API_BASE}/api/appointments/${appointment.id}/cancel`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+    })
+
+    const data = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Could not cancel appointment.')
+    }
+
+    await fetchAppointmentsByDate()
+    showToast('Appointment cancelled successfully.', 'success')
+  } catch (err) {
+    showToast(err.message, 'error')
+  } finally {
+    setCancelAppointmentLoading(null)
+  }
+}
+
+const openReschedulePopup = appointment => {
+  const slotDate = appointment.slot_datetime?.slice(0, 10) || appointmentDate
+  const slotTime = appointment.slot_datetime?.slice(11, 16) || ''
+
+  setSelectedAppointment(appointment)
+  setRescheduleDate(slotDate)
+  setRescheduleTime(slotTime)
+  setRescheduleError('')
+  setShowReschedulePopup(true)
+}
+
+const handleRescheduleAppointment = async () => {
+  if (!selectedAppointment) return
+
+  setRescheduleError('')
+
+  if (!rescheduleDate || !rescheduleTime) {
+    setRescheduleError('Date and time are required.')
+    return
+  }
+
+  setRescheduleAppointmentLoading(selectedAppointment.id)
+
+  try {
+    const res = await fetch(`${API_BASE}/api/appointments/${selectedAppointment.id}/reschedule`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        date: rescheduleDate,
+        time: rescheduleTime,
+      }),
+    })
+
+    const data = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Could not reschedule appointment.')
+    }
+
+    setShowReschedulePopup(false)
+    setSelectedAppointment(null)
+    await fetchAppointmentsByDate()
+    showToast('Appointment rescheduled successfully.', 'success')
+  } catch (err) {
+    setRescheduleError(err.message)
+  } finally {
+    setRescheduleAppointmentLoading(null)
+  }
+}
+
+const getAppointmentPatientName = appointment => {
+  return appointment.patient?.full_name || appointment.patient_name || appointment.patient_id
+}
+
+const getAppointmentPatientEmail = appointment => {
+  return appointment.patient?.email || appointment.patient_email || '—'
+}
+
+const formatAppointmentTime = appointment => {
+  if (!appointment.slot_datetime) return appointment.time || '—'
+  return appointment.slot_datetime.slice(11, 16)
+}
   
 const handleAddPatientToQueue = async () => {
   if (!resolvedClinicId || !selectedPatientId) return
@@ -1106,6 +1252,140 @@ const handleGoToBooking = async () => {
             </section>
           )}
         </section>
+
+        <section className="sd-panel" style={{ marginTop: 24 }}>
+          <header className="sd-panel-header">
+            <section>
+              <h2 className="sd-panel-title">Clinic appointments</h2>
+              <p className="sd-stat-label">
+                View, add, cancel, and reschedule appointments for the selected date.
+              </p>
+            </section>
+
+            <form
+              onSubmit={e => {
+                e.preventDefault()
+                fetchAppointmentsByDate()
+              }}
+              style={{
+                display: 'flex',
+                gap: '8px',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+              }}
+            >
+              <label htmlFor="appointmentDate" className="sr-only">
+                Appointment date
+              </label>
+
+              <input
+                id="appointmentDate"
+                type="date"
+                className="sd-act-btn"
+                style={{ background: 'white' }}
+                value={appointmentDate}
+                onChange={e => setAppointmentDate(e.target.value)}
+              />
+
+              <button type="submit" className="sd-act-btn">
+                View
+              </button>
+
+              <button
+                type="button"
+                className="sd-act-btn sd-act-btn--primary"
+                onClick={handleGoToBooking}
+              >
+                Add appointment
+              </button>
+            </form>
+          </header>
+
+          {appointmentsLoading && <p className="sd-empty">Loading appointments…</p>}
+
+          {appointmentsError && !appointmentsLoading && (
+            <p className="sd-empty" style={{ color: '#B91C1C' }}>
+              {appointmentsError}
+              <button
+                className="sd-act-btn"
+                style={{ display: 'inline', marginLeft: 8 }}
+                onClick={fetchAppointmentsByDate}
+              >
+                Retry
+              </button>
+            </p>
+          )}
+
+          {!appointmentsLoading && !appointmentsError && appointments.length === 0 && (
+            <p className="sd-empty">No appointments found for this date.</p>
+          )}
+
+          {!appointmentsLoading && !appointmentsError && appointments.length > 0 && (
+            <section className="sd-table-wrap">
+              <table className="sd-table" aria-label="Clinic appointments">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Patient</th>
+                    <th>Patient Email</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {appointments.map(appointment => (
+                    <tr key={appointment.id}>
+                      <td>{formatAppointmentTime(appointment)}</td>
+                      <td>{getAppointmentPatientName(appointment)}</td>
+                      <td>{getAppointmentPatientEmail(appointment)}</td>
+                      <td>
+                        <span className={`sd-badge ${BADGE_CLASS[appointment.status] ?? ''}`}>
+                          {appointment.status}
+                        </span>
+                      </td>
+                      <td>
+                        <ul className="sd-actions">
+                          <li>
+                            <button
+                              type="button"
+                              className="sd-act-btn"
+                              onClick={() => openReschedulePopup(appointment)}
+                              disabled={
+                                appointment.status === 'Cancelled' ||
+                                rescheduleAppointmentLoading === appointment.id
+                              }
+                            >
+                              {rescheduleAppointmentLoading === appointment.id
+                                ? 'Saving…'
+                                : 'Reschedule'}
+                            </button>
+                          </li>
+
+                          <li>
+                            <button
+                              type="button"
+                              className="sd-act-btn sd-act-btn--danger"
+                              onClick={() => handleCancelAppointment(appointment)}
+                              disabled={
+                                appointment.status === 'Cancelled' ||
+                                cancelAppointmentLoading === appointment.id
+                              }
+                            >
+                              {cancelAppointmentLoading === appointment.id
+                                ? 'Cancelling…'
+                                : 'Cancel'}
+                            </button>
+                          </li>
+                        </ul>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          )}
+        </section>
       
           
         {resolvedClinicId && (
@@ -1251,6 +1531,88 @@ const handleGoToBooking = async () => {
             </div>
           </div>
         </div>
+      )}
+
+
+
+      {showReschedulePopup && selectedAppointment && (
+        <section
+          className="sd-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reschedule-appointment-title"
+          onClick={e => {
+            if (e.target === e.currentTarget) {
+              setShowReschedulePopup(false)
+            }
+          }}
+        >
+          <section className="sd-dialog">
+            <section className="sd-dialog-icon">📅</section>
+
+            <h2 className="sd-dialog-title" id="reschedule-appointment-title">
+              Reschedule Appointment
+            </h2>
+
+            <p className="sd-dialog-subtitle">
+              Choose a new date and time for {getAppointmentPatientName(selectedAppointment)}.
+            </p>
+
+            <section className="sd-dialog-field">
+              <label className="sd-dialog-label" htmlFor="reschedule-date">
+                New date
+              </label>
+              <input
+                id="reschedule-date"
+                className="sd-dialog-input"
+                type="date"
+                value={rescheduleDate}
+                onChange={e => setRescheduleDate(e.target.value)}
+              />
+            </section>
+
+            <section className="sd-dialog-field">
+              <label className="sd-dialog-label" htmlFor="reschedule-time">
+                New time
+              </label>
+              <input
+                id="reschedule-time"
+                className="sd-dialog-input"
+                type="time"
+                value={rescheduleTime}
+                onChange={e => setRescheduleTime(e.target.value)}
+              />
+            </section>
+
+            {rescheduleError && (
+              <section className="sd-dialog-submit-error" role="alert">
+                ⚠ {rescheduleError}
+              </section>
+            )}
+
+            <section className="sd-dialog-actions">
+              <button
+                type="button"
+                className="sd-act-btn"
+                onClick={() => setShowReschedulePopup(false)}
+                disabled={rescheduleAppointmentLoading === selectedAppointment.id}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                className="sd-act-btn sd-act-btn--primary"
+                onClick={handleRescheduleAppointment}
+                disabled={rescheduleAppointmentLoading === selectedAppointment.id}
+              >
+                {rescheduleAppointmentLoading === selectedAppointment.id
+                  ? 'Saving…'
+                  : 'Reschedule'}
+              </button>
+            </section>
+          </section>
+        </section>
       )}
     </>
   )
