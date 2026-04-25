@@ -1898,6 +1898,57 @@ app.get('/api/appointments/patient/:patientId', async (req, res) => {
   }
 })
 
+app.get('/api/appointments/clinic/:clinicId', async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' })
+    }
+
+    const { clinicId } = req.params
+    const { date } = req.query
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+    if (!uuidRegex.test(clinicId)) {
+      return res.status(400).json({ error: 'Invalid clinic ID format' })
+    }
+
+    if (!date) {
+      return res.status(400).json({ error: 'Date is required' })
+    }
+
+    const start = `${date}T00:00:00`
+    const end = `${date}T23:59:59`
+
+    const { data, error } = await supabase
+      .from('appointments')
+      .select(`
+        id,
+        clinic_id,
+        patient_id,
+        slot_datetime,
+        status,
+        patient:users!appointments_patient_id_fkey (
+          id,
+          full_name,
+          email
+        )
+      `)
+      .eq('clinic_id', clinicId)
+      .gte('slot_datetime', start)
+      .lte('slot_datetime', end)
+      .order('slot_datetime', { ascending: true })
+
+    if (error) throw error
+
+    res.json({ appointments: data || [] })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to fetch clinic appointments' })
+  }
+})
+
+
 
 // Serve built frontend
 const publicPath = path.join(__dirname, '..', 'public')
