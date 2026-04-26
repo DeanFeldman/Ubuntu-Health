@@ -808,18 +808,6 @@ const fetchQueue = useCallback(async () => {
               </p>
             )}
 
-            {canRequestClinicAccess && (
-              <button
-                className="q-btn q-btn-ghost"
-                onClick={handleRequestClinicAccess}
-                disabled={clinicRequestLoading}
-                type="button"
-                style={{ width: '100%', marginBottom: '12px' }}
-              >
-                {clinicRequestLoading ? 'Sending request…' : 'Request staff access for this clinic'}
-              </button>
-            )}
-
             <footer className="q-modal-actions">
               <button
                 className="q-btn q-btn-ghost"

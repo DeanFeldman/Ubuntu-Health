@@ -823,12 +823,12 @@ export default function BookingPage() {
                       value={selectedPatientId}
                       onChange={(e) => setSelectedPatientId(e.target.value)}
                     >
-                      <option value="">— Choose a patient —</option>
-                      {patients.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.full_name}
-                        </option>
-                      ))}
+                      <option value="">Select a patient</option>
+                        {patients.map((patient) => (
+                          <option key={patient.id} value={patient.id}>
+                            {patient.full_name} ({patient.role})
+                          </option>
+                        ))}
                     </select>
                   )}
                 </div>

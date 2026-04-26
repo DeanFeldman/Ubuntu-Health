@@ -98,7 +98,7 @@ function setupFetchMock({
 
 async function selectExistingPatientAndSlot(user) {
   await waitFor(() => {
-    expect(screen.getByRole('option', { name: 'Jane Doe' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /Jane Doe/ })).toBeInTheDocument()
   })
 
   await user.selectOptions(screen.getByLabelText('Select existing patient'), 'patient-1')
@@ -153,7 +153,7 @@ describe('BookingPage', () => {
     renderPage()
 
     await waitFor(() => {
-      expect(screen.getByRole('option', { name: 'Jane Doe' })).toBeInTheDocument()
+      expect(screen.getByRole('option', { name: /Jane Doe/ })).toBeInTheDocument()
     })
 
     await user.selectOptions(screen.getByLabelText('Select existing patient'), 'patient-1')
