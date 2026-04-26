@@ -508,17 +508,27 @@ export default function BookingPage() {
 
   // ── Fetch patients list for staff dropdown ──
   useEffect(() => {
-    if (!isStaff) return
-    setPatientsLoading(true)
-    fetch(`${API_BASE_URL}/api/users`)
-      .then((r) => r.json())
-      .then((data) => {
-        const patientList = (data.users || []).filter((u) => u.role === 'Patient')
-        setPatients(patientList)
+  if (!isStaff) return
+
+  setPatientsLoading(true)
+
+  fetch(`${API_BASE_URL}/api/users`, {
+    headers: { Accept: 'application/json' },
+  })
+    .then(res =>
+      res.json().catch(() => ({})).then(data => {
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to load patients.')
+        }
+
+        setPatients(Array.isArray(data.users) ? data.users : [])
       })
-      .catch(() => {})
-      .finally(() => setPatientsLoading(false))
-  }, [isStaff])
+    )
+    .catch(err => {
+      console.error('Failed to fetch patients:', err.message)
+    })
+    .finally(() => setPatientsLoading(false))
+}, [isStaff, API_BASE_URL])
 
   // ── Generated slots for the selected date ──
   const [slots, setSlots] = useState([])
