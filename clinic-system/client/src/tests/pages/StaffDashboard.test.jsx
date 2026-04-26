@@ -271,10 +271,11 @@ describe('StaffDashboard', () => {
 
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith('/booking', {
-        state: {
-          clinic: { id: 'clinic-1', name: 'Hillbrow Clinic' },
-        },
-      })
+  state: {
+    clinic: { id: 'clinic-1', name: 'Hillbrow Clinic' },
+    bookingMode: 'staff',
+  },
+})
     })
   })
 
