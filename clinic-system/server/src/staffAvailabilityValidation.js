@@ -7,13 +7,13 @@ function isValidUuid(value) {
 
 function getDayName(dayOfWeek) {
   const days = [
-    'sunday',
     'monday',
     'tuesday',
     'wednesday',
     'thursday',
     'friday',
     'saturday',
+    'sunday',
   ]
 
   return days[dayOfWeek]
