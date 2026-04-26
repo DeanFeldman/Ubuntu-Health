@@ -1615,14 +1615,45 @@ app.get('/api/queue/:clinicId/completed-count', async (req, res) => {
 
 app.get('/api/users', async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const { data: users, error: usersError } = await supabase
       .from('users')
-      .select('id, full_name, phone, role, clinic_id')
+      .select('id, full_name, phone, email, role, clinic_id')
       .order('full_name', { ascending: true })
 
-    if (error) throw error
+    if (usersError) throw usersError
 
-    res.json({ users: data || [] })
+    const { data: patients, error: patientsError } = await supabase
+      .from('patients')
+      .select('id, full_name, phone, email')
+      .order('full_name', { ascending: true })
+
+    if (patientsError) throw patientsError
+
+    const registeredUsers = (users || []).map(user => ({
+      id: user.id,
+      full_name: user.full_name,
+      phone: user.phone,
+      email: user.email,
+      role: user.role,
+      clinic_id: user.clinic_id,
+      source: 'users',
+    }))
+
+    const manualPatients = (patients || []).map(patient => ({
+      id: patient.id,
+      full_name: patient.full_name,
+      phone: patient.phone,
+      email: patient.email,
+      role: 'Patient',
+      clinic_id: null,
+      source: 'patients',
+    }))
+
+    const combinedUsers = [...registeredUsers, ...manualPatients].sort((a, b) =>
+      (a.full_name || '').localeCompare(b.full_name || '')
+    )
+
+    res.json({ users: combinedUsers })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to fetch users' })
