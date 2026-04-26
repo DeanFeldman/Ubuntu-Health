@@ -32,7 +32,7 @@ function renderPage({
     user: { id: 'staff-1', full_name: 'Staff User', email: 'staff@example.com' },
     role: 'Staff',
   },
-  locationState = { clinic },
+  locationState = { clinic, bookingMode: 'staff' },
 } = {}) {
   useAuth.mockReturnValue(auth)
   useLocation.mockReturnValue({ state: locationState })
