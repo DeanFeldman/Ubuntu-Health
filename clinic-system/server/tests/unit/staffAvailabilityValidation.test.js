@@ -1,5 +1,7 @@
 const {
   isValidUuid,
+  getDayName,
+  validateAvailabilityWithinClinicHours,
   validateAvailabilityCreateInput,
   validateAvailabilityUpdateInput,
 } = require('../../src/staffAvailabilityValidation')
@@ -285,4 +287,99 @@ describe('staffAvailabilityValidation', () => {
       })
     })
   })
+  describe('getDayName', () => {
+  it('returns sunday for day 0', () => {
+    expect(getDayName(0)).toBe('sunday')
+  })
+
+  it('returns saturday for day 6', () => {
+    expect(getDayName(6)).toBe('saturday')
+  })
 })
+
+describe('validateAvailabilityWithinClinicHours', () => {
+  const clinicOperatingHours = {
+    sunday: null,
+    monday: { open: '08:00', close: '17:00' },
+    tuesday: { open: '08:00', close: '17:00' },
+    wednesday: { open: '08:00', close: '17:00' },
+    thursday: { open: '08:00', close: '17:00' },
+    friday: { open: '08:00', close: '17:00' },
+    saturday: { open: '09:00', close: '12:00' },
+  }
+
+  it('accepts availability within clinic operating hours', () => {
+    const result = validateAvailabilityWithinClinicHours({
+      day_of_week: 1,
+      start_time: '09:00',
+      end_time: '16:00',
+      clinicOperatingHours,
+    })
+
+    expect(result).toEqual({ valid: true })
+  })
+
+  it('accepts availability exactly matching clinic operating hours', () => {
+    const result = validateAvailabilityWithinClinicHours({
+      day_of_week: 1,
+      start_time: '08:00',
+      end_time: '17:00',
+      clinicOperatingHours,
+    })
+
+    expect(result).toEqual({ valid: true })
+  })
+
+  it('rejects availability before clinic opening time', () => {
+    const result = validateAvailabilityWithinClinicHours({
+      day_of_week: 1,
+      start_time: '07:30',
+      end_time: '16:00',
+      clinicOperatingHours,
+    })
+
+    expect(result).toEqual({
+      valid: false,
+      status: 400,
+      error: 'Availability must be within clinic operating hours',
+    })
+  })
+
+  it('rejects availability after clinic closing time', () => {
+    const result = validateAvailabilityWithinClinicHours({
+      day_of_week: 1,
+      start_time: '09:00',
+      end_time: '18:00',
+      clinicOperatingHours,
+    })
+
+    expect(result).toEqual({
+      valid: false,
+      status: 400,
+      error: 'Availability must be within clinic operating hours',
+    })
+  })
+
+  it('rejects availability when clinic is closed on that day', () => {
+    const result = validateAvailabilityWithinClinicHours({
+      day_of_week: 0,
+      start_time: '09:00',
+      end_time: '12:00',
+      clinicOperatingHours,
+    })
+
+    expect(result).toEqual({
+      valid: false,
+      status: 400,
+      error: 'Clinic is closed on this day',
+    })
+  })
+})
+})
+module.exports = {
+  isValidUuid,
+  getDayName,
+  validateAvailabilityWithinClinicHours,
+  validateAvailabilityCreateInput,
+  validateAvailabilityUpdateInput,
+}
