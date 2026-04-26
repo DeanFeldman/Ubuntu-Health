@@ -466,10 +466,12 @@ export default function BookingPage() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  const isStaff = role === 'Staff' || role === 'Admin'
+  //const isStaff = role === 'Staff' || role === 'Admin'
 
   // Clinic passed via navigation state from PatientDashboard or StaffPage
   const clinic = location.state?.clinic ?? null
+  const bookingMode = location.state?.bookingMode || 'patient'
+  const isStaff = bookingMode === 'staff'
 
   // ── Date & slot selection ──
   const [selectedDate, setSelectedDate] = useState('')

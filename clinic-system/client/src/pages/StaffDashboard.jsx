@@ -1075,7 +1075,12 @@ const handleGoToBooking = async () => {
       throw new Error('Assigned clinic not found.')
     }
 
-    navigate('/booking', { state: { clinic } })
+    navigate('/booking', {
+  state: {
+    clinic,
+    bookingMode: 'staff',
+  },
+})
   } catch (err) {
     showToast(err.message, 'error')
   }
