@@ -579,11 +579,12 @@ export default function StaffDashboard() {
           day_of_week: day.value,
           day_label: day.label,
           id: existing?.id || null,
-          start_time: clinicHours.start_time,
-          end_time: clinicHours.end_time,
-          is_available: clinicIsOpen,
+          start_time: existing?.start_time?.slice(0, 5) || clinicHours.start_time,
+          end_time: existing?.end_time?.slice(0, 5) || clinicHours.end_time,
+          is_available: existing?.is_available ?? clinicIsOpen,
           error: '',
         }
+        
       })
     )
   } catch (err) {
