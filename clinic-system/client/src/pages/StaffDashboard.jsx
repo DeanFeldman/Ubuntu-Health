@@ -552,47 +552,48 @@ export default function StaffDashboard() {
 
 
   const fetchAvailability = useCallback(async () => {
-    if (authLoading || !user?.id || !clinicDetails) return
+  if (authLoading || !user?.id || !clinicDetails) return
 
-    setAvailabilityLoading(true)
+  setAvailabilityLoading(true)
 
-    try {
-      const res = await fetch(`${API_BASE}/api/staff/${user.id}/availability`, {
-        headers: { Accept: 'application/json' },
-      })
+  try {
+    const res = await fetch(`${API_BASE}/api/staff/${user.id}/availability`, {
+      headers: { Accept: 'application/json' },
+    })
 
-      const data = await res.json().catch(() => ({}))
+    const data = await res.json().catch(() => ({}))
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to load availability.')
-      }
-
-      const byDay = new Map((data.availability || []).map(item => [item.day_of_week, item]))
-
-      setAvailability(
-        DAYS.map(day => {
-          const existing = byDay.get(day.value)
-
-            const clinicIsOpen = Boolean(clinicHours.start_time && clinicHours.end_time)
-
-            return {
-              day_of_week: day.value,
-              day_label: day.label,
-              id: existing?.id || null,
-              start_time: clinicHours.start_time,
-              end_time: clinicHours.end_time,
-              is_available: clinicIsOpen,
-              error: '',
-            }
-
-        })
-      )
-    } catch (err) {
-      showToast(err.message, 'error')
-    } finally {
-      setAvailabilityLoading(false)
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to load availability.')
     }
-  }, [authLoading, user?.id, API_BASE, showToast,clinicDetails])
+
+    const byDay = new Map((data.availability || []).map(item => [item.day_of_week, item]))
+
+    setAvailability(
+      DAYS.map(day => {
+        const existing = byDay.get(day.value)
+        const clinicHours = getClinicDayHours(clinicDetails, day.label)
+        const clinicIsOpen = Boolean(clinicHours.start_time && clinicHours.end_time)
+
+        return {
+          day_of_week: day.value,
+          day_label: day.label,
+          id: existing?.id || null,
+          start_time: clinicHours.start_time,
+          end_time: clinicHours.end_time,
+          is_available: clinicIsOpen,
+          error: '',
+        }
+      })
+    )
+  } catch (err) {
+    showToast(err.message, 'error')
+  } finally {
+    setAvailabilityLoading(false)
+  }
+}, [authLoading, user?.id, API_BASE, showToast, clinicDetails])
+
+
 
   useEffect(() => {
   if (clinicDetails) {
