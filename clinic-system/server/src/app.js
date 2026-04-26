@@ -1728,7 +1728,11 @@ app.post('/api/queue/:clinicId/add-patient', async (req, res) => {
     res.status(500).json({ error: 'Failed to add patient to queue' })
   }
 })
-const { validateAvailabilityCreateInput, validateAvailabilityUpdateInput,} = require('./staffAvailabilityValidation')
+const {
+  validateAvailabilityCreateInput,
+  validateAvailabilityUpdateInput,
+  validateAvailabilityWithinClinicHours,
+} = require('./staffAvailabilityValidation')
 // GET /api/staff/:staffId/availability — retrieve staff availability
 app.get('/api/staff/:staffId/availability', async (req, res) => {
   try {
@@ -1755,37 +1759,90 @@ app.post('/api/staff/:staffId/availability', async (req, res) => {
   try {
     const { staffId } = req.params
     const { day_of_week, start_time, end_time, is_available } = req.body
-    const validation = validateAvailabilityCreateInput({ staffId, day_of_week, start_time, end_time })
+
+    const validation = validateAvailabilityCreateInput({
+      staffId,
+      day_of_week,
+      start_time,
+      end_time,
+    })
 
     if (!validation.valid) {
       return res.status(validation.status).json({ error: validation.error })
     }
+
     const { data: staffUser, error: userError } = await supabase
       .from('users')
-      .select('id, role')
+      .select('id, role, clinic_id')
       .eq('id', staffId)
       .maybeSingle()
+
     if (userError) throw userError
     if (!staffUser) return res.status(404).json({ error: 'Staff member not found' })
+
     if (!['Staff', 'Admin'].includes(staffUser.role)) {
-      return res.status(403).json({ error: 'Only staff or admin can have availability records' })
+      return res.status(403).json({
+        error: 'Only staff or admin can have availability records',
+      })
     }
+
+    if (!staffUser.clinic_id) {
+      return res.status(400).json({
+        error: 'Staff member is not assigned to a clinic',
+      })
+    }
+
+    const { data: clinic, error: clinicError } = await supabase
+      .from('clinics')
+      .select('operating_hours')
+      .eq('id', staffUser.clinic_id)
+      .maybeSingle()
+
+    if (clinicError) throw clinicError
+    if (!clinic) return res.status(404).json({ error: 'Clinic not found' })
+
+    const clinicHoursValidation = validateAvailabilityWithinClinicHours({
+      day_of_week,
+      start_time,
+      end_time,
+      clinicOperatingHours: clinic.operating_hours,
+    })
+
+    if (!clinicHoursValidation.valid) {
+      return res
+        .status(clinicHoursValidation.status)
+        .json({ error: clinicHoursValidation.error })
+    }
+
     const { data: existing, error: existingError } = await supabase
       .from('staff_availability')
       .select('id')
       .eq('staff_id', staffId)
       .eq('day_of_week', day_of_week)
       .maybeSingle()
+
     if (existingError) throw existingError
+
     if (existing) {
-      return res.status(409).json({ error: 'Availability record already exists for this day' })
+      return res.status(409).json({
+        error: 'Availability record already exists for this day',
+      })
     }
+
     const { data, error } = await supabase
       .from('staff_availability')
-      .insert({ staff_id: staffId, day_of_week, start_time, end_time, is_available: is_available ?? true })
+      .insert({
+        staff_id: staffId,
+        day_of_week,
+        start_time,
+        end_time,
+        is_available: is_available ?? true,
+      })
       .select()
       .single()
+
     if (error) throw error
+
     return res.status(201).json({ availability: data })
   } catch (err) {
     console.error(err)
@@ -1798,22 +1855,76 @@ app.patch('/api/staff/:staffId/availability/:availabilityId', async (req, res) =
   try {
     const { staffId, availabilityId } = req.params
     const { start_time, end_time, is_available } = req.body
-    const validation = validateAvailabilityUpdateInput({staffId,availabilityId,start_time,end_time,is_available,})
+
+    const validation = validateAvailabilityUpdateInput({
+      staffId,
+      availabilityId,
+      start_time,
+      end_time,
+      is_available,
+    })
+
     if (!validation.valid) {
       return res.status(validation.status).json({ error: validation.error })
     }
+
     const { data: existing, error: fetchError } = await supabase
       .from('staff_availability')
       .select('*')
       .eq('id', availabilityId)
       .eq('staff_id', staffId)
       .maybeSingle()
+
     if (fetchError) throw fetchError
-    if (!existing) return res.status(404).json({ error: 'Availability record not found' })
+    if (!existing) {
+      return res.status(404).json({ error: 'Availability record not found' })
+    }
+
+    const nextStartTime = start_time || existing.start_time
+    const nextEndTime = end_time || existing.end_time
+
+    const { data: staffUser, error: staffError } = await supabase
+      .from('users')
+      .select('clinic_id')
+      .eq('id', staffId)
+      .maybeSingle()
+
+    if (staffError) throw staffError
+
+    if (!staffUser?.clinic_id) {
+      return res.status(400).json({
+        error: 'Staff member is not assigned to a clinic',
+      })
+    }
+
+    const { data: clinic, error: clinicError } = await supabase
+      .from('clinics')
+      .select('operating_hours')
+      .eq('id', staffUser.clinic_id)
+      .maybeSingle()
+
+    if (clinicError) throw clinicError
+    if (!clinic) return res.status(404).json({ error: 'Clinic not found' })
+
+    const clinicHoursValidation = validateAvailabilityWithinClinicHours({
+      day_of_week: existing.day_of_week,
+      start_time: nextStartTime,
+      end_time: nextEndTime,
+      clinicOperatingHours: clinic.operating_hours,
+    })
+
+    if (!clinicHoursValidation.valid) {
+      return res
+        .status(clinicHoursValidation.status)
+        .json({ error: clinicHoursValidation.error })
+    }
+
     const updates = {}
+
     if (start_time) updates.start_time = start_time
     if (end_time) updates.end_time = end_time
     if (is_available !== undefined) updates.is_available = is_available
+
     const { data, error } = await supabase
       .from('staff_availability')
       .update(updates)
@@ -1821,7 +1932,9 @@ app.patch('/api/staff/:staffId/availability/:availabilityId', async (req, res) =
       .eq('staff_id', staffId)
       .select()
       .single()
+
     if (error) throw error
+
     return res.status(200).json({ availability: data })
   } catch (err) {
     console.error(err)

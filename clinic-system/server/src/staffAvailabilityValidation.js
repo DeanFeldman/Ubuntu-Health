@@ -5,6 +5,48 @@ function isValidUuid(value) {
   return uuidRegex.test(value)
 }
 
+function getDayName(dayOfWeek) {
+  const days = [
+    'monday',
+    'tuesday',
+    'wednesday',
+    'thursday',
+    'friday',
+    'saturday',
+    'sunday',
+  ]
+
+  return days[dayOfWeek]
+}
+
+function validateAvailabilityWithinClinicHours({
+  day_of_week,
+  start_time,
+  end_time,
+  clinicOperatingHours,
+}) {
+  const dayName = getDayName(day_of_week)
+  const clinicHours = clinicOperatingHours?.[dayName]
+
+  if (!clinicHours || !clinicHours.open || !clinicHours.close) {
+    return {
+      valid: false,
+      status: 400,
+      error: 'Clinic is closed on this day',
+    }
+  }
+
+  if (start_time < clinicHours.open || end_time > clinicHours.close) {
+    return {
+      valid: false,
+      status: 400,
+      error: 'Availability must be within clinic operating hours',
+    }
+  }
+
+  return { valid: true }
+}
+
 function validateAvailabilityCreateInput({ staffId, day_of_week, start_time, end_time }) {
   if (!isValidUuid(staffId)) {
     return { valid: false, status: 400, error: 'Invalid staff ID format' }
@@ -55,6 +97,8 @@ function validateAvailabilityUpdateInput({ staffId, availabilityId, start_time, 
 
 module.exports = {
   isValidUuid,
+  getDayName,
+  validateAvailabilityWithinClinicHours,
   validateAvailabilityCreateInput,
   validateAvailabilityUpdateInput,
 }
