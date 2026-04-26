@@ -1869,6 +1869,10 @@ app.post('/api/patients', async (req, res) => {
 })
 
 const { validateSlotRetrievalInput } = require('./appointmentSlotValidation')
+const {
+  validateAppointmentBookingInput,
+  validateStaffSelfBookingAvailabilityRule,
+} = require('./appointmentBookingValidation')
 app.get('/api/appointments/slots', async (req, res) => {
   try {
     const { clinic_id, date } = req.query
@@ -1925,19 +1929,20 @@ app.post('/api/appointments', async (req, res) => {
   try {
     const { clinic_id, patient_id, date, time, booked_by } = req.body
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const inputValidation = validateAppointmentBookingInput({
+      clinic_id,
+      patient_id,
+      date,
+      time,
+      booked_by,
+    })
 
-    if (!clinic_id || !patient_id || !date || !time || !booked_by) {
-      return res.status(400).json({
-        error: 'clinic_id, patient_id, date, time and booked_by are required',
+    if (!inputValidation.valid) {
+      return res.status(inputValidation.status).json({
+        error: inputValidation.error,
       })
     }
 
-    if (!uuidRegex.test(clinic_id) || !uuidRegex.test(patient_id) || !uuidRegex.test(booked_by)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
-
-    
     const normalizedTime = getTimeFromAppointmentDatetime(time)
     const slot_datetime = new Date(`${date}T${normalizedTime}:00`)
 
@@ -1967,6 +1972,56 @@ app.post('/api/appointments', async (req, res) => {
       return res.status(400).json({
         error: 'Selected time is outside clinic hours or does not match the appointment duration',
       })
+    }
+
+    if (patient_id === booked_by) {
+      const { data: bookedByUser, error: bookedByUserError } = await supabase
+        .from('users')
+        .select('id, role, clinic_id')
+        .eq('id', booked_by)
+        .maybeSingle()
+
+      if (bookedByUserError) throw bookedByUserError
+
+      if (bookedByUser && ['Staff', 'Admin'].includes(bookedByUser.role) && bookedByUser.clinic_id === clinic_id) {
+        const { data: staffUsers, error: staffUsersError } = await supabase
+          .from('users')
+          .select('id, role, clinic_id')
+          .eq('clinic_id', clinic_id)
+          .in('role', ['Staff', 'Admin'])
+
+        if (staffUsersError) throw staffUsersError
+
+        const staffIds = (staffUsers || []).map(staff => staff.id)
+        let availabilityRows = []
+
+        if (staffIds.length > 0) {
+          const { data: availability, error: availabilityError } = await supabase
+            .from('staff_availability')
+            .select('staff_id, day_of_week, start_time, end_time, is_available')
+            .in('staff_id', staffIds)
+
+          if (availabilityError) throw availabilityError
+          availabilityRows = availability || []
+        }
+
+        const selfBookingValidation = validateStaffSelfBookingAvailabilityRule({
+          patient_id,
+          booked_by,
+          clinic_id,
+          bookedByUser,
+          staffUsers: staffUsers || [],
+          availabilityRows,
+          date,
+          time: normalizedTime,
+        })
+
+        if (!selfBookingValidation.valid) {
+          return res.status(selfBookingValidation.status).json({
+            error: selfBookingValidation.error,
+          })
+        }
+      }
     }
 
     const slotRecord = await findOrCreateClinicSlot(
@@ -2001,13 +2056,13 @@ app.post('/api/appointments', async (req, res) => {
 
     if (error) throw error
 
-    res.status(201).json({
+    return res.status(201).json({
       message: 'Appointment booked successfully',
       appointment: data,
     })
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Failed to create appointment' })
+    return res.status(500).json({ error: 'Failed to create appointment' })
   }
 })
 
