@@ -369,6 +369,8 @@ const styles = `
     border-color: #012a5e;
   }
   .sd-act-btn--primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .sd-badge--confirmed { background: #DBEAFE; color: #1E40AF; }
+  .sd-badge--cancelled { background: #FEE2E2; color: #991B1B; }
 `
 const DAYS = [
   { label: 'Monday', value: 0 },
@@ -412,6 +414,10 @@ const BADGE_CLASS = {
   Called: 'sd-badge--called',
   'In Consultation': 'sd-badge--consultation',
   Complete: 'sd-badge--complete',
+
+  Confirmed: 'sd-badge--confirmed',
+  Completed: 'sd-badge--complete',
+  Cancelled: 'sd-badge--cancelled',
 }
 
 function Toast({ message, type, visible }) {
@@ -1528,85 +1534,7 @@ const handleGoToBooking = async () => {
 
 
 
-      {showReschedulePopup && selectedAppointment && (
-        <section
-          className="sd-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="reschedule-appointment-title"
-          onClick={e => {
-            if (e.target === e.currentTarget) {
-              setShowReschedulePopup(false)
-            }
-          }}
-        >
-          <section className="sd-dialog">
-            <section className="sd-dialog-icon">📅</section>
-
-            <h2 className="sd-dialog-title" id="reschedule-appointment-title">
-              Reschedule Appointment
-            </h2>
-
-            <p className="sd-dialog-subtitle">
-              Choose a new date and time for {getAppointmentPatientName(selectedAppointment)}.
-            </p>
-
-            <section className="sd-dialog-field">
-              <label className="sd-dialog-label" htmlFor="reschedule-date">
-                New date
-              </label>
-              <input
-                id="reschedule-date"
-                className="sd-dialog-input"
-                type="date"
-                value={rescheduleDate}
-                onChange={e => setRescheduleDate(e.target.value)}
-              />
-            </section>
-
-            <section className="sd-dialog-field">
-              <label className="sd-dialog-label" htmlFor="reschedule-time">
-                New time
-              </label>
-              <input
-                id="reschedule-time"
-                className="sd-dialog-input"
-                type="time"
-                value={rescheduleTime}
-                onChange={e => setRescheduleTime(e.target.value)}
-              />
-            </section>
-
-            {rescheduleError && (
-              <section className="sd-dialog-submit-error" role="alert">
-                ⚠ {rescheduleError}
-              </section>
-            )}
-
-            <section className="sd-dialog-actions">
-              <button
-                type="button"
-                className="sd-act-btn"
-                onClick={() => setShowReschedulePopup(false)}
-                disabled={rescheduleAppointmentLoading === selectedAppointment.id}
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                className="sd-act-btn sd-act-btn--primary"
-                onClick={handleRescheduleAppointment}
-                disabled={rescheduleAppointmentLoading === selectedAppointment.id}
-              >
-                {rescheduleAppointmentLoading === selectedAppointment.id
-                  ? 'Saving…'
-                  : 'Reschedule'}
-              </button>
-            </section>
-          </section>
-        </section>
-      )}
+      
     </>
   )
 }
