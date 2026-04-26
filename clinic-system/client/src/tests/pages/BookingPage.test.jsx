@@ -141,7 +141,7 @@ describe('BookingPage', () => {
     const dialog = await screen.findByRole('dialog')
     expect(dialog).toBeInTheDocument()
     expect(within(dialog).getByText('Hillbrow Clinic')).toBeInTheDocument()
-    expect(within(dialog).getByText('Sunday 10 May 2099')).toBeInTheDocument()
+    expect(within(dialog).getByText('Sunday, 10 May 2099')).toBeInTheDocument()
     expect(within(dialog).getByText('9:00 AM')).toBeInTheDocument()
     expect(within(dialog).getByText('Jane Doe')).toBeInTheDocument()
   })
