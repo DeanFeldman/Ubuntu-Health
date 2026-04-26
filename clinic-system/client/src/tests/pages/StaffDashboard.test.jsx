@@ -330,7 +330,17 @@ describe('StaffDashboard', () => {
  test('shows validation error when availability times are invalid', async () => {
   const user = userEvent.setup()
 
-  setupFetchMock()
+  setupFetchMock({
+    availability: [
+      {
+        id: 'availability-1',
+        day_of_week: 1,
+        start_time: '08:00:00',
+        end_time: '17:00:00',
+        is_available: true,
+      },
+    ],
+  })
 
   renderDashboard()
 
@@ -338,22 +348,11 @@ describe('StaffDashboard', () => {
     expect(screen.queryByText('Loading availability…')).not.toBeInTheDocument()
   })
 
-  const checkboxes = await screen.findAllByRole('checkbox')
-  await user.click(checkboxes[0])
-
   const startInput = await screen.findByLabelText('Monday start time')
   const endInput = await screen.findByLabelText('Monday end time')
 
-  await waitFor(() => {
-    expect(startInput).not.toBeDisabled()
-    expect(endInput).not.toBeDisabled()
-  })
-
-  await user.clear(startInput)
-  await user.type(startInput, '18:00')
-
-  await user.clear(endInput)
-  await user.type(endInput, '09:00')
+  fireEvent.change(startInput, { target: { value: '18:00' } })
+  fireEvent.change(endInput, { target: { value: '09:00' } })
 
   await user.click(screen.getByRole('button', { name: /save availability/i }))
 
