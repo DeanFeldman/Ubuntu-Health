@@ -7,6 +7,7 @@ require('dotenv').config()
 const app = express()
 const DEFAULT_ESTIMATED_WAIT_APPOINTMENT_DURATION = 15
 const ESTIMATED_WAIT_FALLBACK_MESSAGE = 'Estimated wait time may be inaccurate'
+
 const {
   checkAndTriggerNotifications,
   configureQueueNotificationService,
@@ -29,6 +30,29 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey)
 configureQueueNotificationService(supabase)
+
+const APPOINTMENT_STATUSES = ['Confirmed', 'Waiting', 'Completed', 'Cancelled']
+const BOOKED_APPOINTMENT_STATUSES = ['Confirmed', 'Waiting']
+
+function isValidAppointmentStatus(status) {
+  return APPOINTMENT_STATUSES.includes(status)
+}
+
+function normalizeAppointmentStatus(status) {
+  if (!status) return 'Confirmed'
+
+  const normalized = String(status).trim()
+
+  const legacyStatusMap = {
+    Pending: 'Confirmed',
+    Rescheduled: 'Confirmed',
+    Complete: 'Completed',
+    'No-show': 'Cancelled',
+    NoShow: 'Cancelled',
+  }
+
+  return legacyStatusMap[normalized] || normalized
+}
 
 async function fetchActiveQueueSnapshot(clinicId) {
   const { data, error } = await supabase
@@ -198,7 +222,7 @@ async function fetchBookedSlotTimes(clinicId, startIso, endIso) {
     .from('appointments')
     .select('slot_id')
     .eq('clinic_id', clinicId)
-    .in('status', ['Pending', 'Confirmed'])
+    .in('status', BOOKED_APPOINTMENT_STATUSES)
 
   if (appointmentsError) throw appointmentsError
 
@@ -1955,7 +1979,7 @@ app.post('/api/appointments', async (req, res) => {
       .select('id')
       .eq('clinic_id', clinic_id)
       .eq('slot_id', slotRecord.id)
-      .in('status', ['Pending', 'Confirmed'])
+      .in('status', BOOKED_APPOINTMENT_STATUSES)
       .maybeSingle()
 
     if (existingError) throw existingError
