@@ -394,18 +394,40 @@ function createDefaultAvailability() {
   }))
 }
 
-function getClinicDayHours(clinic, dayLabel) {
-  if (!clinic) return { start_time: '', end_time: '' }
+  function getClinicDayHours(clinic, dayLabel) {
+    if (!clinic) return { start_time: '', end_time: '' }
 
-  const day = dayLabel.toLowerCase()
-  const hours = clinic.operating_hours || clinic.hours || {}
-  const dayHours = hours[day]
+    const day = dayLabel.toLowerCase()
+    const hours = clinic.operating_hours || clinic.hours || {}
 
-  return {
-    start_time: dayHours?.open?.slice(0, 5) || '',
-    end_time: dayHours?.close?.slice(0, 5) || '',
+    const dayHours =
+      hours[day] ||
+      hours[dayLabel] ||
+      hours[dayLabel.toUpperCase()] ||
+      hours[dayLabel.slice(0, 3).toLowerCase()] ||
+      null
+
+    if (!dayHours) return { start_time: '', end_time: '' }
+
+    const open =
+      dayHours.open ||
+      dayHours.start ||
+      dayHours.start_time ||
+      dayHours.opening_time ||
+      ''
+
+    const close =
+      dayHours.close ||
+      dayHours.end ||
+      dayHours.end_time ||
+      dayHours.closing_time ||
+      ''
+
+    return {
+      start_time: open ? String(open).slice(0, 5) : '',
+      end_time: close ? String(close).slice(0, 5) : '',
+    }
   }
-}
 
 const STATUS_SEQUENCE = ['Waiting', 'In Consultation', 'Complete']
 
@@ -551,17 +573,17 @@ export default function StaffDashboard() {
         DAYS.map(day => {
           const existing = byDay.get(day.value)
 
-          const clinicHours = getClinicDayHours(clinicDetails, day.label)
+            const clinicIsOpen = Boolean(clinicHours.start_time && clinicHours.end_time)
 
-          return {
-            day_of_week: day.value,
-            day_label: day.label,
-            id: existing?.id || null,
-            start_time: clinicHours.start_time,
-            end_time: clinicHours.end_time,
-            is_available: existing?.is_available || false,
-            error: '',
-          }
+            return {
+              day_of_week: day.value,
+              day_label: day.label,
+              id: existing?.id || null,
+              start_time: clinicHours.start_time,
+              end_time: clinicHours.end_time,
+              is_available: clinicIsOpen,
+              error: '',
+            }
 
         })
       )
@@ -583,9 +605,19 @@ export default function StaffDashboard() {
       current.map(row => {
         if (row.day_of_week !== dayOfWeek) return row
 
-        const updated = {
+        let updated = {
           ...row,
           [field]: value,
+        }
+
+        if (field === 'is_available' && value === true) {
+          const clinicHours = getClinicDayHours(clinicDetails, row.day_label)
+
+          updated = {
+            ...updated,
+            start_time: updated.start_time || clinicHours.start_time,
+            end_time: updated.end_time || clinicHours.end_time,
+          }
         }
 
         return {
@@ -1448,8 +1480,10 @@ const handleGoToBooking = async () => {
                 <section>
                   {row.error ? (
                     <p className="sd-availability-error">{row.error}</p>
-                  ) : (
+                  ) : row.start_time && row.end_time ? (
                     <span className="sd-stat-label">Ready</span>
+                  ) : (
+                    <span className="sd-stat-label">Clinic closed</span>
                   )}
                 </section>
               </section>
