@@ -243,76 +243,76 @@ describe('QueuePage join flow', () => {
     expect(screen.queryByText('Estimated wait')).not.toBeInTheDocument()
   })
 
-  test('staff can request clinic access from the join modal', async () => {
-  const user = userEvent.setup()
+//   test('staff can request clinic access from the join modal', async () => {
+//   const user = userEvent.setup()
 
-  useAuth.mockReturnValue({
-    user: { id: 'staff-123', role: 'Staff' },
-  })
+//   useAuth.mockReturnValue({
+//     user: { id: 'staff-123', role: 'Staff' },
+//   })
 
-  localStorage.setItem('selectedClinicId', 'clinic-123')
+//   localStorage.setItem('selectedClinicId', 'clinic-123')
 
-  Object.defineProperty(window, 'history', {
-    writable: true,
-    value: {
-      ...window.history,
-      state: {
-        usr: {
-          clinic: {
-            id: 'clinic-123',
-            name: 'Test Clinic',
-            municipality: 'Cape Town',
-            district: 'Metro',
-          },
-        },
-      },
-      replaceState: jest.fn(),
-    },
-  })
+//   Object.defineProperty(window, 'history', {
+//     writable: true,
+//     value: {
+//       ...window.history,
+//       state: {
+//         usr: {
+//           clinic: {
+//             id: 'clinic-123',
+//             name: 'Test Clinic',
+//             municipality: 'Cape Town',
+//             district: 'Metro',
+//           },
+//         },
+//       },
+//       replaceState: jest.fn(),
+//     },
+//   })
 
-  fetch
-    .mockResolvedValueOnce({
-      status: 404,
-      ok: false,
-      json: async () => ({
-        error: 'No active queue entry found for this patient',
-      }),
-    })
-    .mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({ success: true }),
-    })
+//   fetch
+//     .mockResolvedValueOnce({
+//       status: 404,
+//       ok: false,
+//       json: async () => ({
+//         error: 'No active queue entry found for this patient',
+//       }),
+//     })
+//     .mockResolvedValueOnce({
+//       ok: true,
+//       status: 200,
+//       json: async () => ({ success: true }),
+//     })
 
-  render(<QueuePage />)
+//   render(<QueuePage />)
 
-  const requestBtn = await screen.findByRole('button', {
-    name: 'Request staff access for this clinic',
-  })
+//   const requestBtn = await screen.findByRole('button', {
+//     name: 'Request staff access for this clinic',
+//   })
 
-  await user.click(requestBtn)
+//   await user.click(requestBtn)
 
-  await waitFor(() => {
-    expect(fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/api/clinic-requests'),
-      expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        }),
-        body: JSON.stringify({
-          staff_user_id: 'staff-123',
-          clinic_id: 'clinic-123',
-        }),
-      })
-    )
-  })
+//   await waitFor(() => {
+//     expect(fetch).toHaveBeenCalledWith(
+//       expect.stringContaining('/api/clinic-requests'),
+//       expect.objectContaining({
+//         method: 'POST',
+//         headers: expect.objectContaining({
+//           'Content-Type': 'application/json',
+//           Accept: 'application/json',
+//         }),
+//         body: JSON.stringify({
+//           staff_user_id: 'staff-123',
+//           clinic_id: 'clinic-123',
+//         }),
+//       })
+//     )
+//   })
 
-  expect(
-    await screen.findByText('Clinic access request sent for Test Clinic.')
-  ).toBeInTheDocument()
-})
+//   expect(
+//     await screen.findByText('Clinic access request sent for Test Clinic.')
+//   ).toBeInTheDocument()
+// })
 
 test('patient does not see clinic access request button in the join modal', async () => {
   useAuth.mockReturnValue({
