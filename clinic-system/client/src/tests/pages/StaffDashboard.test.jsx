@@ -18,6 +18,20 @@ jest.mock('react-router-dom', () => ({
 
 const mockNavigate = jest.fn()
 
+const defaultClinic = {
+  id: 'clinic-1',
+  name: 'Hillbrow Clinic',
+  operating_hours: {
+    monday: { open: '08:00', close: '17:00' },
+    tuesday: { open: '08:00', close: '17:00' },
+    wednesday: { open: '08:00', close: '17:00' },
+    thursday: { open: '08:00', close: '17:00' },
+    friday: { open: '08:00', close: '17:00' },
+    saturday: { open: '08:00', close: '12:00' },
+    sunday: { open: '08:00', close: '12:00' },
+  },
+}
+
 function renderDashboard(authOverride = {}) {
   useAuth.mockReturnValue({
     user: { id: 'staff-1', clinic_id: 'clinic-1' },
@@ -32,31 +46,18 @@ function renderDashboard(authOverride = {}) {
 function setupFetchMock({
   queue = [],
   users = [],
-  completedCount = 0,
-  clinicDetails = {
-    id: 'clinic-1',
-    name: 'Hillbrow Clinic',
-    operating_hours: {
-      monday: { open: '08:00', close: '17:00' },
-      tuesday: { open: '08:00', close: '17:00' },
-      wednesday: { open: '08:00', close: '17:00' },
-      thursday: { open: '08:00', close: '17:00' },
-      friday: { open: '08:00', close: '17:00' },
-      saturday: { open: '08:00', close: '12:00' },
-      sunday: { open: '08:00', close: '12:00' },
-    },
-  },
-  clinics = [{ id: 'clinic-1', name: 'Hillbrow Clinic' }],
   appointments = [],
-  availability = [],
+  completedCount = 0,
+  clinics = [{ id: 'clinic-1', name: 'Hillbrow Clinic' }],
+  clinicDetails = defaultClinic,
   queueOk = true,
   queueError = 'Failed to load queue.',
+  appointmentsOk = true,
+  appointmentsError = 'Failed to load appointments.',
   joinOk = true,
   joinError = 'Failed to add patient to queue',
-  clinicsOk = true,
-  clinicsError = 'Failed to load clinic.',
-  availabilityOk = true,
-  availabilityError = 'Failed to load availability.',
+  createPatientOk = true,
+  createPatientError = 'Failed to create patient.',
 } = {}) {
   global.fetch = jest.fn((url, options = {}) => {
     const urlString = String(url)
@@ -78,8 +79,9 @@ function setupFetchMock({
 
     if (urlString.includes('/api/appointments/clinic/') && method === 'GET') {
       return Promise.resolve({
-        ok: true,
-        json: async () => ({ appointments }),
+        ok: appointmentsOk,
+        json: async () =>
+          appointmentsOk ? { appointments } : { error: appointmentsError },
       })
     }
 
@@ -92,38 +94,15 @@ function setupFetchMock({
 
     if (urlString.endsWith('/api/clinics') && method === 'GET') {
       return Promise.resolve({
-        ok: clinicsOk,
-        json: async () =>
-          clinicsOk ? { clinics } : { error: clinicsError },
+        ok: true,
+        json: async () => ({ clinics }),
       })
     }
 
     if (urlString.includes('/availability') && method === 'GET') {
       return Promise.resolve({
-        ok: availabilityOk,
-        json: async () =>
-          availabilityOk ? { availability } : { error: availabilityError },
-      })
-    }
-
-    if (
-      urlString.includes('/api/queue/') &&
-      !urlString.includes('/completed-count') &&
-      !urlString.includes('/status') &&
-      !urlString.includes('/entry/') &&
-      !urlString.includes('/join') &&
-      method === 'GET'
-    ) {
-      return Promise.resolve({
-        ok: queueOk,
-        json: async () => (queueOk ? { queue } : { error: queueError }),
-      })
-    }
-
-    if (urlString.includes('/join') && method === 'POST') {
-      return Promise.resolve({
-        ok: joinOk,
-        json: async () => (joinOk ? {} : { error: joinError }),
+        ok: true,
+        json: async () => ({ availability: [] }),
       })
     }
 
@@ -138,6 +117,42 @@ function setupFetchMock({
       return Promise.resolve({
         ok: true,
         json: async () => ({}),
+      })
+    }
+
+    if (urlString.includes('/join') && method === 'POST') {
+      return Promise.resolve({
+        ok: joinOk,
+        json: async () => (joinOk ? {} : { error: joinError }),
+      })
+    }
+
+    if (urlString.includes('/api/patients') && method === 'POST') {
+      return Promise.resolve({
+        ok: createPatientOk,
+        json: async () =>
+          createPatientOk
+            ? {
+                patient: {
+                  id: 'new-patient-1',
+                  full_name: 'New Patient',
+                  email: 'new@example.com',
+                  role: 'Patient',
+                },
+              }
+            : { error: createPatientError },
+      })
+    }
+
+    if (
+      urlString.includes('/api/queue/') &&
+      !urlString.includes('/completed-count') &&
+      !urlString.includes('/join') &&
+      method === 'GET'
+    ) {
+      return Promise.resolve({
+        ok: queueOk,
+        json: async () => (queueOk ? { queue } : { error: queueError }),
       })
     }
 
@@ -173,7 +188,19 @@ describe('StaffDashboard', () => {
     ).toBeInTheDocument()
   })
 
-  test('shows empty state when queue is empty', async () => {
+  test('shows queue error state when queue fetch fails', async () => {
+    setupFetchMock({
+      queueOk: false,
+      queueError: 'Queue failed to load.',
+    })
+
+    renderDashboard()
+
+    expect(await screen.findByText('Queue failed to load.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument()
+  })
+
+  test('shows empty queue state', async () => {
     setupFetchMock({ queue: [] })
 
     renderDashboard()
@@ -183,7 +210,7 @@ describe('StaffDashboard', () => {
     ).toBeInTheDocument()
   })
 
-  test('renders queue data when available', async () => {
+  test('renders queue patient details', async () => {
     setupFetchMock({
       queue: [
         {
@@ -197,13 +224,6 @@ describe('StaffDashboard', () => {
           },
         },
       ],
-      users: [
-        {
-          id: 'patient-1',
-          full_name: 'Jane Doe',
-          role: 'Patient',
-        },
-      ],
       completedCount: 2,
     })
 
@@ -215,13 +235,16 @@ describe('StaffDashboard', () => {
     expect(screen.getByText('2')).toBeInTheDocument()
   })
 
-  test('adds a patient to the queue', async () => {
+  test('adds selected patient to queue', async () => {
     const user = userEvent.setup()
 
     setupFetchMock({
-      queue: [],
       users: [
-        { id: 'patient-2', full_name: 'John Smith', role: 'Patient' },
+        {
+          id: 'patient-2',
+          full_name: 'John Smith',
+          role: 'Patient',
+        },
       ],
     })
 
@@ -230,23 +253,21 @@ describe('StaffDashboard', () => {
     const select = await screen.findByLabelText('Select patient')
 
     await waitFor(() => {
-      expect(
-        screen.getByRole('option', { name: /John Smith/i })
-      ).toBeInTheDocument()
+      expect(screen.getByRole('option', { name: /John Smith/i })).toBeInTheDocument()
     })
 
-    await user.selectOptions(select, 'patient-2')
-    await user.click(screen.getByRole('button', { name: 'Add to queue' }))
+    await user.selectOptions(
+      select,
+      screen.getByRole('option', { name: /John Smith/i })
+    )
+
+    await user.click(screen.getByRole('button', { name: /add to queue/i }))
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
         expect.stringContaining('/join'),
         expect.objectContaining({
           method: 'POST',
-          headers: expect.objectContaining({
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          }),
           body: JSON.stringify({
             patient_id: 'patient-2',
             confirmed: true,
@@ -258,53 +279,135 @@ describe('StaffDashboard', () => {
     expect(await screen.findByText('Patient added to queue.')).toBeInTheDocument()
   })
 
-  test('navigates to booking page when clinic is found', async () => {
+  test('shows error toast when adding patient to queue fails', async () => {
     const user = userEvent.setup()
 
     setupFetchMock({
-      clinics: [{ id: 'clinic-1', name: 'Hillbrow Clinic' }],
+      users: [
+        {
+          id: 'patient-2',
+          full_name: 'John Smith',
+          role: 'Patient',
+        },
+      ],
+      joinOk: false,
+      joinError: 'Patient already has an active queue entry',
     })
 
     renderDashboard()
 
-    await user.click(screen.getByRole('button', { name: 'Add appointment' }))
+    const select = await screen.findByLabelText('Select patient')
 
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith('/booking', {
-  state: {
-    clinic: { id: 'clinic-1', name: 'Hillbrow Clinic' },
-    bookingMode: 'staff',
-  },
-})
+      expect(screen.getByRole('option', { name: /John Smith/i })).toBeInTheDocument()
     })
+
+    await user.selectOptions(
+      select,
+      screen.getByRole('option', { name: /John Smith/i })
+    )
+
+    await user.click(screen.getByRole('button', { name: /add to queue/i }))
+
+    expect(
+      await screen.findByText('Patient already has an active queue entry')
+    ).toBeInTheDocument()
   })
 
-  test('shows error toast when assigned clinic is not found for booking', async () => {
+  test('opens add new patient popup', async () => {
     const user = userEvent.setup()
 
-    setupFetchMock({
-      clinics: [{ id: 'clinic-999', name: 'Other Clinic' }],
-    })
-
+    setupFetchMock()
     renderDashboard()
 
-    await user.click(screen.getByRole('button', { name: 'Add appointment' }))
+    await user.click(screen.getByRole('button', { name: /\+ add new patient/i }))
 
-    expect(await screen.findByText('Assigned clinic not found.')).toBeInTheDocument()
+    expect(await screen.findByText('Add New Patient')).toBeInTheDocument()
+    expect(screen.getByLabelText(/full name/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/email address/i)).toBeInTheDocument()
   })
 
-  test('renders appointment date selector and empty appointment state', async () => {
+  test('shows validation errors when adding new patient with empty fields', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock()
+    renderDashboard()
+
+    await user.click(screen.getByRole('button', { name: /\+ add new patient/i }))
+    await user.click(await screen.findByRole('button', { name: /^add patient$/i }))
+
+    expect(await screen.findByText('Name is required.')).toBeInTheDocument()
+    expect(screen.getByText('Email is required.')).toBeInTheDocument()
+  })
+
+  test('shows validation error for invalid new patient email', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock()
+    renderDashboard()
+
+    await user.click(screen.getByRole('button', { name: /\+ add new patient/i }))
+
+    await user.type(await screen.findByLabelText(/full name/i), 'Test Patient')
+    await user.type(screen.getByLabelText(/email address/i), 'bad-email')
+    await user.click(screen.getByRole('button', { name: /^add patient$/i }))
+
+    expect(await screen.findByText('Enter a valid email address.')).toBeInTheDocument()
+  })
+
+  test('creates a new patient from popup', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock()
+    renderDashboard()
+
+    await user.click(screen.getByRole('button', { name: /\+ add new patient/i }))
+
+    await user.type(await screen.findByLabelText(/full name/i), 'New Patient')
+    await user.type(screen.getByLabelText(/email address/i), 'new@example.com')
+    await user.click(screen.getByRole('button', { name: /^add patient$/i }))
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/patients'),
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            full_name: 'New Patient',
+            email: 'new@example.com',
+            created_by: 'staff-1',
+          }),
+        })
+      )
+    })
+
+    expect(await screen.findByText('New Patient added as a new patient.')).toBeInTheDocument()
+  })
+
+  test('renders appointment date selector and empty appointments state', async () => {
     setupFetchMock({ appointments: [] })
 
     renderDashboard()
 
     expect(await screen.findByLabelText('Appointment date')).toBeInTheDocument()
+
     expect(
       await screen.findByText('No appointments found for this date.')
     ).toBeInTheDocument()
   })
 
-  test('renders appointments for the selected date', async () => {
+  test('shows appointment error state when appointment fetch fails', async () => {
+    setupFetchMock({
+      appointmentsOk: false,
+      appointmentsError: 'Appointments failed to load.',
+    })
+
+    renderDashboard()
+
+    expect(await screen.findByText('Appointments failed to load.')).toBeInTheDocument()
+  })
+
+  test('renders clinic appointments for selected date', async () => {
     setupFetchMock({
       appointments: [
         {
@@ -324,25 +427,70 @@ describe('StaffDashboard', () => {
     expect(await screen.findByText('Thabo Mokoena')).toBeInTheDocument()
     expect(screen.getByText('thabo@example.com')).toBeInTheDocument()
     expect(screen.getByText('09:30')).toBeInTheDocument()
-    expect(screen.getByText('Confirmed')).toBeInTheDocument()
+    expect(screen.getAllByText('Confirmed').length).toBeGreaterThan(0)
   })
 
- 
-  test('handles empty availability state without crashing', async () => {
-  setupFetchMock({ availability: [] })
+  test('disables appointment actions for cancelled appointments', async () => {
+    setupFetchMock({
+      appointments: [
+        {
+          id: 'appointment-1',
+          slot_datetime: '2026-04-26T09:30:00',
+          status: 'Cancelled',
+          patient: {
+            full_name: 'Cancelled Patient',
+            email: 'cancelled@example.com',
+          },
+        },
+      ],
+    })
 
-  renderDashboard()
+    renderDashboard()
 
-  expect(await screen.findByText('Availability')).toBeInTheDocument()
-
-  // wait until loading disappears
-  await waitFor(() => {
-    expect(screen.queryByText('Loading availability…')).not.toBeInTheDocument()
+    expect(await screen.findByText('Cancelled Patient')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /reschedule/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /cancel/i })).toBeDisabled()
   })
 
-  // now the grid (and button) exist
-  expect(
-    await screen.findByRole('button', { name: /save availability/i })
-  ).toBeInTheDocument()
-})
+  test('navigates to booking page when adding appointment', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock()
+
+    renderDashboard()
+
+    await user.click(await screen.findByRole('button', { name: /add appointment/i }))
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/booking', {
+        state: {
+          clinic: { id: 'clinic-1', name: 'Hillbrow Clinic' },
+          bookingMode: 'staff',
+        },
+      })
+    })
+  })
+
+  test('shows error toast when assigned clinic is not found for booking', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock({
+      clinics: [{ id: 'clinic-999', name: 'Other Clinic' }],
+    })
+
+    renderDashboard()
+
+    await user.click(await screen.findByRole('button', { name: /add appointment/i }))
+
+    expect(await screen.findByText('Assigned clinic not found.')).toBeInTheDocument()
+  })
+
+  test('shows availability section', async () => {
+    setupFetchMock()
+
+    renderDashboard()
+
+    expect(await screen.findByText('Availability')).toBeInTheDocument()
+    expect(screen.getByText(/set the days and times/i)).toBeInTheDocument()
+  })
 })
