@@ -13,7 +13,7 @@ const {
   isBookingAtOwnClinic,
   getAvailableStaffAtTime,
   validateStaffSelfBookingAvailabilityRule,
-} = require('../../src/appointmentBookingValidation')
+} = require('../../../src/appointmentBookingValidation')
 
 const clinicId = '11111111-1111-1111-1111-111111111111'
 const staffId = '22222222-2222-2222-2222-222222222222'

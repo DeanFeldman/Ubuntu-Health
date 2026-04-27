@@ -84,7 +84,7 @@ beforeEach(() => {
     from: jest.fn((table) => makeBuilder(table)),
   }
 
-  app = require('../src/app')
+  app = require('../../src/app')
 })
 
 

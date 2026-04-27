@@ -3,7 +3,7 @@ const {
   isValidDateFormat,
   isPastDate,
   validateSlotRetrievalInput,
-} = require('../../src/appointmentSlotValidation')
+} = require('../../../src/appointmentSlotValidation')
 
 const VALID_UUID = '0b0d9f9a-9a5e-47fe-92e0-7d1696e41464'
 const INVALID_UUID = 'not-a-uuid'

@@ -18,7 +18,7 @@ const {
   isValidOperatingHours,
   isValidAppointmentDurationMinutes,
   validateClinicUpdatePayload,
-} = require('../src/clinicManagementValidation')
+} = require('../../../src/clinicManagementValidation')
 
 function makeValidOperatingHours() {
   return {

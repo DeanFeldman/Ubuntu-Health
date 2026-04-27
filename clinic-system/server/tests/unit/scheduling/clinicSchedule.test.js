@@ -4,7 +4,7 @@ const {
   normalizeAppointmentDuration,
   normalizeOperatingHours,
   resolveClinicSchedule,
-} = require('../src/clinicSchedule')
+} = require('../../../src/clinicSchedule')
 
 describe('clinicSchedule', () => {
   test('uses default operating hours when operating_hours is null', () => {

@@ -3,7 +3,7 @@ const {
   canJoinQueue,
   validateQueueJoin,
   isValidStatusTransition,
-} = require('../src/queueValidation')
+} = require('../../../src/queueValidation')
 
 // QUEUE JOIN VALIDATION TESTS
 describe('Queue join validation helpers', () => {

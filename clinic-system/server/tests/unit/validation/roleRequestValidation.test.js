@@ -5,7 +5,7 @@ const {
   isDifferentFromCurrentRole,
   doesUserExist,
   hasDuplicatePendingRoleRequest,
-} = require('../src/roleRequestValidation')
+} = require('../../../src/roleRequestValidation')
 
 describe('Role request validation helpers', () => {
   test('returns true when both required fields are provided', () => {
