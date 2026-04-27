@@ -556,7 +556,15 @@ export default function BookingPage() {
 
         if (!res.ok) throw new Error(data.error || 'Failed to load slots')
 
-        setSlots(Array.isArray(data) ? data : [])
+        const rawSlots = Array.isArray(data) ? data : []
+
+          const availableFutureSlots = rawSlots.filter(slot => {
+            const slotDateTime = new Date(`${selectedDate}T${slot}:00`)
+            return slotDateTime > new Date()
+          })
+
+          setSlots(availableFutureSlots)
+          
       } catch (err) {
         console.error(err)
 
