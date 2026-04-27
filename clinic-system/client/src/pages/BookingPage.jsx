@@ -741,6 +741,7 @@ export default function BookingPage() {
     if (isStaff) {
       navigate('/clinic')
     } 
+    navigate('/clinic')
   }
 
   // ── Redirect if no clinic context ──
