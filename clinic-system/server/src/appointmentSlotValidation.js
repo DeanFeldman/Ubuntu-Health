@@ -43,10 +43,26 @@ function validateSlotRetrievalInput({ clinic_id, date }) {
 
   return { valid: true }
 }
+function sanitizeGeneratedSlots(slots, date) {
+  if (!Array.isArray(slots)) return []
+
+  const today = new Date().toISOString().slice(0, 10)
+  const now = new Date()
+
+  return [...new Set(slots)]
+    .filter(slot => typeof slot === 'string')
+    .filter(slot => /^([01]\d|2[0-3]):[0-5]\d$/.test(slot))
+    .filter(slot => {
+      if (date !== today) return true
+      return new Date(`${date}T${slot}:00`) >= now
+    })
+    .sort()
+}
 
 module.exports = {
   isValidUuid,
   isValidDateFormat,
   isPastDate,
   validateSlotRetrievalInput,
+  sanitizeGeneratedSlots,
 }

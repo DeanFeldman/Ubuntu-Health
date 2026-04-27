@@ -217,6 +217,8 @@ function getTimeFromAppointmentDatetime(slotDatetime) {
   return `${String(parsedDate.getHours()).padStart(2, '0')}:${String(parsedDate.getMinutes()).padStart(2, '0')}`
 }
 
+const { validateSlotRetrievalInput, sanitizeGeneratedSlots } = require('./appointmentSlotValidation')
+
 async function fetchBookedSlotTimes(clinicId, startIso, endIso) {
   const { data: appointments, error: appointmentsError } = await supabase
     .from('appointments')
@@ -2012,7 +2014,6 @@ app.post('/api/patients', async (req, res) => {
   }
 })
 
-const { validateSlotRetrievalInput } = require('./appointmentSlotValidation')
 const {
   validateAppointmentBookingInput,
   validateStaffSelfBookingAvailabilityRule,
@@ -2062,7 +2063,10 @@ app.get('/api/appointments/slots', async (req, res) => {
       startOfNextDay.toISOString()
     )
 
-    return res.json(dailySlots.filter((slot) => !bookedTimes.has(slot)))
+    //return res.json(dailySlots.filter((slot) => !bookedTimes.has(slot)))
+    const availableSlots = dailySlots.filter((slot) => !bookedTimes.has(slot))
+
+    return res.json(sanitizeGeneratedSlots(availableSlots, date))
   } catch (err) {
     console.error(err)
     return res.status(500).json({ error: 'Failed to fetch appointment slots' })

@@ -252,4 +252,24 @@ test('shows slot API error when available slots fail to load', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load slots')
   expect(screen.getByText('Failed to load slots')).toBeInTheDocument()
 })
+test('shows only valid slots returned by the backend', async () => {
+  const user = userEvent.setup()
+
+  setupFetchMock({
+    slots: ['09:00', '09:30'],
+  })
+
+  renderPage()
+
+  await waitFor(() => {
+    expect(screen.getByRole('option', { name: /Jane Doe/ })).toBeInTheDocument()
+  })
+
+  await user.type(screen.getByLabelText('Appointment date'), '2099-05-10')
+
+  expect(await screen.findByRole('button', { name: '9:00 AM' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '9:30 AM' })).toBeInTheDocument()
+  expect(screen.queryByText('bad-slot')).not.toBeInTheDocument()
+  expect(screen.queryByText('25:99')).not.toBeInTheDocument()
+})
 })
