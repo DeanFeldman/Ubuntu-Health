@@ -394,6 +394,19 @@ function createDefaultAvailability() {
   }))
 }
 
+function formatDisplayDate(dateStr) {
+  if (!dateStr) return ''
+
+  const [year, month, day] = dateStr.split('-').map(Number)
+
+  return new Date(year, month - 1, day).toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
   function getClinicDayHours(clinic, dayLabel) {
     if (!clinic) return { start_time: '', end_time: '' }
 
@@ -516,19 +529,26 @@ export default function StaffDashboard() {
     }, 3000)
   }, [])
 
-    const validateAvailabilityRow = row => {
-    if (!row.is_available) return ''
+const validateAvailabilityRow = row => {
+  if (!row.is_available) return ''
 
-    if (!row.start_time || !row.end_time) {
-      return 'Start and end time are required.'
-    }
+  const hasStart = Boolean(row.start_time)
+  const hasEnd = Boolean(row.end_time)
 
-    if (row.start_time >= row.end_time) {
-      return 'Start time must be before end time.'
-    }
-
+  if (!hasStart && !hasEnd) {
     return ''
   }
+
+  if (hasStart !== hasEnd) {
+    return 'Both start and end time are required.'
+  }
+
+  if (row.start_time >= row.end_time) {
+    return 'Start time must be before end time.'
+  }
+
+  return ''
+}
 
   const fetchClinicDetails = useCallback(async () => {
   if (authLoading || !resolvedClinicId) return
@@ -631,83 +651,95 @@ export default function StaffDashboard() {
   }
 
   const handleSaveAvailability = async () => {
-    if (!user?.id) return
+  if (!user?.id) return
 
-    const prepared = availability.map(row => ({
-      ...row,
-      error: validateAvailabilityRow(row),
-    }))
+  const prepared = availability.map(row => ({
+    ...row,
+    error: validateAvailabilityRow(row),
+  }))
 
-    setAvailability(prepared)
+  setAvailability(prepared)
 
-    if (prepared.some(row => row.error)) {
-      showToast('Please fix availability errors first.', 'error')
-      return
-    }
+  if (prepared.some(row => row.error)) {
+    showToast('Please fix availability errors first.', 'error')
+    return
+  }
 
-    setAvailabilitySaving(true)
+  const rowsToSave = prepared.filter(row => {
+    if (!row.is_available) return row.id
+    return row.start_time && row.end_time
+  })
 
-    try {
-      for (const row of prepared) {
-        const payload = {
-          start_time: row.start_time,
-          end_time: row.end_time,
-          is_available: row.is_available,
-        }
+  if (rowsToSave.length === 0) {
+    showToast('No availability changes to save.', 'error')
+    return
+  }
 
-        if (row.id) {
-          const res = await fetch(
-            `${API_BASE}/api/staff/${user.id}/availability/${row.id}`,
-            {
-              method: 'PATCH',
-              headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-              },
-              body: JSON.stringify(payload),
-            }
-          )
+  setAvailabilitySaving(true)
 
-          const body = await res.json().catch(() => ({}))
+  try {
+    for (const row of rowsToSave) {
+      const payload = {
+        start_time: row.start_time || null,
+        end_time: row.end_time || null,
+        is_available: row.is_available,
+      }
 
-          if (!res.ok) {
-            throw new Error(body.error || `Failed to update ${row.day_label}.`)
-          }
-        } else {
-          const res = await fetch(`${API_BASE}/api/staff/${user.id}/availability`, {
-            method: 'POST',
+      if (row.id) {
+        const res = await fetch(
+          `${API_BASE}/api/staff/${user.id}/availability/${row.id}`,
+          {
+            method: 'PATCH',
             headers: {
               'Content-Type': 'application/json',
               Accept: 'application/json',
             },
-            body: JSON.stringify({
-              day_of_week: row.day_of_week,
-              start_time: row.start_time,
-              end_time: row.end_time,
-              is_available: row.is_available,
-            }),
-          })
-
-          const body = await res.json().catch(() => ({}))
-
-          if (!res.ok) {
-            if (body.error?.includes('already exists')) {
-              continue
-            }
-            throw new Error(body.error || `Failed to create ${row.day_label}.`)
+            body: JSON.stringify(payload),
           }
+        )
+
+        const body = await res.json().catch(() => ({}))
+
+        if (!res.ok) {
+          throw new Error(body.error || `Failed to update ${row.day_label}.`)
+        }
+      } else if (row.is_available && row.start_time && row.end_time) {
+        const res = await fetch(`${API_BASE}/api/staff/${user.id}/availability`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            day_of_week: row.day_of_week,
+            start_time: row.start_time,
+            end_time: row.end_time,
+            is_available: true,
+          }),
+        })
+
+        const body = await res.json().catch(() => ({}))
+
+        if (!res.ok) {
+          if (body.error?.includes('already exists')) {
+            continue
+          }
+
+          throw new Error(body.error || `Failed to create ${row.day_label}.`)
         }
       }
-
-      await fetchAvailability()
-      showToast('Availability saved successfully.', 'success')
-    } catch (err) {
-      showToast(err.message, 'error')
-    } finally {
-      setAvailabilitySaving(false)
     }
-  }
 
+    await fetchClinicDetails()
+    await fetchAvailability()
+
+    showToast('Availability saved successfully.', 'success')
+  } catch (err) {
+    showToast(err.message, 'error')
+  } finally {
+    setAvailabilitySaving(false)
+  }
+}
   
 const fetchAppointmentsByDate = useCallback(async () => {
   if (authLoading || !resolvedClinicId || !appointmentDate) return
@@ -830,11 +862,17 @@ useEffect(() => {
     const interval = setInterval(() => {
       fetchQueue()
       fetchCompletedCount()
-    }, 30000)
+      fetchPatients()
+      fetchAppointmentsByDate()
+    }, 10000)
 
     return () => clearInterval(interval)
-  }, [fetchQueue, fetchCompletedCount])
-
+  }, [
+    fetchQueue,
+    fetchCompletedCount,
+    fetchPatients,
+    fetchAppointmentsByDate,
+  ])
   const handleStatusUpdate = async entry => {
     const currentIndex = STATUS_SEQUENCE.indexOf(entry.status)
     const nextStatus =
@@ -1004,6 +1042,71 @@ const formatAppointmentTime = appointment => {
   return appointment.slot_datetime.slice(11, 16)
 }
   
+const handleAddNewPatient = async () => {
+  let valid = true
+  setNewPatientNameError('')
+  setNewPatientEmailError('')
+  setAddPatientError('')
+
+  if (!newPatientName.trim()) {
+    setNewPatientNameError('Name is required.')
+    valid = false
+  }
+
+  if (!newPatientEmail.trim()) {
+    setNewPatientEmailError('Email is required.')
+    valid = false
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newPatientEmail.trim())) {
+    setNewPatientEmailError('Enter a valid email address.')
+    valid = false
+  }
+
+  if (!valid) return
+
+  setAddingPatient(true)
+
+  try {
+    const res = await fetch(`${API_BASE}/api/patients`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        full_name: newPatientName.trim(),
+        email: newPatientEmail.trim(),
+        created_by: user.id,
+      }),
+    })
+
+    const data = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to create patient.')
+    }
+
+    const created = data.patient
+
+    setShowAddPatientPopup(false)
+    setNewPatientName('')
+    setNewPatientEmail('')
+    setSelectedPatientId(created.id)
+
+    await Promise.all([
+      fetchPatients(),
+      fetchQueue(),
+      fetchCompletedCount(),
+      fetchAppointmentsByDate(),
+    ])
+
+    showToast(`${created.full_name} added as a new patient.`, 'success')
+  } catch (err) {
+    setAddPatientError(err.message)
+  } finally {
+    setAddingPatient(false)
+  }
+}
+
 const handleAddPatientToQueue = async () => {
   if (!resolvedClinicId || !selectedPatientId) return
 
@@ -1028,61 +1131,19 @@ const handleAddPatientToQueue = async () => {
       throw new Error(body.error || 'Failed to add patient to queue')
     }
 
-    await fetchQueue()
-    await fetchCompletedCount()
+    await Promise.all([
+      fetchQueue(),
+      fetchCompletedCount(),
+      fetchPatients(),
+      fetchAppointmentsByDate(),
+    ])
+
     setSelectedPatientId('')
     showToast('Patient added to queue.', 'success')
   } catch (err) {
     showToast(err.message || 'Failed to add patient to queue', 'error')
   } finally {
     setAddPatientLoading(false)
-  }
-}  
-
-const handleAddNewPatient = async () => {
-  let valid = true
-  setNewPatientNameError('')
-  setNewPatientEmailError('')
-  setAddPatientError('')
-
-  if (!newPatientName.trim()) {
-    setNewPatientNameError('Name is required.')
-    valid = false
-  }
-  if (!newPatientEmail.trim()) {
-    setNewPatientEmailError('Email is required.')
-    valid = false
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newPatientEmail.trim())) {
-    setNewPatientEmailError('Enter a valid email address.')
-    valid = false
-  }
-  if (!valid) return
-
-  setAddingPatient(true)
-  try {
-    const res = await fetch(`${API_BASE}/api/patients`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        full_name: newPatientName.trim(),
-        email: newPatientEmail.trim(),
-        created_by: user.id,
-      }),
-    })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(data.error || 'Failed to create patient.')
-
-    const created = data.patient
-    setAllPatients(prev => [...prev, created])
-    setSelectedPatientId(created.id)
-    setShowAddPatientPopup(false)
-    setNewPatientName('')
-    setNewPatientEmail('')
-    showToast(`${created.full_name} added as a new patient.`, 'success')
-  } catch (err) {
-    setAddPatientError(err.message)
-  } finally {
-    setAddingPatient(false)
   }
 }
 
@@ -1126,6 +1187,16 @@ const handleGoToBooking = async () => {
     complete: completedCount,  
   }
 
+  const appointmentStats = {
+    total: appointments.length,
+    confirmed: appointments.filter(appointment => appointment.status === 'Confirmed').length,
+    waiting: appointments.filter(appointment => appointment.status === 'Waiting').length,
+    completed: appointments.filter(appointment =>
+      ['Completed', 'Complete'].includes(appointment.status)
+    ).length,
+    cancelled: appointments.filter(appointment => appointment.status === 'Cancelled').length,
+  }
+
   return (
     <>
       <style>{styles}</style>
@@ -1147,6 +1218,39 @@ const handleGoToBooking = async () => {
             <p className="sd-stat-value sd-stat-value--green">{stats.complete}</p>
           </li>
         </ul>
+
+        <h2 className="sd-heading" style={{ marginTop: 8 }}>
+          Clinic appointments for {formatDisplayDate(appointmentDate)} ({appointmentDate})
+        </h2>
+
+          <ul className="sd-stats" aria-label="Appointment summary">
+            <li className="sd-stat">
+              <p className="sd-stat-label">Total appointments</p>
+              <p className="sd-stat-value sd-stat-value--black">{appointmentStats.total}</p>
+            </li>
+
+            <li className="sd-stat">
+              <p className="sd-stat-label">Confirmed</p>
+              <p className="sd-stat-value sd-stat-value--blue">{appointmentStats.confirmed}</p>
+            </li>
+
+            <li className="sd-stat">
+              <p className="sd-stat-label">Waiting</p>
+              <p className="sd-stat-value sd-stat-value--yellow">{appointmentStats.waiting}</p>
+            </li>
+
+            <li className="sd-stat">
+              <p className="sd-stat-label">Completed</p>
+              <p className="sd-stat-value sd-stat-value--green">{appointmentStats.completed}</p>
+            </li>
+
+            <li className="sd-stat">
+              <p className="sd-stat-label">Cancelled</p>
+              <p className="sd-stat-value" style={{ color: '#B91C1C' }}>
+                {appointmentStats.cancelled}
+              </p>
+            </li>
+          </ul>
 
         <section className="sd-panel">
           <header className="sd-panel-header">
