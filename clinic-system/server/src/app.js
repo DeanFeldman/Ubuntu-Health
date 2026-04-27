@@ -2003,9 +2003,22 @@ app.post('/api/patients', async (req, res) => {
 
     if (existingUserError) throw existingUserError
     if (existingUser) {
-      return res.status(409).json({ error: 'A user with this email already exists' })
-    }
+  return res.status(409).json({ 
+    error: 'This patient is already registered in the system. Find them in the existing patients list instead.',
+    user_id: existingUser.id
+  })
+}
 
+// Check if email already exists in auth.users
+const { data: authUsers, error: authLookupError } = await supabase.auth.admin.listUsers()
+if (authLookupError) throw authLookupError
+
+const authEmailExists = authUsers.users.some(u => u.email === normalizedEmail)
+if (authEmailExists) {
+  return res.status(409).json({ 
+    error: 'This patient is already registered in the system. Find them in the existing patients list instead.'
+  })
+}
     // Create auth user so the patient ID works across all FK constraints
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email: normalizedEmail,
