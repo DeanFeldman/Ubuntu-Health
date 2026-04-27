@@ -14,6 +14,15 @@ let mockDb = {
 jest.mock('@supabase/supabase-js', () => {
   return {
     createClient: jest.fn(() => ({
+      auth: {
+        admin: {
+          createUser: jest.fn().mockResolvedValue({
+            data: { user: { id: 'new-auth-user-id' } },
+            error: null,
+          }),
+          deleteUser: jest.fn().mockResolvedValue({ error: null }),
+        },
+      },
       from: (table) => {
         return {
           select: () => ({

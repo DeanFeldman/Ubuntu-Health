@@ -1945,9 +1945,23 @@ app.patch('/api/staff/:staffId/availability/:availabilityId', async (req, res) =
 })
 
 // POST /api/patients — staff creates a patient record for a walk-in
+
 const { validatePatientInput } = require('./patientValidation')
 
+// POST /api/patients — staff creates a patient record for a walk-in
+
 app.post('/api/patients', async (req, res) => {
+  let createdAuthUserId = null
+
+  async function rollbackAuthUser() {
+    if (!createdAuthUserId) return
+    try {
+      await supabase.auth.admin.deleteUser(createdAuthUserId)
+    } catch (cleanupErr) {
+      console.error('Failed to rollback auth user:', cleanupErr)
+    }
+  }
+
   try {
     const { full_name, phone, email, date_of_birth, created_by } = req.body
 
@@ -1971,29 +1985,54 @@ app.post('/api/patients', async (req, res) => {
     const normalizedEmail = email.trim().toLowerCase()
 
     const { data: existingPatient, error: existingPatientError } = await supabase
-  .from('patients')
-  .select('id')
-  .eq('email', normalizedEmail)
-  .maybeSingle()
+      .from('patients')
+      .select('id')
+      .eq('email', normalizedEmail)
+      .maybeSingle()
 
-  if (existingPatientError) throw existingPatientError
+    if (existingPatientError) throw existingPatientError
+    if (existingPatient) {
+      return res.status(409).json({ error: 'A patient with this email already exists' })
+    }
 
-  if (existingPatient) {
-    return res.status(409).json({ error: 'A patient with this email already exists' })
-  }
+    const { data: existingUser, error: existingUserError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', normalizedEmail)
+      .maybeSingle()
 
-  const { data: existingUser, error: existingUserError } = await supabase
-    .from('users')
-    .select('id')
-    .eq('email', normalizedEmail)
-    .maybeSingle()
+    if (existingUserError) throw existingUserError
+    if (existingUser) {
+      return res.status(409).json({ error: 'A user with this email already exists' })
+    }
 
-  if (existingUserError) throw existingUserError
+    // Create auth user so the patient ID works across all FK constraints
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email: normalizedEmail,
+      email_confirm: true,
+      user_metadata: { full_name: full_name.trim() },
+    })
 
-  if (existingUser) {
-    return res.status(409).json({ error: 'A user with this email already exists' })
-  }
+    if (authError) throw authError
 
+    createdAuthUserId = authData.user.id
+
+    // Insert into public.users with the same ID
+    const { error: userInsertError } = await supabase
+      .from('users')
+      .insert({
+        id: createdAuthUserId,
+        email: normalizedEmail,
+        full_name: full_name.trim(),
+        role: 'Patient',
+      })
+
+    if (userInsertError) {
+      await rollbackAuthUser()
+      throw userInsertError
+    }
+
+    // Insert into patients table with linked_user_id
     const { data, error } = await supabase
       .from('patients')
       .insert({
@@ -2002,14 +2041,20 @@ app.post('/api/patients', async (req, res) => {
         email: normalizedEmail,
         date_of_birth: date_of_birth || null,
         created_by,
+        linked_user_id: createdAuthUserId,
       })
       .select()
       .single()
 
-    if (error) throw error
-    return res.status(201).json({ patient: data })
+    if (error) {
+      await rollbackAuthUser()
+      throw error
+    }
+
+    return res.status(201).json({ patient: { ...data, user_id: createdAuthUserId } })
   } catch (err) {
     console.error(err)
+    await rollbackAuthUser()
     return res.status(500).json({ error: 'Failed to create patient record' })
   }
 })
