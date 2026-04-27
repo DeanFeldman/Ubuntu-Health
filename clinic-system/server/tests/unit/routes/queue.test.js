@@ -1,5 +1,5 @@
 const request = require('supertest')
-const app = require('../src/app')
+const app = require('../../../src/app')
 
 // UUID-format values used for validation tests
 const validClinicId = '00000000-0000-0000-0000-000000000001'

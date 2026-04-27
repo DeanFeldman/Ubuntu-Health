@@ -1,5 +1,5 @@
 const request = require('supertest')
-const app = require('../src/app')
+const app = require('../../../src/app')
 
 describe('Clinic endpoints', () => {
   test('GET /api/clinics returns 200', async () => {

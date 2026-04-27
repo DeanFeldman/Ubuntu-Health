@@ -4,7 +4,7 @@ const {
   validateAvailabilityWithinClinicHours,
   validateAvailabilityCreateInput,
   validateAvailabilityUpdateInput,
-} = require('../../src/staffAvailabilityValidation')
+} = require('../../../src/staffAvailabilityValidation')
 
 const VALID_STAFF_ID = '0b0d9f9a-9a5e-47fe-92e0-7d1696e41464'
 const VALID_AVAILABILITY_ID = '8a8d439e-6634-44df-be8e-f51b9e0ca87a'

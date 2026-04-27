@@ -108,7 +108,7 @@ beforeEach(() => {
     rpc: jest.fn(() => Promise.resolve({ data: null, error: null })),
   }
 
-  app = require('../src/app')
+  app = require('../../../src/app')
 })
 
 describe('Mocked app.js route branches', () => {

@@ -3,7 +3,7 @@ const {
   configureQueueNotificationService,
   createNotification,
   getQueueNotificationRows,
-} = require('../src/queueNotificationService')
+} = require('../../../src/queueNotificationService')
 
 const baseEntry = {
   clinic_id: 'clinic-1',
