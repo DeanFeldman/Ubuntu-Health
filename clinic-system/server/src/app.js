@@ -2068,18 +2068,6 @@ app.get('/api/appointments/slots', async (req, res) => {
     return res.status(500).json({ error: 'Failed to fetch appointment slots' })
   }
 })
-async function rollbackCreatedPatient() {
-  if (!createdPatientId) return
-
-  try {
-    await supabase
-      .from('patients')
-      .delete()
-      .eq('id', createdPatientId)
-  } catch (cleanupErr) {
-    console.error('Failed to rollback patient:', cleanupErr)
-  }
-}
 
 app.post('/api/appointments', async (req, res) => {
   let createdPatientId = null
