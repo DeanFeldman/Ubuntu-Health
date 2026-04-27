@@ -1641,8 +1641,10 @@ app.get('/api/users', async (req, res) => {
       source: 'users',
     }))
 
-    const manualPatients = (patients || [])
-  .filter(patient => !patient.linked_user_id)
+   const registeredEmails = new Set((users || []).map(u => u.email).filter(Boolean))
+
+const manualPatients = (patients || [])
+  .filter(patient => !patient.linked_user_id && (!patient.email || !registeredEmails.has(patient.email)))
   .map(patient => ({
       id: patient.id,
       full_name: patient.full_name,
@@ -1958,6 +1960,11 @@ app.post('/api/patients', async (req, res) => {
   async function rollbackAuthUser() {
     if (!createdAuthUserId) return
     try {
+      await supabase
+        .from('users')
+        .delete()
+        .eq('id', createdAuthUserId)
+
       await supabase.auth.admin.deleteUser(createdAuthUserId)
     } catch (cleanupErr) {
       console.error('Failed to rollback auth user:', cleanupErr)
