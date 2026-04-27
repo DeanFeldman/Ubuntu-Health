@@ -1641,7 +1641,9 @@ app.get('/api/users', async (req, res) => {
       source: 'users',
     }))
 
-    const manualPatients = (patients || []).map(patient => ({
+    const manualPatients = (patients || [])
+  .filter(patient => !patient.linked_user_id)
+  .map(patient => ({
       id: patient.id,
       full_name: patient.full_name,
       phone: patient.phone,
