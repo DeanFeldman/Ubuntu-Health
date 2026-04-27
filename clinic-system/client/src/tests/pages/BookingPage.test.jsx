@@ -198,6 +198,7 @@ describe('BookingPage', () => {
             date: '2099-05-10',
             time: '09:00',
             booked_by: 'staff-1',
+            is_new_patient: false,
           }),
         })
       )

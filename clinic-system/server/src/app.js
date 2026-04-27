@@ -2068,10 +2068,37 @@ app.get('/api/appointments/slots', async (req, res) => {
     return res.status(500).json({ error: 'Failed to fetch appointment slots' })
   }
 })
+async function rollbackCreatedPatient() {
+  if (!createdPatientId) return
+
+  try {
+    await supabase
+      .from('patients')
+      .delete()
+      .eq('id', createdPatientId)
+  } catch (cleanupErr) {
+    console.error('Failed to rollback patient:', cleanupErr)
+  }
+}
 
 app.post('/api/appointments', async (req, res) => {
+  let createdPatientId = null
+
+  async function rollbackCreatedPatient() {
+    if (!createdPatientId) return
+
+    try {
+      await supabase
+        .from('patients')
+        .delete()
+        .eq('id', createdPatientId)
+    } catch (cleanupErr) {
+      console.error('Failed to rollback patient:', cleanupErr)
+    }
+  }
+
   try {
-    const { clinic_id, patient_id, date, time, booked_by } = req.body
+    const { clinic_id, patient_id, date, time, booked_by, is_new_patient } = req.body
 
     const inputValidation = validateAppointmentBookingInput({
       clinic_id,
@@ -2087,10 +2114,15 @@ app.post('/api/appointments', async (req, res) => {
       })
     }
 
+    if (is_new_patient) {
+      createdPatientId = patient_id
+    }
+
     const normalizedTime = getTimeFromAppointmentDatetime(time)
     const slot_datetime = new Date(`${date}T${normalizedTime}:00`)
 
     if (Number.isNaN(slot_datetime.getTime())) {
+      await rollbackCreatedPatient()
       return res.status(400).json({ error: 'Invalid date or time format' })
     }
 
@@ -2101,7 +2133,9 @@ app.post('/api/appointments', async (req, res) => {
       .maybeSingle()
 
     if (clinicError) throw clinicError
+
     if (!clinic) {
+      await rollbackCreatedPatient()
       return res.status(404).json({ error: 'Clinic not found' })
     }
 
@@ -2113,6 +2147,7 @@ app.post('/api/appointments', async (req, res) => {
     })
 
     if (!validSlots.includes(normalizedTime)) {
+      await rollbackCreatedPatient()
       return res.status(400).json({
         error: 'Selected time is outside clinic hours or does not match the appointment duration',
       })
@@ -2127,7 +2162,11 @@ app.post('/api/appointments', async (req, res) => {
 
       if (bookedByUserError) throw bookedByUserError
 
-      if (bookedByUser && ['Staff', 'Admin'].includes(bookedByUser.role) && bookedByUser.clinic_id === clinic_id) {
+      if (
+        bookedByUser &&
+        ['Staff', 'Admin'].includes(bookedByUser.role) &&
+        bookedByUser.clinic_id === clinic_id
+      ) {
         const { data: staffUsers, error: staffUsersError } = await supabase
           .from('users')
           .select('id, role, clinic_id')
@@ -2161,6 +2200,7 @@ app.post('/api/appointments', async (req, res) => {
         })
 
         if (!selfBookingValidation.valid) {
+          await rollbackCreatedPatient()
           return res.status(selfBookingValidation.status).json({
             error: selfBookingValidation.error,
           })
@@ -2184,6 +2224,7 @@ app.post('/api/appointments', async (req, res) => {
     if (existingError) throw existingError
 
     if (existingAppointment) {
+      await rollbackCreatedPatient()
       return res.status(409).json({ error: 'This slot is already booked' })
     }
 
@@ -2206,10 +2247,12 @@ app.post('/api/appointments', async (req, res) => {
     })
   } catch (err) {
     console.error(err)
+
+    await rollbackCreatedPatient()
+
     return res.status(500).json({ error: 'Failed to create appointment' })
   }
 })
-
 
 app.get('/api/appointments/patient/:patientId', async (req, res) => {
   try {

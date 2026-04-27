@@ -711,6 +711,7 @@ export default function BookingPage() {
           date: selectedDate,
           time: selectedSlot,
           booked_by: currentUser.id,
+          is_new_patient: isStaff && showNewPatient,  
         }),
       })
       const data = await res.json()
