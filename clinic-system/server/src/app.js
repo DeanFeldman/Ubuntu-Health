@@ -203,7 +203,7 @@ async function fetchWaitingQueuePosition(clinicId, patientId) {
   }
 }
 
-function getTimeFromAppointmentDatetime(slotDatetime) {
+/*function getTimeFromAppointmentDatetime(slotDatetime) {
   if (!slotDatetime) return null
 
   if (typeof slotDatetime === 'string') {
@@ -211,10 +211,28 @@ function getTimeFromAppointmentDatetime(slotDatetime) {
     if (match) return match[1]
   }
 
+
   const parsedDate = new Date(slotDatetime)
   if (Number.isNaN(parsedDate.getTime())) return null
 
   return `${String(parsedDate.getHours()).padStart(2, '0')}:${String(parsedDate.getMinutes()).padStart(2, '0')}`
+}*/
+function getTimeFromAppointmentDatetime(slotDatetime) {
+  if (!slotDatetime) return null
+
+  if (typeof slotDatetime === 'string' && /^\d{2}:\d{2}$/.test(slotDatetime)) {
+    return slotDatetime
+  }
+
+  const parsedDate = new Date(slotDatetime)
+  if (Number.isNaN(parsedDate.getTime())) return null
+
+  return parsedDate.toLocaleTimeString('en-ZA', {
+    timeZone: 'Africa/Johannesburg',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
 }
 
 const { validateSlotRetrievalInput, sanitizeGeneratedSlots } = require('./appointmentSlotValidation')

@@ -67,7 +67,7 @@ jest.mock('@supabase/supabase-js', () => {
           data: [
             {
               id: 'slot-booked',
-              slot_datetime: '2099-05-10T10:00:00.000Z',
+              slot_datetime: '2099-05-10T08:00:00.000Z',
             },
           ],
           error: null,
