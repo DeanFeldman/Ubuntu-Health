@@ -136,4 +136,23 @@ describe('appointmentSlotValidation', () => {
       expect(result).toEqual({ valid: true })
     })
   })
+  const {
+  sanitizeGeneratedSlots,
+} = require('../../../src/appointmentSlotValidation')
+
+describe('sanitizeGeneratedSlots', () => {
+  it('removes invalid slot formats', () => {
+    expect(sanitizeGeneratedSlots(['09:00', 'bad', '25:99'], '2099-05-10'))
+      .toEqual(['09:00'])
+  })
+
+  it('removes duplicate slots and sorts valid slots', () => {
+    expect(sanitizeGeneratedSlots(['10:00', '09:00', '09:00'], '2099-05-10'))
+      .toEqual(['09:00', '10:00'])
+  })
+
+  it('returns empty array when input is not an array', () => {
+    expect(sanitizeGeneratedSlots(null, '2099-05-10')).toEqual([])
+  })
+})
 })

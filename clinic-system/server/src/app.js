@@ -217,21 +217,7 @@ function getTimeFromAppointmentDatetime(slotDatetime) {
   return `${String(parsedDate.getHours()).padStart(2, '0')}:${String(parsedDate.getMinutes()).padStart(2, '0')}`
 }
 
-function sanitizeGeneratedSlots(slots, date) {
-  if (!Array.isArray(slots)) return []
-
-  const today = new Date().toISOString().slice(0, 10)
-  const now = new Date()
-
-  return [...new Set(slots)]
-    .filter(slot => typeof slot === 'string')
-    .filter(slot => /^([01]\d|2[0-3]):[0-5]\d$/.test(slot))
-    .filter(slot => {
-      if (date !== today) return true
-      return new Date(`${date}T${slot}:00`) >= now
-    })
-    .sort()
-}
+const { validateSlotRetrievalInput, sanitizeGeneratedSlots } = require('./appointmentSlotValidation')
 
 async function fetchBookedSlotTimes(clinicId, startIso, endIso) {
   const { data: appointments, error: appointmentsError } = await supabase
@@ -2028,7 +2014,6 @@ app.post('/api/patients', async (req, res) => {
   }
 })
 
-const { validateSlotRetrievalInput } = require('./appointmentSlotValidation')
 const {
   validateAppointmentBookingInput,
   validateStaffSelfBookingAvailabilityRule,
