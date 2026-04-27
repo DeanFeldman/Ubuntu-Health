@@ -21,6 +21,10 @@ jest.mock('@supabase/supabase-js', () => {
             error: null,
           }),
           deleteUser: jest.fn().mockResolvedValue({ error: null }),
+          listUsers: jest.fn().mockResolvedValue({
+      data: { users: [] },
+      error: null,
+    }),
         },
       },
       from: (table) => {
@@ -176,7 +180,7 @@ describe('POST /api/patients', () => {
     expect(res.status).toBe(409)
     expect(res.body).toHaveProperty(
       'error',
-      'A user with this email already exists'
+      'This patient is already registered in the system. Find them in the existing patients list instead.'
     )
   })
 
