@@ -429,7 +429,7 @@ describe('Mocked app.js route branches', () => {
       position: 4,
       patientsAhead: 3,
       appointmentDuration: 15,
-      staffCount: 1,
+      staffCount: 0,
       estimatedWaitTime: null,
       message: 'Estimate not available',
     })

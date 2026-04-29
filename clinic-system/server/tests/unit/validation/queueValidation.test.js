@@ -1,9 +1,9 @@
 const {
-  isValidUuid,
-  isValidEmail,
-  validatePatientInput,
-  calculateEstimatedWaitTime,
-} = require('../../../src/patientValidation')
+  isJoinConfirmed,
+  canJoinQueue,
+  validateQueueJoin,
+  isValidStatusTransition,
+} = require('../../../src/queueValidation')
 
 const {
   calculateEstimatedWaitTime,
