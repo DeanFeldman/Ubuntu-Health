@@ -737,6 +737,9 @@ export default function BookingPage() {
       showToast('Appointment booked successfully', 'success')
     } catch (err) {
       const message = err?.message || 'Booking failed. Please try again.'
+      setBooked(false)
+  setBookedDetails(null)
+  setShowConfirm(false)
       setSubmitError(message)
       showToast(message, 'error')
     } finally {

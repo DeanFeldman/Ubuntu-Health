@@ -2161,18 +2161,35 @@ app.get('/api/appointments/slots', async (req, res) => {
 app.post('/api/appointments', async (req, res) => {
   let createdPatientId = null
 
-  async function rollbackCreatedPatient() {
-    if (!createdPatientId) return
+ async function rollbackCreatedPatient() {
+  if (!createdPatientId) return
 
-    try {
+  try {
+    const { data: patientRows } = await supabase
+      .from('patients')
+      .select('id, linked_user_id')
+      .or(`id.eq.${createdPatientId},linked_user_id.eq.${createdPatientId}`)
+      .limit(1)
+
+    const linkedUserId = patientRows?.[0]?.linked_user_id || null
+
+    await supabase
+      .from('patients')
+      .delete()
+      .or(`id.eq.${createdPatientId},linked_user_id.eq.${createdPatientId}`)
+
+    if (linkedUserId) {
       await supabase
-        .from('patients')
+        .from('users')
         .delete()
-        .eq('id', createdPatientId)
-    } catch (cleanupErr) {
-      console.error('Failed to rollback patient:', cleanupErr)
+        .eq('id', linkedUserId)
+
+      await supabase.auth.admin.deleteUser(linkedUserId)
     }
+  } catch (cleanupErr) {
+    console.error('Failed to rollback patient:', cleanupErr)
   }
+}
 
   try {
     const { clinic_id, patient_id, date, time, booked_by, is_new_patient } = req.body
