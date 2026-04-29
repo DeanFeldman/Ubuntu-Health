@@ -1,9 +1,9 @@
 const {
-  isJoinConfirmed,
-  canJoinQueue,
-  validateQueueJoin,
-  isValidStatusTransition,
-} = require('../../../src/queueValidation')
+  isValidUuid,
+  isValidEmail,
+  validatePatientInput,
+  calculateEstimatedWaitTime,
+} = require('../../../src/patientValidation')
 
 // QUEUE JOIN VALIDATION TESTS
 describe('Queue join validation helpers', () => {
@@ -129,4 +129,21 @@ describe('Queue status transition validation', () => {
   test('rejects unknown current statuses', () => {
     expect(isValidStatusTransition('Unknown', 'Waiting')).toBe(false)
   })
+
+
+  // ESTIMATED WAIT TIME TESTS
+describe('Estimated wait time validation', () => {
+  test('returns estimate not available when no staff are assigned to the clinic', () => {
+    const result = calculateEstimatedWaitTime({
+      patientsAhead: 3,
+      appointmentDuration: 15,
+      staffCount: 0,
+    })
+
+    expect(result).toEqual({
+      estimatedWaitTime: null,
+      message: 'Estimate not available',
+    })
+  })
+})
 })
