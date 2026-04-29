@@ -145,7 +145,7 @@ async function fetchClinicQueueMetrics(clinicId) {
 
   return {
     appointmentDuration,
-    staffCount: hasStaffCount ? rawStaffCount : 1,
+    staffCount: hasStaffCount ? rawStaffCount : 0,
     fallbackUsed: !hasAppointmentDuration || !hasStaffCount,
   }
 }
@@ -155,24 +155,28 @@ function calculateEstimatedWaitTime({
   appointmentDuration,
   staffCount,
 }) {
-  const safePatientsAhead = Math.max(Number(patientsAhead) || 0, 0)
-  const rawAppointmentDuration = Number(appointmentDuration)
   const rawStaffCount = Number(staffCount)
-  const hasAppointmentDuration =
+
+  if (!Number.isFinite(rawStaffCount) || rawStaffCount <= 0) {
+    return {
+      estimatedWaitTime: null,
+      message: 'Estimate not available',
+    }
+  }
+
+  const safePatientsAhead = Math.max(Number(patientsAhead) || 0, 0)
+
+  const rawAppointmentDuration = Number(appointmentDuration)
+  const safeAppointmentDuration =
     Number.isFinite(rawAppointmentDuration) && rawAppointmentDuration > 0
-  const hasStaffCount = Number.isFinite(rawStaffCount) && rawStaffCount > 0
-  const safeAppointmentDuration = hasAppointmentDuration
-    ? rawAppointmentDuration
-    : DEFAULT_ESTIMATED_WAIT_APPOINTMENT_DURATION
-  const safeStaffCount = hasStaffCount ? rawStaffCount : 1
-  const estimatedWaitTime =
-    safePatientsAhead === 0
-      ? 0
-      : Math.ceil((safePatientsAhead * safeAppointmentDuration) / safeStaffCount)
+      ? rawAppointmentDuration
+      : DEFAULT_ESTIMATED_WAIT_APPOINTMENT_DURATION
 
   return {
-    estimatedWaitTime,
-    fallbackUsed: !hasAppointmentDuration || !hasStaffCount,
+    estimatedWaitTime:
+      safePatientsAhead === 0
+        ? 0
+        : Math.ceil((safePatientsAhead * safeAppointmentDuration) / rawStaffCount),
   }
 }
 
@@ -504,7 +508,8 @@ app.get('/api/queue/:clinicId/estimated-wait-time/:patientId', async (req, res) 
     const appointmentDuration =
       queueMetrics?.appointmentDuration ??
       DEFAULT_ESTIMATED_WAIT_APPOINTMENT_DURATION
-    const staffCount = queueMetrics?.staffCount ?? 1
+    const staffCount = queueMetrics?.staffCount ?? 0
+  
     const waitEstimate = calculateEstimatedWaitTime({
       patientsAhead: queuePosition.patientsAhead,
       appointmentDuration,
@@ -517,6 +522,7 @@ app.get('/api/queue/:clinicId/estimated-wait-time/:patientId', async (req, res) 
       appointmentDuration,
       staffCount,
       estimatedWaitTime: waitEstimate.estimatedWaitTime,
+      message: waitEstimate.message,
     })
   } catch (err) {
     console.error(err)
@@ -2404,22 +2410,24 @@ app.get('/api/appointments/patient/:patientId', async (req, res) => {
       clinicsById = Object.fromEntries((clinics || []).map((clinic) => [clinic.id, clinic]))
     }
 
-    const allAppointments = appointments
-      .map((appointment) => ({
-        id: appointment.id,
-        patient_id: appointment.patient_id,
-        clinic_id: appointment.clinic_id,
-        slot_id: appointment.slot_id,
-        status: appointment.status || 'Confirmed',
-        service: appointment.service || null,
-        clinic_name: clinicsById[appointment.clinic_id]?.name || 'Clinic',
-        slot_datetime: slotsById[appointment.slot_id]?.slot_datetime || null,
-      }))
-      .sort((a, b) => {
-        if (!a.slot_datetime) return 1
-        if (!b.slot_datetime) return -1
-        return new Date(a.slot_datetime) - new Date(b.slot_datetime)
-      })
+    const now = new Date()
+
+  const allAppointments = appointments
+    .map((appointment) => ({
+      id: appointment.id,
+      patient_id: appointment.patient_id,
+      clinic_id: appointment.clinic_id,
+      slot_id: appointment.slot_id,
+      status: appointment.status || 'Confirmed',
+      service: appointment.service || null,
+      clinic_name: clinicsById[appointment.clinic_id]?.name || 'Clinic',
+      slot_datetime: slotsById[appointment.slot_id]?.slot_datetime || null,
+    }))
+    .filter((appointment) => {
+      if (!appointment.slot_datetime) return false
+      return new Date(appointment.slot_datetime) >= now
+    })
+    .sort((a, b) => new Date(a.slot_datetime) - new Date(b.slot_datetime))
 
     res.json({ appointments: allAppointments })
   } catch (err) {

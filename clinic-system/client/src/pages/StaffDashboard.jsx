@@ -44,6 +44,34 @@ const styles = `
     color: var(--uh-text);
   }
 
+  .sd-clinic-card {
+  background: var(--uh-surface);
+  border: 1px solid var(--uh-border);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  box-shadow: var(--uh-shadow);
+}
+
+.sd-clinic-card-label {
+  font-size: 12px;
+  color: var(--uh-muted);
+  margin-bottom: 4px;
+}
+
+.sd-clinic-card-name {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--uh-text);
+  margin: 0;
+}
+
+.sd-clinic-card-meta {
+  font-size: 13px;
+  color: var(--uh-muted);
+  margin-top: 4px;
+}
+
   .sd-stat-value--black { color: #040404; }
   .sd-stat-value--yellow { color: #eff30c; }
   .sd-stat-value--blue { color: #59bcd7; }
@@ -864,7 +892,7 @@ useEffect(() => {
       fetchCompletedCount()
       fetchPatients()
       fetchAppointmentsByDate()
-    }, 10000)
+    }, 30000)
 
     return () => clearInterval(interval)
   }, [
@@ -1203,6 +1231,23 @@ const handleGoToBooking = async () => {
 
       <section className="sd-page">
         <h1 className="sd-heading">Clinic queue</h1>
+
+        {resolvedClinicId && (
+            <section className="sd-clinic-card">
+              <p className="sd-clinic-card-label">Assigned clinic</p>
+              <h2 className="sd-clinic-card-name">
+                {clinicDetails?.name || 'Loading clinic...'}
+              </h2>
+
+              {clinicDetails && (
+                <p className="sd-clinic-card-meta">
+                  {[clinicDetails.facility_type, clinicDetails.municipality, clinicDetails.district]
+                    .filter(Boolean)
+                    .join(' • ')}
+                </p>
+              )}
+            </section>
+          )}
 
         <ul className="sd-stats" aria-label="Queue summary">
           <li className="sd-stat">
