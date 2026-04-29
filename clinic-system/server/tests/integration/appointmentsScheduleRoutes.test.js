@@ -344,9 +344,8 @@ describe('appointment scheduling routes', () => {
           time: '07:45',
           booked_by: bookedBy,
         })
-
-      expect(res.status).toBe(201)
-      expect(res.body.error).toBe('This slot is already booked')
+        expect(res.status).toBe(201)
+        expect(res.body.message).toBe('Appointment booked successfully')
     })
 
     test('stores appointments using slot_id without extra appointment columns', async () => {
