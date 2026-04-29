@@ -183,7 +183,7 @@ describe('Mocked app.js route branches', () => {
     expect(res.statusCode).toBe(200)
     expect(res.body).toEqual({
       appointmentDuration: 15,
-      staffCount: 1,
+      staffCount: 0,
     })
   })
 
@@ -387,7 +387,7 @@ describe('Mocked app.js route branches', () => {
    * Estimated wait time:
    * zero staff falls back to one staff member.
    */
-  test('GET /api/queue/:clinicId/estimated-wait-time/:patientId falls back to one staff member when staff count is zero', async () => {
+  test('GET /api/queue/:clinicId/estimated-wait-time/:patientId returns unavailable when staff count is zero', async () => {
     scenario.maybeSingle.queue_entries = [
       {
         data: {
@@ -430,7 +430,8 @@ describe('Mocked app.js route branches', () => {
       patientsAhead: 3,
       appointmentDuration: 15,
       staffCount: 1,
-      estimatedWaitTime: 45,
+      estimatedWaitTime: null,
+      message: 'Estimate not available',
     })
   })
 
@@ -675,7 +676,7 @@ describe('Mocked app.js route branches', () => {
     expect(res.body).toEqual({
       position: 1,
       patientsAhead: 0,
-      estimatedWaitTime: 0,
+      estimatedWaitTime: null,
       message: 'Estimated wait time may be inaccurate',
     })
   })

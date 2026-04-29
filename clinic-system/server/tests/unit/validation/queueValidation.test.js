@@ -5,6 +5,10 @@ const {
   calculateEstimatedWaitTime,
 } = require('../../../src/patientValidation')
 
+const {
+  calculateEstimatedWaitTime,
+} = require('../../../src/patientValidation')
+
 // QUEUE JOIN VALIDATION TESTS
 describe('Queue join validation helpers', () => {
 
@@ -131,6 +135,10 @@ describe('Queue status transition validation', () => {
   })
 
 
+
+})
+
+
   // ESTIMATED WAIT TIME TESTS
 describe('Estimated wait time validation', () => {
   test('returns estimate not available when no staff are assigned to the clinic', () => {
@@ -145,5 +153,4 @@ describe('Estimated wait time validation', () => {
       message: 'Estimate not available',
     })
   })
-})
 })
