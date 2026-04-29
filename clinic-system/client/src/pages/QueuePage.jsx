@@ -601,6 +601,7 @@ const fetchQueue = useCallback(async () => {
       setQueueEntry(null)
       setPendingClinic(null)
       setActionSuccess('You have been removed from the queue.')
+      setTimeout(() => navigate('/clinic'), 2000)
     } catch (err) {
       setActionError(err.message)
     } finally {
