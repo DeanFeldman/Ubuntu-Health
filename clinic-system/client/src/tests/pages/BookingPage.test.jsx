@@ -225,7 +225,7 @@ describe('BookingPage', () => {
     const errors = await screen.findAllByText((text) => text.includes('Booking failed.'))
 
     expect(errors.length).toBeGreaterThan(0)
-    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toBeInTheDocument()
     expect(screen.queryByText('Appointment Booked!')).not.toBeInTheDocument()
   })
 
