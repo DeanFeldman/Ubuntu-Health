@@ -146,7 +146,7 @@ describe('appointments + slot handling', () => {
       })
 
     expect(response.status).toBe(200)
-    expect(response.body).toEqual(['09:00'])
+    expect(response.body).toEqual(['09:00','10:00'])
   })
 
   it('rejects invalid slot retrieval input', async () => {

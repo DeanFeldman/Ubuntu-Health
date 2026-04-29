@@ -241,7 +241,29 @@ function getTimeFromAppointmentDatetime(slotDatetime) {
 
 const { validateSlotRetrievalInput, sanitizeGeneratedSlots } = require('./appointmentSlotValidation')
 
+async function fetchClinicBookingCapacity(clinicId) {
+  try {
+    const { count, error } = await supabase
+      .from('users')
+      .select('id', { count: 'exact', head: true })
+      .eq('clinic_id', clinicId)
+      .in('role', ['Staff', 'Admin'])
+
+    if (error) throw error
+
+    const parsedCount = Number(count)
+
+    return Number.isFinite(parsedCount) && parsedCount > 0
+      ? parsedCount
+      : 1
+  } catch (err) {
+    return 1
+  }
+}
+
 async function fetchBookedSlotTimes(clinicId, startIso, endIso) {
+  const staffCount = await fetchClinicBookingCapacity(clinicId)
+
   const { data: appointments, error: appointmentsError } = await supabase
     .from('appointments')
     .select('slot_id')
@@ -250,7 +272,9 @@ async function fetchBookedSlotTimes(clinicId, startIso, endIso) {
 
   if (appointmentsError) throw appointmentsError
 
-  const slotIds = [...new Set((appointments || []).map((appointment) => appointment.slot_id).filter(Boolean))]
+  const slotIds = [
+    ...new Set((appointments || []).map(appointment => appointment.slot_id).filter(Boolean)),
+  ]
 
   if (slotIds.length === 0) {
     return new Set()
@@ -260,14 +284,31 @@ async function fetchBookedSlotTimes(clinicId, startIso, endIso) {
     .from('slots')
     .select('id, slot_datetime')
     .in('id', slotIds)
-    .lt('slot_datetime', endIso)
 
   if (slotsError) throw slotsError
 
+  const slotById = Object.fromEntries((slots || []).map(slot => [slot.id, slot]))
+  const bookingCountByTime = {}
+
+  for (const appointment of appointments || []) {
+    const slot = slotById[appointment.slot_id]
+    if (!slot?.slot_datetime) continue
+
+    const slotDate = slot.slot_datetime.slice(0, 10)
+    const startDate = startIso.slice(0, 10)
+
+    if (slotDate !== startDate) continue
+
+    const time = getTimeFromAppointmentDatetime(slot.slot_datetime)
+    if (!time) continue
+
+    bookingCountByTime[time] = (bookingCountByTime[time] || 0) + 1
+  }
+
   return new Set(
-    (slots || [])
-      .map((slot) => getTimeFromAppointmentDatetime(slot.slot_datetime))
-      .filter(Boolean)
+    Object.entries(bookingCountByTime)
+      .filter(([, count]) => count >= staffCount)
+      .map(([time]) => time)
   )
 }
 
@@ -2313,17 +2354,24 @@ app.post('/api/appointments', async (req, res) => {
       slot_datetime.toISOString()
     )
 
-    const { data: existingAppointment, error: existingError } = await supabase
+    const staffCount = await fetchClinicBookingCapacity(clinic_id)
+
+    const { data: existingAppointments, error: existingError } = await supabase
       .from('appointments')
       .select('id')
       .eq('clinic_id', clinic_id)
       .eq('slot_id', slotRecord.id)
       .in('status', BOOKED_APPOINTMENT_STATUSES)
-      .maybeSingle()
 
     if (existingError) throw existingError
 
-    if (existingAppointment) {
+    const bookedCount = Array.isArray(existingAppointments)
+      ? existingAppointments.length
+      : existingAppointments
+        ? 1
+        : 0
+
+    if (bookedCount >= staffCount) {
       await rollbackCreatedPatient()
       return res.status(409).json({ error: 'This slot is already booked' })
     }
