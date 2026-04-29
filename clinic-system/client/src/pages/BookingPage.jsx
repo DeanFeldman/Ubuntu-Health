@@ -558,13 +558,13 @@ export default function BookingPage() {
 
         const rawSlots = Array.isArray(data) ? data : []
 
-          /*const availableFutureSlots = rawSlots.filter(slot => {
+          const availableFutureSlots = rawSlots.filter(slot => {
             const slotDateTime = new Date(`${selectedDate}T${slot}:00`)
             return slotDateTime > new Date()
           })
 
-          setSlots(availableFutureSlots)*/
-          setSlots(rawSlots);
+          setSlots(availableFutureSlots)
+          //setSlots(rawSlots);
           
       } catch (err) {
         console.error(err)
