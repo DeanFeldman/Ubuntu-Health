@@ -373,6 +373,86 @@ const styles = `
     flex-direction: column;
   }
 
+  .admin-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.admin-sidebar {
+  background: var(--uh-surface);
+  border: 1px solid var(--uh-border);
+  border-radius: 14px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+  padding: 12px;
+  position: sticky;
+  top: 20px;
+}
+
+.admin-sidebar-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--uh-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 8px 10px 12px;
+  margin: 0;
+}
+
+.admin-nav-btn {
+  width: 100%;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  padding: 11px 12px;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--uh-text);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: inherit;
+}
+
+.admin-nav-btn:hover {
+  background: var(--uh-bg);
+}
+
+.admin-nav-btn--active {
+  background: #EFF6FF;
+  color: #1D4ED8;
+}
+
+.admin-nav-count {
+  font-size: 11px;
+  background: var(--uh-bg);
+  color: var(--uh-muted);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.admin-nav-btn--active .admin-nav-count {
+  background: #DBEAFE;
+  color: #1D4ED8;
+}
+
+.admin-content {
+  min-width: 0;
+}
+
+@media (max-width: 820px) {
+  .admin-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-sidebar {
+    position: static;
+  }
+}
+
   .operating-hours-grid {
     display: grid;
     gap: 12px;
@@ -555,6 +635,8 @@ export default function AdminDashboard() {
   const [savingClinic, setSavingClinic] = useState(false)
   const [clinicEditFeedback, setClinicEditFeedback] = useState('')
   const [clinicEditError, setClinicEditError] = useState('')
+
+  const [activeSection, setActiveSection] = useState('overview')
 
   const selectedClinicStaff = staffUsers.filter((staffUser) => staffUser.clinic_id === selectedClinicId)
   const unassignedStaffUsers = staffUsers.filter((staffUser) => !staffUser.clinic_id)
@@ -923,422 +1005,498 @@ export default function AdminDashboard() {
       <p>Manage role approvals, staff placement, and clinic details from one place.</p>
     </header>
 
-    <section className="admin-overview" aria-label="Admin overview">
-      <article className="admin-overview-card">
-        <span>Pending requests</span>
-        <strong>{roleRequests.length}</strong>
-        <p>Role changes waiting for a decision.</p>
-      </article>
+    <section className="admin-layout">
+      <aside className="admin-sidebar">
+        <p className="admin-sidebar-title">Sections</p>
 
-      <article className="admin-overview-card">
-        <span>Unassigned staff</span>
-        <strong>{unassignedStaffUsers.length}</strong>
-        <p>Team members ready to be linked to a clinic.</p>
-      </article>
-    </section>
+        <button
+          type="button"
+          className={`admin-nav-btn ${
+            activeSection === 'overview' ? 'admin-nav-btn--active' : ''
+          }`}
+          onClick={() => setActiveSection('overview')}
+        >
+          Overview
+        </button>
 
-    <section className="admin-stack">
-      <section className="admin-panel" aria-labelledby="role-requests-heading">
-        <header className="admin-panel-header">
-          <section>
-            <h2 id="role-requests-heading">Pending role requests</h2>
-            <p className="admin-section-intro">
-              Review each request and approve only the roles you want active.
-            </p>
-          </section>
-          <span>{roleRequests.length} pending</span>
-        </header>
+        <button
+          type="button"
+          className={`admin-nav-btn ${
+            activeSection === 'roles' ? 'admin-nav-btn--active' : ''
+          }`}
+          onClick={() => setActiveSection('roles')}
+        >
+          Role requests
+          <span className="admin-nav-count">{roleRequests.length}</span>
+        </button>
 
-        {roleError && (
-          <p className="admin-message admin-error" role="alert">
-            {roleError}
-          </p>
-        )}
+        <button
+          type="button"
+          className={`admin-nav-btn ${
+            activeSection === 'clinics' ? 'admin-nav-btn--active' : ''
+          }`}
+          onClick={() => setActiveSection('clinics')}
+        >
+          Clinic details
+          <span className="admin-nav-count">{clinics.length}</span>
+        </button>
+      </aside>
 
-        {roleFeedback && (
-          <p className="admin-message admin-feedback" role="status">
-            {roleFeedback}
-          </p>
-        )}
+      <section className="admin-content">
+        {activeSection === 'overview' && (
+          <section className="admin-overview" aria-label="Admin overview">
+            <article className="admin-overview-card">
+              <span>Pending requests</span>
+              <strong>{roleRequests.length}</strong>
+              <p>Role changes waiting for a decision.</p>
+            </article>
 
-        {loadingRoleRequests ? (
-          <p className="admin-message">Loading role requests...</p>
-        ) : roleRequests.length === 0 ? (
-          <section className="admin-empty">
-            <strong>No pending role requests.</strong>
-            <p>Everything is up to date for now.</p>
-          </section>
-        ) : (
-          <section className="admin-table-wrap">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>User</th>
-                  <th>Email</th>
-                  <th>Current role</th>
-                  <th>Requested role</th>
-                  <th>Requested</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {roleRequests.map((request) => (
-                  <tr key={request.id}>
-                    <td>{request.users?.full_name || 'Unknown user'}</td>
-                    <td>{request.users?.email || 'No email'}</td>
-                    <td>{request.users?.role || 'Unknown'}</td>
-                    <td>{request.requested_role}</td>
-                    <td>{new Date(request.created_at).toLocaleDateString('en-GB')}</td>
-                    <td>
-                      <menu className="admin-actions">
-                        <li>
-                          <button
-                            className="admin-btn admin-btn-approve"
-                            disabled={processingRoleRequestId === request.id}
-                            onClick={() => approveRoleRequest(request)}
-                            type="button"
-                          >
-                            Approve
-                          </button>
-                        </li>
-                        <li>
-                          <button
-                            className="admin-btn admin-btn-reject"
-                            disabled={processingRoleRequestId === request.id}
-                            onClick={() => rejectRoleRequest(request)}
-                            type="button"
-                          >
-                            Reject
-                          </button>
-                        </li>
-                      </menu>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <article className="admin-overview-card">
+              <span>Unassigned staff</span>
+              <strong>{unassignedStaffUsers.length}</strong>
+              <p>Team members ready to be linked to a clinic.</p>
+            </article>
           </section>
         )}
-      </section>
 
-      <section className="admin-panel" aria-labelledby="staff-assignment-heading">
-        <header className="admin-panel-header">
-          <section>
-            <h2 id="staff-assignment-heading">Clinic details</h2>
-            <p className="admin-section-intro">
-              Search for a clinic by name, then manage staff and edit the clinic profile.
-            </p>
-          </section>
-          <span>{selectedClinic ? selectedClinic.name : 'No clinic selected'}</span>
-        </header>
-
-        {assignmentError && (
-          <p className="admin-message admin-error" role="alert">
-            {assignmentError}
-          </p>
-        )}
-
-        {assignmentFeedback && (
-          <p className="admin-message admin-feedback" role="status">
-            {assignmentFeedback}
-          </p>
-        )}
-
-        {loadingAssignmentData ? (
-          <p className="admin-message">Loading clinics and staff...</p>
-        ) : (
-          <form
-            className="admin-message"
-            onSubmit={(event) => {
-              event.preventDefault()
-              assignStaffToClinic()
-            }}
-          >
-            <label htmlFor="clinic-select">Choose a clinic</label>
-            <select
-              id="clinic-select"
-              value={selectedClinicId}
-              onChange={(event) => handleClinicSelect(event.target.value)}
-            >
-              <option value="">Select clinic</option>
-              {clinics.map((clinic) => (
-                <option key={clinic.id} value={clinic.id}>
-                  {clinic.name}
-                </option>
-              ))}
-            </select>
-
-            {!selectedClinicId && (
-              <section className="admin-empty">
-                <strong>Select a clinic to get started</strong>
-                <p>
-                  You will be able to view assigned staff, update facility type,
-                  services, and edit each day&apos;s operating hours.
-                </p>
-              </section>
-            )}
-
-            {selectedClinicId && (
-              <>
-                <section className="admin-selected-banner" aria-live="polite">
-                  <section>
-                    <strong>{selectedClinic?.name}</strong>
-                    <p>
-                      {selectedClinic?.municipality || 'Municipality not set'}
-                      {' - '}
-                      {selectedClinic?.district || 'District not set'}
-                    </p>
-                  </section>
-                  <span>Edit the fields just below.</span>
-                </section>
-
-                <section className="admin-subsection">
-                  <header className="admin-subsection-header">
-                    <h3>Clinic staff</h3>
-                  </header>
-                  <p className="admin-subsection-copy">
-                    Manage the team currently assigned to this clinic and add available staff below.
+        {activeSection === 'roles' && (
+          <section className="admin-stack">
+            <section className="admin-panel" aria-labelledby="role-requests-heading">
+              <header className="admin-panel-header">
+                <section>
+                  <h2 id="role-requests-heading">Pending role requests</h2>
+                  <p className="admin-section-intro">
+                    Review each request and approve only the roles you want active.
                   </p>
+                </section>
+                <span>{roleRequests.length} pending</span>
+              </header>
 
-                  <section className="admin-table-wrap">
-                    <table className="admin-table">
-                      <tbody>
-                        {selectedClinicStaff.length === 0 ? (
-                          <tr>
-                            <td colSpan="4">No staff assigned yet.</td>
-                          </tr>
-                        ) : (
-                          selectedClinicStaff.map((staffUser) => (
-                            <tr key={staffUser.id}>
-                              <td>{staffUser.full_name}</td>
-                              <td>{staffUser.role}</td>
-                              <td>{selectedClinic?.name}</td>
-                              <td>
+              {roleError && (
+                <p className="admin-message admin-error" role="alert">
+                  {roleError}
+                </p>
+              )}
+
+              {roleFeedback && (
+                <p className="admin-message admin-feedback" role="status">
+                  {roleFeedback}
+                </p>
+              )}
+
+              {loadingRoleRequests ? (
+                <p className="admin-message">Loading role requests...</p>
+              ) : roleRequests.length === 0 ? (
+                <section className="admin-empty">
+                  <strong>No pending role requests.</strong>
+                  <p>Everything is up to date for now.</p>
+                </section>
+              ) : (
+                <section className="admin-table-wrap">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>User</th>
+                        <th>Email</th>
+                        <th>Current role</th>
+                        <th>Requested role</th>
+                        <th>Requested</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {roleRequests.map((request) => (
+                        <tr key={request.id}>
+                          <td>{request.users?.full_name || 'Unknown user'}</td>
+                          <td>{request.users?.email || 'No email'}</td>
+                          <td>{request.users?.role || 'Unknown'}</td>
+                          <td>{request.requested_role}</td>
+                          <td>
+                            {new Date(request.created_at).toLocaleDateString('en-GB')}
+                          </td>
+                          <td>
+                            <menu className="admin-actions">
+                              <li>
+                                <button
+                                  className="admin-btn admin-btn-approve"
+                                  disabled={processingRoleRequestId === request.id}
+                                  onClick={() => approveRoleRequest(request)}
+                                  type="button"
+                                >
+                                  Approve
+                                </button>
+                              </li>
+
+                              <li>
                                 <button
                                   className="admin-btn admin-btn-reject"
+                                  disabled={processingRoleRequestId === request.id}
+                                  onClick={() => rejectRoleRequest(request)}
                                   type="button"
-                                  onClick={() => unassignStaffFromClinic(staffUser.id)}
                                 >
-                                  Unassign
+                                  Reject
                                 </button>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </section>
+                              </li>
+                            </menu>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </section>
+              )}
+            </section>
+          </section>
+        )}
 
-                  <br />
+        {activeSection === 'clinics' && (
+          <section className="admin-stack">
+            <section className="admin-panel" aria-labelledby="staff-assignment-heading">
+              <header className="admin-panel-header">
+                <section>
+                  <h2 id="staff-assignment-heading">Clinic details</h2>
+                  <p className="admin-section-intro">
+                    Search for a clinic by name, then manage staff and edit the clinic profile.
+                  </p>
+                </section>
+                <span>{selectedClinic ? selectedClinic.name : 'No clinic selected'}</span>
+              </header>
 
-                  <label htmlFor="staff-select">Add staff member</label>
+              {assignmentError && (
+                <p className="admin-message admin-error" role="alert">
+                  {assignmentError}
+                </p>
+              )}
+
+              {assignmentFeedback && (
+                <p className="admin-message admin-feedback" role="status">
+                  {assignmentFeedback}
+                </p>
+              )}
+
+              {loadingAssignmentData ? (
+                <p className="admin-message">Loading clinics and staff...</p>
+              ) : (
+                <form
+                  className="admin-message"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    assignStaffToClinic()
+                  }}
+                >
+                  <label htmlFor="clinic-select">Choose a clinic</label>
                   <select
-                    id="staff-select"
-                    value={selectedStaffId}
-                    onChange={(event) => setSelectedStaffId(event.target.value)}
+                    id="clinic-select"
+                    value={selectedClinicId}
+                    onChange={(event) => handleClinicSelect(event.target.value)}
                   >
-                    <option value="">Select staff</option>
-                    {unassignedStaffUsers.map((staffUser) => (
-                      <option key={staffUser.id} value={staffUser.id}>
-                        {staffUser.full_name}
+                    <option value="">Select clinic</option>
+                    {clinics.map((clinic) => (
+                      <option key={clinic.id} value={clinic.id}>
+                        {clinic.name}
                       </option>
                     ))}
                   </select>
 
-                  <br />
-                  <br />
-
-                  <button
-                    className="admin-btn admin-btn-approve"
-                    type="button"
-                    onClick={assignStaffToClinic}
-                    disabled={assigningStaff || !selectedStaffId}
-                  >
-                    {assigningStaff ? 'Adding...' : 'Add staff'}
-                  </button>
-                </section>
-
-                <section className="admin-subsection">
-                  <header className="admin-subsection-header">
-                    <h3>Edit clinic</h3>
-                  </header>
-                  <p className="admin-subsection-copy">
-                    Update facility type, services, and operating hours below, then save your changes.
-                  </p>
-
-
-                  <section className="edit-clinic-container">
-                    <label className="edit-clinic-name" htmlFor="clinic-name">
-                      Name
-                      <input
-                        id="clinic-name"
-                        name="name"
-                        value={clinicForm.name}
-                        onChange={handleClinicFormChange}
-                      />
-                    </label>
-
-                    <section className="edit-clinic-grid">
-                      <label className="edit-field" htmlFor="facility-type">
-                        Facility type
-                        <input
-                          id="facility-type"
-                          list="facility-type-options"
-                          name="facility_type"
-                          value={clinicForm.facility_type}
-                          onChange={handleClinicFormChange}
-                        />
-                        <datalist id="facility-type-options">
-                          {FACILITY_TYPE_OPTIONS.map((facilityType) => (
-                            <option key={facilityType} value={facilityType} />
-                          ))}
-                        </datalist>
-                      </label>
-
-                      <label className="edit-field" htmlFor="province">
-                        Province
-                        <input
-                          id="province"
-                          name="province"
-                          value={clinicForm.province}
-                        />
-                      </label>
-
-                      <label className="edit-field" htmlFor="district">
-                        District
-                        <input
-                          id="district"
-                          name="district"
-                          value={clinicForm.district}
-                        />
-                      </label>
-
-                      <label className="edit-field" htmlFor="municipality">
-                        Municipality
-                        <input
-                          id="municipality"
-                          name="municipality"
-                          value={clinicForm.municipality}
-                        />
-                      </label>
-
-                      <label className="edit-field" htmlFor="services">
-                        Services
-                        <textarea
-                          id="services"
-                          name="services"
-                          value={clinicForm.services}
-                          onChange={handleClinicFormChange}
-                          placeholder="Separate services with commas or new lines"
-                        />
-                        <p className="admin-hint">
-                          Example: HIV testing, Immunisation, Family planning
-                        </p>
-                      </label>
-
-                      <label className="edit-field" htmlFor="appointment-duration">
-                        Appointment duration minutes
-                        <input
-                          id="appointment-duration"
-                          min="1"
-                          max="240"
-                          name="appointment_duration_minutes"
-                          type="number"
-                          value={clinicForm.appointment_duration_minutes}
-                          onChange={handleClinicFormChange}
-                          placeholder="Default: 15"
-                        />
-                        <p className="admin-hint">
-                          Leave empty to use the backend default of 15 minutes.
-                        </p>
-                      </label>
-                    </section>
-
-                    <section className="admin-subsection">
-                      <header className="admin-subsection-header">
-                        <h3>Operating hours</h3>
-                      </header>
-                      <p className="admin-subsection-copy">
-                        Set opening and closing times for each day, or mark the day as closed.
+                  {!selectedClinicId && (
+                    <section className="admin-empty">
+                      <strong>Select a clinic to get started</strong>
+                      <p>
+                        You will be able to view assigned staff, update facility type,
+                        services, and edit each day&apos;s operating hours.
                       </p>
-
-                      <section className="operating-hours-grid">
-                        {WEEK_DAYS.map((day) => (
-                          <section className="operating-hours-row" key={day}>
-                            <span className="operating-hours-day">
-                              {day.charAt(0).toUpperCase() + day.slice(1)}
-                            </span>
-
-                            <label htmlFor={`${day}-closed`}>
-                              <input
-                                id={`${day}-closed`}
-                                type="checkbox"
-                                checked={operatingHoursForm[day]?.closed ?? true}
-                                onChange={(event) =>
-                                  handleClosedToggle(day, event.target.checked)
-                                }
-                              />
-                              Closed
-                            </label>
-
-                            <input
-                              aria-label={`${day} opening time`}
-                              type="time"
-                              value={operatingHoursForm[day]?.open ?? ''}
-                              disabled={operatingHoursForm[day]?.closed}
-                              onChange={(event) =>
-                                handleOperatingHoursChange(day, 'open', event.target.value)
-                              }
-                            />
-
-                            <input
-                              aria-label={`${day} closing time`}
-                              type="time"
-                              value={operatingHoursForm[day]?.close ?? ''}
-                              disabled={operatingHoursForm[day]?.closed}
-                              onChange={(event) =>
-                                handleOperatingHoursChange(day, 'close', event.target.value)
-                              }
-                            />
-                          </section>
-                        ))}
-                      </section>
                     </section>
+                  )}
 
-                    <br />
+                  {selectedClinicId && (
+                    <>
+                      <section className="admin-selected-banner" aria-live="polite">
+                        <section>
+                          <strong>{selectedClinic?.name}</strong>
+                          <p>
+                            {selectedClinic?.municipality || 'Municipality not set'}
+                            {' - '}
+                            {selectedClinic?.district || 'District not set'}
+                          </p>
+                        </section>
+                        <span>Edit the fields just below.</span>
+                      </section>
 
-                      <section style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '12px' }}>
+                      <section className="admin-subsection">
+                        <header className="admin-subsection-header">
+                          <h3>Clinic staff</h3>
+                        </header>
+
+                        <p className="admin-subsection-copy">
+                          Manage the team currently assigned to this clinic and add available staff below.
+                        </p>
+
+                        <section className="admin-table-wrap">
+                          <table className="admin-table">
+                            <tbody>
+                              {selectedClinicStaff.length === 0 ? (
+                                <tr>
+                                  <td colSpan="4">No staff assigned yet.</td>
+                                </tr>
+                              ) : (
+                                selectedClinicStaff.map((staffUser) => (
+                                  <tr key={staffUser.id}>
+                                    <td>{staffUser.full_name}</td>
+                                    <td>{staffUser.role}</td>
+                                    <td>{selectedClinic?.name}</td>
+                                    <td>
+                                      <button
+                                        className="admin-btn admin-btn-reject"
+                                        type="button"
+                                        onClick={() => unassignStaffFromClinic(staffUser.id)}
+                                      >
+                                        Unassign
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </section>
+
+                        <br />
+
+                        <label htmlFor="staff-select">Add staff member</label>
+                        <select
+                          id="staff-select"
+                          value={selectedStaffId}
+                          onChange={(event) => setSelectedStaffId(event.target.value)}
+                        >
+                          <option value="">Select staff</option>
+                          {unassignedStaffUsers.map((staffUser) => (
+                            <option key={staffUser.id} value={staffUser.id}>
+                              {staffUser.full_name}
+                            </option>
+                          ))}
+                        </select>
+
+                        <br />
+                        <br />
+
                         <button
                           className="admin-btn admin-btn-approve"
                           type="button"
-                          onClick={saveClinicChanges}
-                          disabled={savingClinic}
+                          onClick={assignStaffToClinic}
+                          disabled={assigningStaff || !selectedStaffId}
                         >
-                          {savingClinic ? 'Saving...' : 'Save changes'}
+                          {assigningStaff ? 'Adding...' : 'Add staff'}
                         </button>
-
-                        {clinicEditError && (
-                          <span className="admin-error" role="alert">
-                            {clinicEditError}
-                          </span>
-                        )}
-
-                        {clinicEditFeedback && (
-                          <span className="admin-feedback" role="status">
-                            {clinicEditFeedback}
-                          </span>
-                        )}
                       </section>
 
+                      <section className="admin-subsection">
+                        <header className="admin-subsection-header">
+                          <h3>Edit clinic</h3>
+                        </header>
 
-                  </section>
-                </section>
-              </>
-            )}
-          </form>
+                        <p className="admin-subsection-copy">
+                          Update facility type, services, and operating hours below, then save your changes.
+                        </p>
+
+                        <section className="edit-clinic-container">
+                          <label className="edit-clinic-name" htmlFor="clinic-name">
+                            Name
+                            <input
+                              id="clinic-name"
+                              name="name"
+                              value={clinicForm.name}
+                              onChange={handleClinicFormChange}
+                            />
+                          </label>
+
+                          <section className="edit-clinic-grid">
+                            <label className="edit-field" htmlFor="facility-type">
+                              Facility type
+                              <input
+                                id="facility-type"
+                                list="facility-type-options"
+                                name="facility_type"
+                                value={clinicForm.facility_type}
+                                onChange={handleClinicFormChange}
+                              />
+                              <datalist id="facility-type-options">
+                                {FACILITY_TYPE_OPTIONS.map((facilityType) => (
+                                  <option key={facilityType} value={facilityType} />
+                                ))}
+                              </datalist>
+                            </label>
+
+                            <label className="edit-field" htmlFor="province">
+                              Province
+                              <input
+                                id="province"
+                                name="province"
+                                value={clinicForm.province}
+                                onChange={handleClinicFormChange}
+                              />
+                            </label>
+
+                            <label className="edit-field" htmlFor="district">
+                              District
+                              <input
+                                id="district"
+                                name="district"
+                                value={clinicForm.district}
+                                onChange={handleClinicFormChange}
+                              />
+                            </label>
+
+                            <label className="edit-field" htmlFor="municipality">
+                              Municipality
+                              <input
+                                id="municipality"
+                                name="municipality"
+                                value={clinicForm.municipality}
+                                onChange={handleClinicFormChange}
+                              />
+                            </label>
+
+                            <label className="edit-field" htmlFor="services">
+                              Services
+                              <textarea
+                                id="services"
+                                name="services"
+                                value={clinicForm.services}
+                                onChange={handleClinicFormChange}
+                                placeholder="Separate services with commas or new lines"
+                              />
+                              <p className="admin-hint">
+                                Example: HIV testing, Immunisation, Family planning
+                              </p>
+                            </label>
+
+                            <label className="edit-field" htmlFor="appointment-duration">
+                              Appointment duration minutes
+                              <input
+                                id="appointment-duration"
+                                min="1"
+                                max="240"
+                                name="appointment_duration_minutes"
+                                type="number"
+                                value={clinicForm.appointment_duration_minutes}
+                                onChange={handleClinicFormChange}
+                                placeholder="Default: 15"
+                              />
+                              <p className="admin-hint">
+                                Leave empty to use the backend default of 15 minutes.
+                              </p>
+                            </label>
+                          </section>
+
+                          <section className="admin-subsection">
+                            <header className="admin-subsection-header">
+                              <h3>Operating hours</h3>
+                            </header>
+
+                            <p className="admin-subsection-copy">
+                              Set opening and closing times for each day, or mark the day as closed.
+                            </p>
+
+                            <section className="operating-hours-grid">
+                              <section className="operating-hours-header">
+                                <span>Day</span>
+                                <span>Closed</span>
+                                <span>Opening time</span>
+                                <span>Closing time</span>
+                              </section>
+
+                              {WEEK_DAYS.map((day) => (
+                                <section className="operating-hours-row" key={day}>
+                                  <span className="operating-hours-day">
+                                    {day.charAt(0).toUpperCase() + day.slice(1)}
+                                  </span>
+
+                                  <label htmlFor={`${day}-closed`}>
+                                    <input
+                                      id={`${day}-closed`}
+                                      type="checkbox"
+                                      checked={operatingHoursForm[day]?.closed ?? true}
+                                      onChange={(event) =>
+                                        handleClosedToggle(day, event.target.checked)
+                                      }
+                                    />
+                                    Closed
+                                  </label>
+
+                                  <input
+                                    aria-label={`${day} opening time`}
+                                    type="time"
+                                    value={operatingHoursForm[day]?.open ?? ''}
+                                    disabled={operatingHoursForm[day]?.closed}
+                                    onChange={(event) =>
+                                      handleOperatingHoursChange(
+                                        day,
+                                        'open',
+                                        event.target.value
+                                      )
+                                    }
+                                  />
+
+                                  <input
+                                    aria-label={`${day} closing time`}
+                                    type="time"
+                                    value={operatingHoursForm[day]?.close ?? ''}
+                                    disabled={operatingHoursForm[day]?.closed}
+                                    onChange={(event) =>
+                                      handleOperatingHoursChange(
+                                        day,
+                                        'close',
+                                        event.target.value
+                                      )
+                                    }
+                                  />
+                                </section>
+                              ))}
+                            </section>
+                          </section>
+
+                          <section
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '12px',
+                              marginTop: '12px',
+                            }}
+                          >
+                            <button
+                              className="admin-btn admin-btn-approve"
+                              type="button"
+                              onClick={saveClinicChanges}
+                              disabled={savingClinic}
+                            >
+                              {savingClinic ? 'Saving...' : 'Save changes'}
+                            </button>
+
+                            {clinicEditError && (
+                              <span className="admin-error" role="alert">
+                                {clinicEditError}
+                              </span>
+                            )}
+
+                            {clinicEditFeedback && (
+                              <span className="admin-feedback" role="status">
+                                {clinicEditFeedback}
+                              </span>
+                            )}
+                          </section>
+                        </section>
+                      </section>
+                    </>
+                  )}
+                </form>
+              )}
+            </section>
+          </section>
         )}
       </section>
     </section>
   </section>
 )
+
 }
