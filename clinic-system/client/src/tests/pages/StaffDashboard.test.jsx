@@ -163,6 +163,12 @@ function setupFetchMock({
   })
 }
 
+async function openSection(name) {
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('button', { name }))
+  return user
+}
+
 describe('StaffDashboard', () => {
   beforeEach(() => {
     jest.clearAllMocks()
@@ -388,6 +394,7 @@ describe('StaffDashboard', () => {
     setupFetchMock({ appointments: [] })
 
     renderDashboard()
+    await openSection(/appointments/i)
 
     expect(await screen.findByLabelText('Appointment date')).toBeInTheDocument()
 
@@ -403,54 +410,61 @@ describe('StaffDashboard', () => {
     })
 
     renderDashboard()
+    await openSection(/appointments/i)
 
     expect(await screen.findByText('Appointments failed to load.')).toBeInTheDocument()
   })
 
-  test('renders clinic appointments for selected date', async () => {
-    setupFetchMock({
-      appointments: [
-        {
-          id: 'appointment-1',
-          slot_datetime: '2026-04-26T09:30:00',
-          status: 'Confirmed',
-          patient: {
-            full_name: 'Thabo Mokoena',
-            email: 'thabo@example.com',
-          },
+test('renders future active clinic appointments for selected date', async () => {
+  setupFetchMock({
+    appointments: [
+      {
+        id: 'appointment-1',
+        slot_datetime: '2026-04-30T23:30:00',
+        status: 'Confirmed',
+        patient: {
+          full_name: 'Thabo Mokoena',
+          email: 'thabo@example.com',
         },
-      ],
-    })
-
-    renderDashboard()
-
-    expect(await screen.findByText('Thabo Mokoena')).toBeInTheDocument()
-    expect(screen.getByText('thabo@example.com')).toBeInTheDocument()
-    expect(screen.getByText('09:30')).toBeInTheDocument()
-    expect(screen.getAllByText('Confirmed').length).toBeGreaterThan(0)
+      },
+    ],
   })
 
-  test('hides appointment actions for cancelled appointments', async () => {
-    setupFetchMock({
-      appointments: [
-        {
-          id: 'appointment-1',
-          slot_datetime: '2026-04-26T09:30:00',
-          status: 'Cancelled',
-          patient: {
-            full_name: 'Cancelled Patient',
-            email: 'cancelled@example.com',
-          },
+ renderDashboard()
+  await openSection(/appointments/i)
+
+  expect(await screen.findByText('Thabo Mokoena')).toBeInTheDocument()
+
+  expect(screen.getByText('thabo@example.com')).toBeInTheDocument()
+  expect(screen.getByText('23:30')).toBeInTheDocument()
+  expect(screen.getAllByText('Confirmed').length).toBeGreaterThan(0)
+})
+
+
+test('hides cancelled appointments from the staff appointment list', async () => {
+  setupFetchMock({
+    appointments: [
+      {
+        id: 'appointment-1',
+        slot_datetime: '2026-04-30T23:30:00',
+        status: 'Cancelled',
+        patient: {
+          full_name: 'Cancelled Patient',
+          email: 'cancelled@example.com',
         },
-      ],
-    })
-
-    renderDashboard()
-
-    expect(await screen.findByText('Cancelled Patient')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /reschedule/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /cancel/i })).not.toBeInTheDocument()
+      },
+    ],
   })
+
+  renderDashboard()
+
+  await waitFor(() => {
+    expect(screen.queryByText('Cancelled Patient')).not.toBeInTheDocument()
+  })
+
+  expect(screen.queryByRole('button', { name: /reschedule/i })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /cancel/i })).not.toBeInTheDocument()
+})
 
   test('navigates to booking page when adding appointment', async () => {
     const user = userEvent.setup()
@@ -459,6 +473,7 @@ describe('StaffDashboard', () => {
 
     renderDashboard()
 
+    await user.click(await screen.findByRole('button', { name: /appointments/i }))
     await user.click(await screen.findByRole('button', { name: /add appointment/i }))
 
     await waitFor(() => {
@@ -480,6 +495,7 @@ describe('StaffDashboard', () => {
 
     renderDashboard()
 
+    await user.click(await screen.findByRole('button', { name: /appointments/i }))
     await user.click(await screen.findByRole('button', { name: /add appointment/i }))
 
     expect(await screen.findByText('Assigned clinic not found.')).toBeInTheDocument()
@@ -489,8 +505,14 @@ describe('StaffDashboard', () => {
     setupFetchMock()
 
     renderDashboard()
+    await openSection(/availability/i)
 
-    expect(await screen.findByText('Availability')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Availability' })
+    ).toBeInTheDocument()
+    
     expect(screen.getByText(/set the days and times/i)).toBeInTheDocument()
   })
+
+
 })

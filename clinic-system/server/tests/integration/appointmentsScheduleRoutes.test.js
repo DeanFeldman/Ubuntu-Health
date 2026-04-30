@@ -344,6 +344,7 @@ describe('appointment scheduling routes', () => {
           time: '07:45',
           booked_by: bookedBy,
         })
+        
         expect(res.status).toBe(201)
         expect(res.body.message).toBe('Appointment booked successfully')
     })
