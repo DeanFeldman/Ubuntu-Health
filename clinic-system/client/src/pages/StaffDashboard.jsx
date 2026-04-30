@@ -376,6 +376,56 @@ const styles = `
     font-weight: 500;
     margin-top: 14px;
   }
+
+  .sd-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.sd-slot-btn {
+  padding: 10px 6px;
+  border-radius: 10px;
+  border: 1.5px solid var(--uh-border);
+  background: var(--uh-surface);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--uh-muted);
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.12s;
+}
+
+.sd-slot-btn:hover {
+  border-color: #2563EB;
+  color: #2563EB;
+  background: #EFF6FF;
+}
+
+.sd-slot-btn--selected {
+  background: #2563EB;
+  border-color: #2563EB;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+}
+
+.sd-slot-empty {
+  text-align: center;
+  padding: 18px;
+  color: var(--uh-muted);
+  font-size: 13px;
+  background: #F9FAFB;
+  border-radius: 12px;
+  border: 1.5px dashed var(--uh-border);
+}
+
+@media (max-width: 520px) {
+  .sd-slot-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
   .sd-dialog-actions {
     display: flex;
     gap: 10px;
@@ -481,6 +531,8 @@ const BADGE_CLASS = {
   Confirmed: 'sd-badge--confirmed',
   Completed: 'sd-badge--complete',
   Cancelled: 'sd-badge--cancelled',
+  'No-show': 'sd-badge--cancelled',
+  
 }
 
 function Toast({ message, type, visible }) {
@@ -493,6 +545,15 @@ function Toast({ message, type, visible }) {
       {message}
     </aside>
   )
+}
+function formatTimeLabel(timeStr) {
+  if (!timeStr) return ''
+
+  const [h, m] = timeStr.split(':').map(Number)
+  const period = h >= 12 ? 'PM' : 'AM'
+  const hour = h % 12 || 12
+
+  return `${hour}:${String(m).padStart(2, '0')} ${period}`
 }
 
 function getDisplayName(entry) {
@@ -541,14 +602,18 @@ export default function StaffDashboard() {
   const [appointmentsLoading, setAppointmentsLoading] = useState(false)
   const [appointmentsError, setAppointmentsError] = useState(null)
 
-  const [cancelAppointmentLoading, setCancelAppointmentLoading] = useState(null)
   const [rescheduleAppointmentLoading, setRescheduleAppointmentLoading] = useState(null)
+  const [appointmentStatusLoading, setAppointmentStatusLoading] = useState(null)
 
   const [showReschedulePopup, setShowReschedulePopup] = useState(false)
   const [selectedAppointment, setSelectedAppointment] = useState(null)
   const [rescheduleDate, setRescheduleDate] = useState('')
   const [rescheduleTime, setRescheduleTime] = useState('')
   const [rescheduleError, setRescheduleError] = useState('')
+
+  const [rescheduleSlots, setRescheduleSlots] = useState([])
+  const [rescheduleSlotsLoading, setRescheduleSlotsLoading] = useState(false)
+  const [rescheduleSlotsError, setRescheduleSlotsError] = useState('')
 
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type, visible: true })
@@ -557,6 +622,7 @@ export default function StaffDashboard() {
     }, 3000)
   }, [])
 
+  
 const validateAvailabilityRow = row => {
   if (!row.is_available) return ''
 
@@ -975,45 +1041,109 @@ useEffect(() => {
       setRemoveLoading(null)
     }
   }
-
-
-  const handleCancelAppointment = async appointment => {
-  setCancelAppointmentLoading(appointment.id)
+const handleAppointmentStatusUpdate = async (appointment, status) => {
+  setAppointmentStatusLoading(`${appointment.id}-${status}`)
 
   try {
-    const res = await fetch(`${API_BASE}/api/appointments/${appointment.id}/cancel`, {
+    const res = await fetch(`${API_BASE}/api/appointments/${appointment.id}/status`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
+      body: JSON.stringify({ status }),
     })
 
     const data = await res.json().catch(() => ({}))
 
     if (!res.ok) {
-      throw new Error(data.error || 'Could not cancel appointment.')
+      throw new Error(data.error || 'Could not update appointment status.')
     }
 
-    await fetchAppointmentsByDate()
-    showToast('Appointment cancelled successfully.', 'success')
+    setAppointments(current =>
+      current.map(item =>
+        item.id === appointment.id
+          ? { ...item, status: data.appointment.status }
+          : item
+      )
+    )
+
+    showToast(data.message || `Appointment marked as ${status}.`, 'success')
   } catch (err) {
     showToast(err.message, 'error')
   } finally {
-    setCancelAppointmentLoading(null)
+    setAppointmentStatusLoading(null)
   }
 }
 
+
+
 const openReschedulePopup = appointment => {
   const slotDate = appointment.slot_datetime?.slice(0, 10) || appointmentDate
-  const slotTime = appointment.slot_datetime?.slice(11, 16) || ''
 
   setSelectedAppointment(appointment)
   setRescheduleDate(slotDate)
-  setRescheduleTime(slotTime)
+  setRescheduleTime('')
   setRescheduleError('')
+  setRescheduleSlots([])
+  setRescheduleSlotsError('')
   setShowReschedulePopup(true)
 }
+
+useEffect(() => {
+  if (!showReschedulePopup || !selectedAppointment || !rescheduleDate) {
+    setRescheduleSlots([])
+    setRescheduleSlotsError('')
+    return
+  }
+
+  async function fetchRescheduleSlots() {
+    setRescheduleSlotsLoading(true)
+    setRescheduleSlotsError('')
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/appointments/slots?clinic_id=${selectedAppointment.clinic_id}&date=${rescheduleDate}`,
+        {
+          headers: { Accept: 'application/json' },
+        }
+      )
+
+      const data = await res.json().catch(() => [])
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to load slots.')
+      }
+
+      const rawSlots = Array.isArray(data) ? data : []
+
+      const availableFutureSlots = rawSlots.filter(slot => {
+        const slotDateTime = new Date(`${rescheduleDate}T${slot}:00`)
+        return slotDateTime > new Date()
+      })
+
+      setRescheduleSlots(availableFutureSlots)
+
+      if (!availableFutureSlots.includes(rescheduleTime)) {
+        setRescheduleTime('')
+      }
+    } catch (err) {
+      setRescheduleSlots([])
+      setRescheduleSlotsError(err.message || 'Failed to load available slots.')
+    } finally {
+      setRescheduleSlotsLoading(false)
+    }
+  }
+
+  fetchRescheduleSlots()
+}, [
+  showReschedulePopup,
+  selectedAppointment,
+  rescheduleDate,
+  rescheduleTime,
+  API_BASE,
+])
+
 
 const handleRescheduleAppointment = async () => {
   if (!selectedAppointment) return
@@ -1532,39 +1662,56 @@ const handleGoToBooking = async () => {
                         </span>
                       </td>
                       <td>
-                        <ul className="sd-actions">
-                          <li>
-                            <button
-                              type="button"
-                              className="sd-act-btn"
-                              onClick={() => openReschedulePopup(appointment)}
-                              disabled={
-                                appointment.status === 'Cancelled' ||
-                                rescheduleAppointmentLoading === appointment.id
-                              }
-                            >
-                              {rescheduleAppointmentLoading === appointment.id
-                                ? 'Saving…'
-                                : 'Reschedule'}
-                            </button>
-                          </li>
 
-                          <li>
-                            <button
-                              type="button"
-                              className="sd-act-btn sd-act-btn--danger"
-                              onClick={() => handleCancelAppointment(appointment)}
-                              disabled={
-                                appointment.status === 'Cancelled' ||
-                                cancelAppointmentLoading === appointment.id
-                              }
-                            >
-                              {cancelAppointmentLoading === appointment.id
-                                ? 'Cancelling…'
-                                : 'Cancel'}
-                            </button>
-                          </li>
-                        </ul>
+                      <ul className="sd-actions">
+                        {!['Cancelled', 'Completed', 'No-show'].includes(appointment.status) && (
+                          <>
+                            <li>
+                              <button
+                                type="button"
+                                className="sd-act-btn"
+                                onClick={() => handleAppointmentStatusUpdate(appointment, 'Completed')}
+                                disabled={appointmentStatusLoading === `${appointment.id}-Completed`}
+                              >
+                                {appointmentStatusLoading === `${appointment.id}-Completed`
+                                  ? 'Saving…'
+                                  : 'Completed'}
+                              </button>
+                            </li>
+
+                            <li>
+                               <button
+                                type="button"
+                                className="sd-act-btn sd-act-btn--danger"
+                                onClick={() => handleAppointmentStatusUpdate(appointment, 'No-show')}
+                                disabled={appointmentStatusLoading === `${appointment.id}-No-show`}
+                              >
+                                {appointmentStatusLoading === `${appointment.id}-No-show`
+                                  ? 'Saving…'
+                                  : 'No-show'}
+                              </button>
+                            </li>
+                          </>
+                        )}
+
+                          {!['Cancelled', 'Completed', 'No-show'].includes(appointment.status) && (
+                            <li>
+                              <button
+                                type="button"
+                                className="sd-act-btn"
+                                onClick={() => openReschedulePopup(appointment)}
+                                disabled={rescheduleAppointmentLoading === appointment.id}
+                              >
+                                {rescheduleAppointmentLoading === appointment.id
+                                  ? 'Saving…'
+                                  : 'Reschedule'}
+                              </button>
+                            </li>
+                          )}
+
+
+                      </ul>
+
                       </td>
                     </tr>
                   ))}
@@ -1722,7 +1869,117 @@ const handleGoToBooking = async () => {
         </div>
       )}
 
+      {showReschedulePopup && selectedAppointment && (
+  <div
+    className="sd-overlay"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="reschedule-appointment-title"
+    onClick={e => {
+      if (e.target === e.currentTarget) {
+        setShowReschedulePopup(false)
+        setSelectedAppointment(null)
+      }
+    }}
+  >
+    <div className="sd-dialog">
+      <div className="sd-dialog-icon">📅</div>
 
+      <h2 className="sd-dialog-title" id="reschedule-appointment-title">
+        Reschedule Appointment
+      </h2>
+
+      <p className="sd-dialog-subtitle">
+        Choose a new date and time for {getAppointmentPatientName(selectedAppointment)}.
+      </p>
+
+      <div className="sd-dialog-field">
+        <label className="sd-dialog-label" htmlFor="reschedule-date">
+          New date
+        </label>
+        <input
+          id="reschedule-date"
+          className="sd-dialog-input"
+          type="date"
+          value={rescheduleDate}
+          onChange={e => setRescheduleDate(e.target.value)}
+        />
+      </div>
+
+      <div className="sd-dialog-field">
+        <label className="sd-dialog-label">
+          New time
+        </label>
+
+        {!rescheduleDate ? (
+          <div className="sd-slot-empty">
+            Pick a date first.
+          </div>
+        ) : rescheduleSlotsLoading ? (
+          <div className="sd-slot-empty">
+            Loading slots…
+          </div>
+        ) : rescheduleSlotsError ? (
+          <div className="sd-slot-empty" role="alert">
+            {rescheduleSlotsError}
+          </div>
+        ) : rescheduleSlots.length === 0 ? (
+          <div className="sd-slot-empty">
+            No slots available for this date.
+          </div>
+        ) : (
+          <div className="sd-slot-grid" role="group" aria-label="Available reschedule times">
+            {rescheduleSlots.map(slot => (
+              <button
+                key={slot}
+                type="button"
+                className={`sd-slot-btn ${
+                  rescheduleTime === slot ? 'sd-slot-btn--selected' : ''
+                }`}
+                onClick={() => setRescheduleTime(slot)}
+                aria-pressed={rescheduleTime === slot}
+              >
+                {formatTimeLabel(slot)}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {rescheduleError && (
+        <div className="sd-dialog-submit-error" role="alert">
+          ⚠ {rescheduleError}
+        </div>
+      )}
+
+      <div className="sd-dialog-actions">
+        <button
+          type="button"
+          className="sd-act-btn"
+          onClick={() => {
+            setShowReschedulePopup(false)
+            setSelectedAppointment(null)
+            setRescheduleError('')
+          }}
+          disabled={rescheduleAppointmentLoading === selectedAppointment.id}
+        >
+          Cancel
+        </button>
+
+        <button
+          type="button"
+          className="sd-act-btn sd-act-btn--primary"
+          onClick={handleRescheduleAppointment}
+          disabled={rescheduleAppointmentLoading === selectedAppointment.id}
+        >
+          {rescheduleAppointmentLoading === selectedAppointment.id
+            ? 'Saving…'
+            : 'Confirm Reschedule'}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
       
     </>

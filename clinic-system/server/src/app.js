@@ -31,7 +31,7 @@ if (!supabaseUrl || !supabaseKey) {
 const supabase = createClient(supabaseUrl, supabaseKey)
 configureQueueNotificationService(supabase)
 
-const APPOINTMENT_STATUSES = ['Confirmed', 'Waiting', 'Completed', 'Cancelled']
+const APPOINTMENT_STATUSES = ['Confirmed', 'Waiting', 'Completed', 'Cancelled', 'No-show']
 const BOOKED_APPOINTMENT_STATUSES = ['Confirmed', 'Waiting']
 
 function isValidAppointmentStatus(status) {
@@ -47,8 +47,9 @@ function normalizeAppointmentStatus(status) {
     Pending: 'Confirmed',
     Rescheduled: 'Confirmed',
     Complete: 'Completed',
-    'No-show': 'Cancelled',
-    NoShow: 'Cancelled',
+    'No-show': 'No-show',
+    NoShow: 'No-show',
+    No_Show: 'No-show',
   }
 
   return legacyStatusMap[normalized] || normalized
@@ -2590,7 +2591,230 @@ app.get('/api/appointments/clinic/:clinicId', async (req, res) => {
   }
 })
 
+app.patch('/api/appointments/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { status } = req.body
 
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+    if (!uuidRegex.test(id)) {
+      return res.status(400).json({ error: 'Invalid appointment ID format' })
+    }
+
+    const normalizedStatus = normalizeAppointmentStatus(status)
+
+    if (!['Completed', 'No-show'].includes(normalizedStatus)) {
+      return res.status(400).json({ error: 'Invalid appointment status' })
+    }
+
+    const { data: appointment, error: fetchError } = await supabase
+      .from('appointments')
+      .select('id, status')
+      .eq('id', id)
+      .maybeSingle()
+
+    if (fetchError) throw fetchError
+
+    if (!appointment) {
+      return res.status(404).json({ error: 'Appointment not found' })
+    }
+
+    if (['Cancelled', 'Completed', 'No-show'].includes(appointment.status)) {
+      return res.status(409).json({
+        error: `Appointment is already ${appointment.status}`,
+      })
+    }
+
+    const { data, error } = await supabase
+      .from('appointments')
+      .update({ status: normalizedStatus })
+      .eq('id', id)
+      .select('*')
+      .single()
+
+    if (error) throw error
+
+    return res.json({
+      message: `Appointment marked as ${normalizedStatus}`,
+      appointment: data,
+    })
+  } catch (err) {
+    console.error('Failed to update appointment status:', err)
+    return res.status(500).json({ error: 'Failed to update appointment status' })
+  }
+})
+
+
+app.patch('/api/appointments/:id/reschedule', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { date, time } = req.body
+
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+    if (!uuidRegex.test(id)) {
+      return res.status(400).json({ error: 'Invalid appointment ID format' })
+    }
+
+    if (!date || !time) {
+      return res.status(400).json({ error: 'date and time are required' })
+    }
+
+    const normalizedTime = getTimeFromAppointmentDatetime(time)
+    const slotDatetime = new Date(`${date}T${normalizedTime}:00`)
+
+    if (!normalizedTime || Number.isNaN(slotDatetime.getTime())) {
+      return res.status(400).json({ error: 'Invalid date or time format' })
+    }
+
+    const { data: appointment, error: appointmentError } = await supabase
+      .from('appointments')
+      .select('id, clinic_id, patient_id, slot_id, status')
+      .eq('id', id)
+      .maybeSingle()
+
+    if (appointmentError) throw appointmentError
+
+    if (!appointment) {
+      return res.status(404).json({ error: 'Appointment not found' })
+    }
+
+    if (['Cancelled', 'Completed', 'No-show'].includes(appointment.status)) {
+      return res.status(409).json({
+        error: `Cannot reschedule an appointment that is ${appointment.status}`,
+      })
+    }
+
+    const { data: clinic, error: clinicError } = await supabase
+      .from('clinics')
+      .select('*')
+      .eq('id', appointment.clinic_id)
+      .maybeSingle()
+
+    if (clinicError) throw clinicError
+
+    if (!clinic) {
+      return res.status(404).json({ error: 'Clinic not found' })
+    }
+
+    const schedule = resolveClinicSchedule(clinic)
+
+    const validSlots = generateDailySlots({
+      date,
+      operating_hours: schedule.operating_hours,
+      appointment_duration_minutes: schedule.appointment_duration_minutes,
+    })
+
+    if (!validSlots.includes(normalizedTime)) {
+      return res.status(400).json({
+        error: 'Selected time is outside clinic hours or does not match the appointment duration',
+      })
+    }
+
+    const newSlot = await findOrCreateClinicSlot(
+      appointment.clinic_id,
+      slotDatetime.toISOString()
+    )
+
+    const staffCount = await fetchClinicBookingCapacity(appointment.clinic_id)
+
+    const { data: existingAppointments, error: existingError } = await supabase
+      .from('appointments')
+      .select('id')
+      .eq('clinic_id', appointment.clinic_id)
+      .eq('slot_id', newSlot.id)
+      .in('status', BOOKED_APPOINTMENT_STATUSES)
+      .neq('id', appointment.id)
+
+    if (existingError) throw existingError
+
+    const bookedCount = Array.isArray(existingAppointments)
+      ? existingAppointments.length
+      : existingAppointments
+        ? 1
+        : 0
+
+    if (bookedCount >= staffCount) {
+      return res.status(409).json({ error: 'This slot is already booked' })
+    }
+
+    const { data, error } = await supabase
+      .from('appointments')
+      .update({
+        slot_id: newSlot.id,
+        status: 'Confirmed',
+      })
+      .eq('id', appointment.id)
+      .select('*')
+      .single()
+
+    if (error) throw error
+
+    return res.json({
+      message: 'Appointment rescheduled successfully',
+      appointment: data,
+    })
+  } catch (err) {
+    console.error('Failed to reschedule appointment:', err)
+    return res.status(500).json({ error: 'Failed to reschedule appointment' })
+  }
+})
+
+
+app.patch('/api/appointments/:id/cancel', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+    if (!uuidRegex.test(id)) {
+      return res.status(400).json({ error: 'Invalid appointment ID format' })
+    }
+
+    const { data: appointment, error: fetchError } = await supabase
+      .from('appointments')
+      .select('id, status')
+      .eq('id', id)
+      .maybeSingle()
+
+    if (fetchError) throw fetchError
+
+    if (!appointment) {
+      return res.status(404).json({ error: 'Appointment not found' })
+    }
+
+    if (appointment.status === 'Cancelled') {
+      return res.status(409).json({ error: 'Appointment is already cancelled' })
+    }
+
+    if (['Completed', 'No-show'].includes(appointment.status)) {
+      return res.status(409).json({
+        error: `Cannot cancel an appointment that is ${appointment.status}`,
+      })
+    }
+
+    const { data, error } = await supabase
+      .from('appointments')
+      .update({ status: 'Cancelled' })
+      .eq('id', id)
+      .select('*')
+      .single()
+
+    if (error) throw error
+
+    return res.json({
+      message: 'Appointment cancelled successfully',
+      appointment: data,
+    })
+  } catch (err) {
+    console.error('Failed to cancel appointment:', err)
+    return res.status(500).json({ error: 'Failed to cancel appointment' })
+  }
+})
 
 // Serve built frontend
 const publicPath = path.join(__dirname, '..', 'public')

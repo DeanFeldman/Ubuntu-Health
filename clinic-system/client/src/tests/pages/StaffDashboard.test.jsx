@@ -430,7 +430,7 @@ describe('StaffDashboard', () => {
     expect(screen.getAllByText('Confirmed').length).toBeGreaterThan(0)
   })
 
-  test('disables appointment actions for cancelled appointments', async () => {
+  test('hides appointment actions for cancelled appointments', async () => {
     setupFetchMock({
       appointments: [
         {
@@ -448,8 +448,8 @@ describe('StaffDashboard', () => {
     renderDashboard()
 
     expect(await screen.findByText('Cancelled Patient')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /reschedule/i })).toBeDisabled()
-    expect(screen.getByRole('button', { name: /cancel/i })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: /reschedule/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /cancel/i })).not.toBeInTheDocument()
   })
 
   test('navigates to booking page when adding appointment', async () => {
