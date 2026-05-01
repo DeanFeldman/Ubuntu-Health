@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import getApiBase from '../lib/getApiBase'
 import { useAuth } from '../context/AuthContext'
+
 const styles = `
   .q-page {
     max-width: 680px;
@@ -129,22 +130,12 @@ const styles = `
     text-align: right;
   }
 
-  .q-called-banner {
-    background: #EFF6FF;
-    border: 1px solid #BFDBFE;
-    border-radius: 12px;
-    padding: 14px 18px;
+  .q-card-footer {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid var(--uh-border);
     display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 22px;
-    font-size: 14px;
-    color: #1D4ED8;
-    font-weight: 600;
-  }
-  .q-called-icon {
-    font-size: 1.4rem;
-    flex-shrink: 0;
+    justify-content: flex-end;
   }
 
   .q-empty-state {
@@ -225,6 +216,7 @@ const styles = `
   .q-alert-success { background: #F0FDF4; color: #166534; border: 1px solid #BBF7D0; }
   .q-alert-icon { flex-shrink: 0; }
 
+  /* ── Cancel confirmation modal ── */
   .q-overlay {
     position: fixed;
     inset: 0;
@@ -256,7 +248,7 @@ const styles = `
   .q-modal-icon {
     width: 48px;
     height: 48px;
-    background: #EFF6FF;
+    background: #FEF2F2;
     border-radius: 14px;
     display: grid;
     place-items: center;
@@ -275,23 +267,29 @@ const styles = `
     margin-bottom: 20px;
     line-height: 1.6;
   }
-  .q-modal-clinic {
+  .q-modal-details {
     background: var(--uh-bg);
     border: 1px solid var(--uh-border);
     border-radius: 12px;
     padding: 14px 16px;
     margin-bottom: 22px;
+    display: grid;
+    gap: 8px;
   }
-  .q-modal-clinic strong {
-    display: block;
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--uh-text);
-    margin-bottom: 3px;
-  }
-  .q-modal-clinic span {
+  .q-modal-detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     font-size: 13px;
+  }
+  .q-modal-detail-key {
     color: var(--uh-muted);
+    font-weight: 500;
+  }
+  .q-modal-detail-val {
+    color: var(--uh-text);
+    font-weight: 700;
+    text-align: right;
   }
   .q-modal-actions {
     display: flex;
@@ -308,6 +306,7 @@ const styles = `
     margin-top: 12px;
   }
 `
+
 const STATUS_DOT = {
   Confirmed: 'served',
   Waiting: 'waiting',
@@ -325,6 +324,12 @@ export default function PatientAppointments() {
   const [appointments, setAppointments] = useState([])
   const [loadingAppointments, setLoadingAppointments] = useState(true)
   const [fetchError, setFetchError] = useState(null)
+
+  // ── Cancellation state ──
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [appointmentToCancel, setAppointmentToCancel] = useState(null)
+  const [cancelLoading, setCancelLoading] = useState(false)
+  const [cancelError, setCancelError] = useState(null)
 
   const fetchAppointments = useCallback(async () => {
     try {
@@ -358,9 +363,54 @@ export default function PatientAppointments() {
     fetchAppointments()
   }, [fetchAppointments])
 
+  // ── Open cancel modal ──
+  function openCancelModal(appointment) {
+    setAppointmentToCancel(appointment)
+    setCancelError(null)
+    setShowCancelModal(true)
+  }
+
+  // ── Dismiss cancel modal ──
+  function dismissCancelModal() {
+    setShowCancelModal(false)
+    setAppointmentToCancel(null)
+    setCancelError(null)
+  }
+
+  // ── Confirm cancellation ──
+  async function handleConfirmCancel() {
+    if (!appointmentToCancel) return
+
+    try {
+      setCancelLoading(true)
+      setCancelError(null)
+
+      const res = await fetch(`${API_BASE}/api/appointments/${appointmentToCancel.id}/cancel`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+      })
+
+      const data = await res.json().catch(() => null)
+
+      if (!res.ok) {
+        throw new Error(data?.error || 'Could not cancel appointment.')
+      }
+
+      setShowCancelModal(false)
+      setAppointmentToCancel(null)
+      await fetchAppointments()
+    } catch (err) {
+      setCancelError(err.message)
+    } finally {
+      setCancelLoading(false)
+    }
+  }
+
   function formatDate(dateString) {
     if (!dateString) return '—'
-
     return new Date(dateString).toLocaleDateString('en-ZA', {
       weekday: 'short',
       day: 'numeric',
@@ -371,7 +421,6 @@ export default function PatientAppointments() {
 
   function formatTime(dateString) {
     if (!dateString) return '—'
-
     return new Date(dateString).toLocaleTimeString('en-ZA', {
       hour: '2-digit',
       minute: '2-digit',
@@ -380,95 +429,169 @@ export default function PatientAppointments() {
 
   return (
     <>
-    <style>{styles}</style>
-    <main className="q-page">
-      <header className="q-page-header">
-        <h1>My Appointments</h1>
-        <p>View your upcoming bookings and appointment statuses.</p>
-      </header>
+      <style>{styles}</style>
 
-      {loadingAppointments && (
-        <section className="q-loading" aria-live="polite">
-          <span className="q-spinner" role="status" aria-label="Loading appointments" />
-          Loading your appointments…
-        </section>
-      )}
+      <main className="q-page">
+        <header className="q-page-header">
+          <h1>My Appointments</h1>
+          <p>View your upcoming bookings and appointment statuses.</p>
+        </header>
 
-      {!loadingAppointments && fetchError && (
-        <p className="q-alert q-alert-error" role="alert">
-          <span className="q-alert-icon">⚠</span>
-          {fetchError}
-        </p>
-      )}
-
-      {!loadingAppointments && !fetchError && appointments.length === 0 && (
-        <article className="q-card">
-          <section className="q-empty-state">
-            <p className="q-empty-icon" aria-hidden="true">📅</p>
-            <h2>No upcoming appointments</h2>
-            <p>Book an appointment at a clinic to see it listed here.</p>
-            <button
-              className="q-btn q-btn-primary"
-              onClick={() => navigate('/clinic')}
-            >
-              Browse clinics
-            </button>
+        {loadingAppointments && (
+          <section className="q-loading" aria-live="polite">
+            <span className="q-spinner" role="status" aria-label="Loading appointments" />
+            Loading your appointments…
           </section>
-        </article>
-      )}
+        )}
 
-      {!loadingAppointments && !fetchError && appointments.map((appointment) => (
-        <article className="q-card" key={appointment.id}>
-          <header className="q-status-row">
-            <span
-              className={`q-status-dot ${STATUS_DOT[appointment.status] ?? 'called'}`}
-              aria-hidden="true"
-            />
-            <span className="q-status-label">
-              {appointment.status || 'Confirmed'}
-            </span>
-          </header>
+        {!loadingAppointments && fetchError && (
+          <p className="q-alert q-alert-error" role="alert">
+            <span className="q-alert-icon">⚠</span>
+            {fetchError}
+          </p>
+        )}
 
-          <section className="q-position-hero">
-            <figure style={{ margin: 0 }}>
-              <p className="q-position-number">
-                {formatTime(appointment.slot_datetime)}
+        {!loadingAppointments && !fetchError && appointments.length === 0 && (
+          <article className="q-card">
+            <section className="q-empty-state">
+              <p className="q-empty-icon" aria-hidden="true">📅</p>
+              <h2>No upcoming appointments</h2>
+              <p>Book an appointment at a clinic to see it listed here.</p>
+              <button
+                className="q-btn q-btn-primary"
+                onClick={() => navigate('/clinic')}
+              >
+                Browse clinics
+              </button>
+            </section>
+          </article>
+        )}
+
+        {!loadingAppointments && !fetchError && appointments.map((appointment) => (
+          <article className="q-card" key={appointment.id}>
+            <header className="q-status-row">
+              <span
+                className={`q-status-dot ${STATUS_DOT[appointment.status] ?? 'called'}`}
+                aria-hidden="true"
+              />
+              <span className="q-status-label">
+                {appointment.status || 'Confirmed'}
+              </span>
+            </header>
+
+            <section className="q-position-hero">
+              <figure style={{ margin: 0 }}>
+                <p className="q-position-number">
+                  {formatTime(appointment.slot_datetime)}
+                </p>
+                <figcaption className="q-position-label">Time</figcaption>
+              </figure>
+
+              <hr className="q-position-divider" aria-hidden="true" />
+
+              <address className="q-position-info">
+                <h2>{appointment.clinic_name || 'Clinic'}</h2>
+                <p>{formatDate(appointment.slot_datetime)}</p>
+              </address>
+            </section>
+
+            <dl className="q-detail-grid" aria-label="Appointment details">
+              <span className="q-detail-row">
+                <dt className="q-detail-key">Clinic</dt>
+                <dd className="q-detail-val">{appointment.clinic_name || 'Clinic'}</dd>
+              </span>
+              <span className="q-detail-row">
+                <dt className="q-detail-key">Date</dt>
+                <dd className="q-detail-val">{formatDate(appointment.slot_datetime)}</dd>
+              </span>
+              <span className="q-detail-row">
+                <dt className="q-detail-key">Time</dt>
+                <dd className="q-detail-val">{formatTime(appointment.slot_datetime)}</dd>
+              </span>
+              <span className="q-detail-row">
+                <dt className="q-detail-key">Status</dt>
+                <dd className="q-detail-val">{appointment.status || 'Confirmed'}</dd>
+              </span>
+            </dl>
+
+            {/* ── Cancel button ── */}
+            {appointment.status !== 'Cancelled' && appointment.status !== 'Completed' && (
+              <footer className="q-card-footer">
+                <button
+                  type="button"
+                  className="q-btn q-btn-danger"
+                  onClick={() => openCancelModal(appointment)}
+                >
+                  Cancel appointment
+                </button>
+              </footer>
+            )}
+          </article>
+        ))}
+      </main>
+
+      {/* ── Cancel confirmation modal ── */}
+      {showCancelModal && appointmentToCancel && (
+        <aside
+          className="q-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cancel-modal-title"
+          aria-describedby="cancel-modal-desc"
+          onClick={(e) => { if (e.target === e.currentTarget) dismissCancelModal() }}
+        >
+          <article className="q-modal">
+            <div className="q-modal-icon" aria-hidden="true">🗓️</div>
+
+            <h2 id="cancel-modal-title">Cancel appointment?</h2>
+            <p className="q-modal-subtitle" id="cancel-modal-desc">
+              This action cannot be undone. Please confirm you want to cancel the following appointment.
+            </p>
+
+            <div className="q-modal-details" aria-label="Appointment to cancel">
+              <div className="q-modal-detail-row">
+                <span className="q-modal-detail-key">Clinic</span>
+                <span className="q-modal-detail-val">{appointmentToCancel.clinic_name || 'Clinic'}</span>
+              </div>
+              <div className="q-modal-detail-row">
+                <span className="q-modal-detail-key">Date</span>
+                <span className="q-modal-detail-val">{formatDate(appointmentToCancel.slot_datetime)}</span>
+              </div>
+              <div className="q-modal-detail-row">
+                <span className="q-modal-detail-key">Time</span>
+                <span className="q-modal-detail-val">{formatTime(appointmentToCancel.slot_datetime)}</span>
+              </div>
+            </div>
+
+            {cancelError && (
+              <p className="q-alert q-alert-error" role="alert" style={{ marginBottom: 16 }}>
+                <span className="q-alert-icon">⚠</span>
+                {cancelError}
               </p>
-              <figcaption className="q-position-label">Time</figcaption>
-            </figure>
+            )}
 
-            <hr className="q-position-divider" aria-hidden="true" />
-
-            <address className="q-position-info">
-              <h2>{appointment.clinic_name || 'Clinic'}</h2>
-              <p>{formatDate(appointment.slot_datetime)}</p>
-            </address>
-          </section>
-
-          <dl className="q-detail-grid" aria-label="Appointment details">
-            <span className="q-detail-row">
-              <dt className="q-detail-key">Clinic</dt>
-              <dd className="q-detail-val">{appointment.clinic_name || 'Clinic'}</dd>
-            </span>
-
-            <span className="q-detail-row">
-              <dt className="q-detail-key">Date</dt>
-              <dd className="q-detail-val">{formatDate(appointment.slot_datetime)}</dd>
-            </span>
-
-            <span className="q-detail-row">
-              <dt className="q-detail-key">Time</dt>
-              <dd className="q-detail-val">{formatTime(appointment.slot_datetime)}</dd>
-            </span>
-
-            <span className="q-detail-row">
-              <dt className="q-detail-key">Status</dt>
-              <dd className="q-detail-val">{appointment.status || 'Confirmed'}</dd>
-            </span>
-          </dl>
-        </article>
-      ))}
-    </main>
+            <footer className="q-modal-actions">
+              <button
+                type="button"
+                className="q-btn q-btn-ghost"
+                onClick={dismissCancelModal}
+                disabled={cancelLoading}
+              >
+                Keep appointment
+              </button>
+              <button
+                type="button"
+                className="q-btn q-btn-danger"
+                onClick={handleConfirmCancel}
+                disabled={cancelLoading}
+                autoFocus
+              >
+                {cancelLoading ? 'Cancelling…' : 'Yes, cancel'}
+              </button>
+            </footer>
+          </article>
+        </aside>
+      )}
     </>
   )
 }
