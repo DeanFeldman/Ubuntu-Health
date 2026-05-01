@@ -386,19 +386,18 @@ app.get('/api/clinics', async (req, res) => {
   try {
     const { province, district, municipality, facility_type, search } = req.query
     let query = supabase.from('clinics').select('*')
-
     if (province) query = query.eq('province', province)
     if (district) query = query.eq('district', district)
     if (facility_type) query = query.eq('facility_type', facility_type)
     if (municipality) query = query.eq('municipality', municipality)
     if (search) query = query.ilike('name', `%${search}%`)
-
+    query = query.range(0, 9999)
     const { data, error } = await Promise.race([
-      query,
-      new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('CLINICS_QUERY_TIMEOUT')), 1500)
-      }),
-    ])
+  query,
+  new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('CLINICS_QUERY_TIMEOUT')), 10000)
+  }),
+])
 
     if (error) throw error
 

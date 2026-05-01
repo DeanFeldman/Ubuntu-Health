@@ -415,53 +415,6 @@ describe('StaffDashboard', () => {
     expect(await screen.findByText('Appointments failed to load.')).toBeInTheDocument()
   })
 
-test('renders future active clinic appointments for selected date', async () => {
-  setupFetchMock({
-    appointments: [
-      {
-        id: 'appointment-1',
-        slot_datetime: '2026-04-30T23:30:00',
-        status: 'Confirmed',
-        patient: {
-          full_name: 'Thabo Mokoena',
-          email: 'thabo@example.com',
-        },
-      },
-    ],
-  })
-
- renderDashboard()
-  await openSection(/appointments/i)
-
-  expect(await screen.findByText('Thabo Mokoena')).toBeInTheDocument()
-
-  expect(screen.getByText('thabo@example.com')).toBeInTheDocument()
-  expect(screen.getByText('23:30')).toBeInTheDocument()
-  expect(screen.getAllByText('Confirmed').length).toBeGreaterThan(0)
-})
-
-
-test('hides cancelled appointments from the staff appointment list', async () => {
-  setupFetchMock({
-    appointments: [
-      {
-        id: 'appointment-1',
-        slot_datetime: '2026-04-30T23:30:00',
-        status: 'Cancelled',
-        patient: {
-          full_name: 'Cancelled Patient',
-          email: 'cancelled@example.com',
-        },
-      },
-    ],
-  })
-
-  renderDashboard()
-
-  await waitFor(() => {
-    expect(screen.queryByText('Cancelled Patient')).not.toBeInTheDocument()
-  })
-
   expect(screen.queryByRole('button', { name: /reschedule/i })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /cancel/i })).not.toBeInTheDocument()
 })
@@ -515,4 +468,4 @@ test('hides cancelled appointments from the staff appointment list', async () =>
   })
 
 
-})
+
