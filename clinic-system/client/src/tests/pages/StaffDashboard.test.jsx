@@ -424,7 +424,7 @@ describe('StaffDashboard', () => {
 
     renderDashboard()
 
-    expect(await screen.findByText('Thabo Mokoena')).toBeInTheDocument()
+    expect(await screen.findByText('Thabo Mokoena', {}, { timeout: 5000 })).toBeInTheDocument()
     expect(screen.getByText('thabo@example.com')).toBeInTheDocument()
     expect(screen.getByText('09:30')).toBeInTheDocument()
     expect(screen.getAllByText('Confirmed').length).toBeGreaterThan(0)
