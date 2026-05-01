@@ -519,4 +519,4 @@ test('hides cancelled appointments from the staff appointment list', async () =>
   })
 
 
-})
+
