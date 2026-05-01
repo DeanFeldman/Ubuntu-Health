@@ -556,7 +556,16 @@ export default function BookingPage() {
 
         if (!res.ok) throw new Error(data.error || 'Failed to load slots')
 
-        setSlots(Array.isArray(data) ? data : [])
+        const rawSlots = Array.isArray(data) ? data : []
+
+          const availableFutureSlots = rawSlots.filter(slot => {
+            const slotDateTime = new Date(`${selectedDate}T${slot}:00`)
+            return slotDateTime > new Date()
+          })
+
+          setSlots(availableFutureSlots)
+          //setSlots(rawSlots);
+          
       } catch (err) {
         console.error(err)
 
@@ -728,6 +737,9 @@ export default function BookingPage() {
       showToast('Appointment booked successfully', 'success')
     } catch (err) {
       const message = err?.message || 'Booking failed. Please try again.'
+      setBooked(false)
+  setBookedDetails(null)
+  setShowConfirm(false)
       setSubmitError(message)
       showToast(message, 'error')
     } finally {
@@ -741,6 +753,7 @@ export default function BookingPage() {
     if (isStaff) {
       navigate('/clinic')
     } 
+    navigate('/clinic')
   }
 
   // ── Redirect if no clinic context ──

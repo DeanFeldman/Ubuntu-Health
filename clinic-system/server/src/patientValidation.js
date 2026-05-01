@@ -32,8 +32,34 @@ function validatePatientInput({ full_name, email, created_by }) {
   return { valid: true }
 }
 
+
+function calculateEstimatedWaitTime({
+  patientsAhead,
+  appointmentDuration,
+  staffCount,
+}) {
+  if (!staffCount || staffCount <= 0) {
+    return {
+      estimatedWaitTime: null,
+      message: 'Estimate not available',
+    }
+  }
+
+  const safePatientsAhead = Math.max(Number(patientsAhead) || 0, 0)
+
+  const safeAppointmentDuration =
+    Number(appointmentDuration) > 0 ? Number(appointmentDuration) : 15
+
+  return {
+    estimatedWaitTime: Math.ceil(
+      (safePatientsAhead * safeAppointmentDuration) / staffCount
+    ),
+  }
+}
+
 module.exports = {
   isValidUuid,
   isValidEmail,
   validatePatientInput,
+  calculateEstimatedWaitTime,
 }

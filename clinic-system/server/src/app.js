@@ -31,7 +31,7 @@ if (!supabaseUrl || !supabaseKey) {
 const supabase = createClient(supabaseUrl, supabaseKey)
 configureQueueNotificationService(supabase)
 
-const APPOINTMENT_STATUSES = ['Confirmed', 'Waiting', 'Completed', 'Cancelled']
+const APPOINTMENT_STATUSES = ['Confirmed', 'Waiting', 'Completed', 'Cancelled', 'No-show']
 const BOOKED_APPOINTMENT_STATUSES = ['Confirmed', 'Waiting']
 
 function isValidAppointmentStatus(status) {
@@ -47,8 +47,9 @@ function normalizeAppointmentStatus(status) {
     Pending: 'Confirmed',
     Rescheduled: 'Confirmed',
     Complete: 'Completed',
-    'No-show': 'Cancelled',
-    NoShow: 'Cancelled',
+    'No-show': 'No-show',
+    NoShow: 'No-show',
+    No_Show: 'No-show',
   }
 
   return legacyStatusMap[normalized] || normalized
@@ -145,7 +146,7 @@ async function fetchClinicQueueMetrics(clinicId) {
 
   return {
     appointmentDuration,
-    staffCount: hasStaffCount ? rawStaffCount : 1,
+    staffCount: hasStaffCount ? rawStaffCount : 0,
     fallbackUsed: !hasAppointmentDuration || !hasStaffCount,
   }
 }
@@ -155,24 +156,28 @@ function calculateEstimatedWaitTime({
   appointmentDuration,
   staffCount,
 }) {
-  const safePatientsAhead = Math.max(Number(patientsAhead) || 0, 0)
-  const rawAppointmentDuration = Number(appointmentDuration)
   const rawStaffCount = Number(staffCount)
-  const hasAppointmentDuration =
+
+  if (!Number.isFinite(rawStaffCount) || rawStaffCount <= 0) {
+    return {
+      estimatedWaitTime: null,
+      message: 'Estimate not available',
+    }
+  }
+
+  const safePatientsAhead = Math.max(Number(patientsAhead) || 0, 0)
+
+  const rawAppointmentDuration = Number(appointmentDuration)
+  const safeAppointmentDuration =
     Number.isFinite(rawAppointmentDuration) && rawAppointmentDuration > 0
-  const hasStaffCount = Number.isFinite(rawStaffCount) && rawStaffCount > 0
-  const safeAppointmentDuration = hasAppointmentDuration
-    ? rawAppointmentDuration
-    : DEFAULT_ESTIMATED_WAIT_APPOINTMENT_DURATION
-  const safeStaffCount = hasStaffCount ? rawStaffCount : 1
-  const estimatedWaitTime =
-    safePatientsAhead === 0
-      ? 0
-      : Math.ceil((safePatientsAhead * safeAppointmentDuration) / safeStaffCount)
+      ? rawAppointmentDuration
+      : DEFAULT_ESTIMATED_WAIT_APPOINTMENT_DURATION
 
   return {
-    estimatedWaitTime,
-    fallbackUsed: !hasAppointmentDuration || !hasStaffCount,
+    estimatedWaitTime:
+      safePatientsAhead === 0
+        ? 0
+        : Math.ceil((safePatientsAhead * safeAppointmentDuration) / rawStaffCount),
   }
 }
 
@@ -203,7 +208,7 @@ async function fetchWaitingQueuePosition(clinicId, patientId) {
   }
 }
 
-function getTimeFromAppointmentDatetime(slotDatetime) {
+/*function getTimeFromAppointmentDatetime(slotDatetime) {
   if (!slotDatetime) return null
 
   if (typeof slotDatetime === 'string') {
@@ -211,15 +216,55 @@ function getTimeFromAppointmentDatetime(slotDatetime) {
     if (match) return match[1]
   }
 
+
   const parsedDate = new Date(slotDatetime)
   if (Number.isNaN(parsedDate.getTime())) return null
 
   return `${String(parsedDate.getHours()).padStart(2, '0')}:${String(parsedDate.getMinutes()).padStart(2, '0')}`
+}*/
+function getTimeFromAppointmentDatetime(slotDatetime) {
+  if (!slotDatetime) return null
+
+  if (typeof slotDatetime === 'string' && /^\d{2}:\d{2}$/.test(slotDatetime)) {
+    return slotDatetime
+  }
+
+  const parsedDate = new Date(slotDatetime)
+  if (Number.isNaN(parsedDate.getTime())) return null
+
+  return parsedDate.toLocaleTimeString('en-ZA', {
+    timeZone: 'Africa/Johannesburg',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
 }
 
 const { validateSlotRetrievalInput, sanitizeGeneratedSlots } = require('./appointmentSlotValidation')
 
+async function fetchClinicBookingCapacity(clinicId) {
+  try {
+    const { count, error } = await supabase
+      .from('users')
+      .select('id', { count: 'exact', head: true })
+      .eq('clinic_id', clinicId)
+      .in('role', ['Staff', 'Admin'])
+
+    if (error) throw error
+
+    const parsedCount = Number(count)
+
+    return Number.isFinite(parsedCount) && parsedCount > 0
+      ? parsedCount
+      : 1
+  } catch (err) {
+    return 1
+  }
+}
+
 async function fetchBookedSlotTimes(clinicId, startIso, endIso) {
+  const staffCount = await fetchClinicBookingCapacity(clinicId)
+
   const { data: appointments, error: appointmentsError } = await supabase
     .from('appointments')
     .select('slot_id')
@@ -228,7 +273,9 @@ async function fetchBookedSlotTimes(clinicId, startIso, endIso) {
 
   if (appointmentsError) throw appointmentsError
 
-  const slotIds = [...new Set((appointments || []).map((appointment) => appointment.slot_id).filter(Boolean))]
+  const slotIds = [
+    ...new Set((appointments || []).map(appointment => appointment.slot_id).filter(Boolean)),
+  ]
 
   if (slotIds.length === 0) {
     return new Set()
@@ -238,14 +285,31 @@ async function fetchBookedSlotTimes(clinicId, startIso, endIso) {
     .from('slots')
     .select('id, slot_datetime')
     .in('id', slotIds)
-    .lt('slot_datetime', endIso)
 
   if (slotsError) throw slotsError
 
+  const slotById = Object.fromEntries((slots || []).map(slot => [slot.id, slot]))
+  const bookingCountByTime = {}
+
+  for (const appointment of appointments || []) {
+    const slot = slotById[appointment.slot_id]
+    if (!slot?.slot_datetime) continue
+
+    const slotDate = slot.slot_datetime.slice(0, 10)
+    const startDate = startIso.slice(0, 10)
+
+    if (slotDate !== startDate) continue
+
+    const time = getTimeFromAppointmentDatetime(slot.slot_datetime)
+    if (!time) continue
+
+    bookingCountByTime[time] = (bookingCountByTime[time] || 0) + 1
+  }
+
   return new Set(
-    (slots || [])
-      .map((slot) => getTimeFromAppointmentDatetime(slot.slot_datetime))
-      .filter(Boolean)
+    Object.entries(bookingCountByTime)
+      .filter(([, count]) => count >= staffCount)
+      .map(([time]) => time)
   )
 }
 
@@ -485,7 +549,8 @@ app.get('/api/queue/:clinicId/estimated-wait-time/:patientId', async (req, res) 
     const appointmentDuration =
       queueMetrics?.appointmentDuration ??
       DEFAULT_ESTIMATED_WAIT_APPOINTMENT_DURATION
-    const staffCount = queueMetrics?.staffCount ?? 1
+    const staffCount = queueMetrics?.staffCount ?? 0
+  
     const waitEstimate = calculateEstimatedWaitTime({
       patientsAhead: queuePosition.patientsAhead,
       appointmentDuration,
@@ -498,6 +563,7 @@ app.get('/api/queue/:clinicId/estimated-wait-time/:patientId', async (req, res) 
       appointmentDuration,
       staffCount,
       estimatedWaitTime: waitEstimate.estimatedWaitTime,
+      message: waitEstimate.message,
     })
   } catch (err) {
     console.error(err)
@@ -2142,18 +2208,35 @@ app.get('/api/appointments/slots', async (req, res) => {
 app.post('/api/appointments', async (req, res) => {
   let createdPatientId = null
 
-  async function rollbackCreatedPatient() {
-    if (!createdPatientId) return
+ async function rollbackCreatedPatient() {
+  if (!createdPatientId) return
 
-    try {
+  try {
+    const { data: patientRows } = await supabase
+      .from('patients')
+      .select('id, linked_user_id')
+      .or(`id.eq.${createdPatientId},linked_user_id.eq.${createdPatientId}`)
+      .limit(1)
+
+    const linkedUserId = patientRows?.[0]?.linked_user_id || null
+
+    await supabase
+      .from('patients')
+      .delete()
+      .or(`id.eq.${createdPatientId},linked_user_id.eq.${createdPatientId}`)
+
+    if (linkedUserId) {
       await supabase
-        .from('patients')
+        .from('users')
         .delete()
-        .eq('id', createdPatientId)
-    } catch (cleanupErr) {
-      console.error('Failed to rollback patient:', cleanupErr)
+        .eq('id', linkedUserId)
+
+      await supabase.auth.admin.deleteUser(linkedUserId)
     }
+  } catch (cleanupErr) {
+    console.error('Failed to rollback patient:', cleanupErr)
   }
+}
 
   try {
     const { clinic_id, patient_id, date, time, booked_by, is_new_patient } = req.body
@@ -2271,17 +2354,24 @@ app.post('/api/appointments', async (req, res) => {
       slot_datetime.toISOString()
     )
 
-    const { data: existingAppointment, error: existingError } = await supabase
+    const staffCount = await fetchClinicBookingCapacity(clinic_id)
+
+    const { data: existingAppointments, error: existingError } = await supabase
       .from('appointments')
       .select('id')
       .eq('clinic_id', clinic_id)
       .eq('slot_id', slotRecord.id)
       .in('status', BOOKED_APPOINTMENT_STATUSES)
-      .maybeSingle()
 
     if (existingError) throw existingError
 
-    if (existingAppointment) {
+    const bookedCount = Array.isArray(existingAppointments)
+      ? existingAppointments.length
+      : existingAppointments
+        ? 1
+        : 0
+
+    if (bookedCount >= staffCount) {
       await rollbackCreatedPatient()
       return res.status(409).json({ error: 'This slot is already booked' })
     }
@@ -2368,22 +2458,24 @@ app.get('/api/appointments/patient/:patientId', async (req, res) => {
       clinicsById = Object.fromEntries((clinics || []).map((clinic) => [clinic.id, clinic]))
     }
 
-    const allAppointments = appointments
-      .map((appointment) => ({
-        id: appointment.id,
-        patient_id: appointment.patient_id,
-        clinic_id: appointment.clinic_id,
-        slot_id: appointment.slot_id,
-        status: appointment.status || 'Confirmed',
-        service: appointment.service || null,
-        clinic_name: clinicsById[appointment.clinic_id]?.name || 'Clinic',
-        slot_datetime: slotsById[appointment.slot_id]?.slot_datetime || null,
-      }))
-      .sort((a, b) => {
-        if (!a.slot_datetime) return 1
-        if (!b.slot_datetime) return -1
-        return new Date(a.slot_datetime) - new Date(b.slot_datetime)
-      })
+    const now = new Date()
+
+  const allAppointments = appointments
+    .map((appointment) => ({
+      id: appointment.id,
+      patient_id: appointment.patient_id,
+      clinic_id: appointment.clinic_id,
+      slot_id: appointment.slot_id,
+      status: appointment.status || 'Confirmed',
+      service: appointment.service || null,
+      clinic_name: clinicsById[appointment.clinic_id]?.name || 'Clinic',
+      slot_datetime: slotsById[appointment.slot_id]?.slot_datetime || null,
+    }))
+    .filter((appointment) => {
+      if (!appointment.slot_datetime) return false
+      return new Date(appointment.slot_datetime) >= now
+    })
+    .sort((a, b) => new Date(a.slot_datetime) - new Date(b.slot_datetime))
 
     res.json({ appointments: allAppointments })
   } catch (err) {
@@ -2498,7 +2590,230 @@ app.get('/api/appointments/clinic/:clinicId', async (req, res) => {
   }
 })
 
+app.patch('/api/appointments/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { status } = req.body
 
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+    if (!uuidRegex.test(id)) {
+      return res.status(400).json({ error: 'Invalid appointment ID format' })
+    }
+
+    const normalizedStatus = normalizeAppointmentStatus(status)
+
+    if (!['Completed', 'No-show'].includes(normalizedStatus)) {
+      return res.status(400).json({ error: 'Invalid appointment status' })
+    }
+
+    const { data: appointment, error: fetchError } = await supabase
+      .from('appointments')
+      .select('id, status')
+      .eq('id', id)
+      .maybeSingle()
+
+    if (fetchError) throw fetchError
+
+    if (!appointment) {
+      return res.status(404).json({ error: 'Appointment not found' })
+    }
+
+    if (['Cancelled', 'Completed', 'No-show'].includes(appointment.status)) {
+      return res.status(409).json({
+        error: `Appointment is already ${appointment.status}`,
+      })
+    }
+
+    const { data, error } = await supabase
+      .from('appointments')
+      .update({ status: normalizedStatus })
+      .eq('id', id)
+      .select('*')
+      .single()
+
+    if (error) throw error
+
+    return res.json({
+      message: `Appointment marked as ${normalizedStatus}`,
+      appointment: data,
+    })
+  } catch (err) {
+    console.error('Failed to update appointment status:', err)
+    return res.status(500).json({ error: 'Failed to update appointment status' })
+  }
+})
+
+
+app.patch('/api/appointments/:id/reschedule', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { date, time } = req.body
+
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+    if (!uuidRegex.test(id)) {
+      return res.status(400).json({ error: 'Invalid appointment ID format' })
+    }
+
+    if (!date || !time) {
+      return res.status(400).json({ error: 'date and time are required' })
+    }
+
+    const normalizedTime = getTimeFromAppointmentDatetime(time)
+    const slotDatetime = new Date(`${date}T${normalizedTime}:00`)
+
+    if (!normalizedTime || Number.isNaN(slotDatetime.getTime())) {
+      return res.status(400).json({ error: 'Invalid date or time format' })
+    }
+
+    const { data: appointment, error: appointmentError } = await supabase
+      .from('appointments')
+      .select('id, clinic_id, patient_id, slot_id, status')
+      .eq('id', id)
+      .maybeSingle()
+
+    if (appointmentError) throw appointmentError
+
+    if (!appointment) {
+      return res.status(404).json({ error: 'Appointment not found' })
+    }
+
+    if (['Cancelled', 'Completed', 'No-show'].includes(appointment.status)) {
+      return res.status(409).json({
+        error: `Cannot reschedule an appointment that is ${appointment.status}`,
+      })
+    }
+
+    const { data: clinic, error: clinicError } = await supabase
+      .from('clinics')
+      .select('*')
+      .eq('id', appointment.clinic_id)
+      .maybeSingle()
+
+    if (clinicError) throw clinicError
+
+    if (!clinic) {
+      return res.status(404).json({ error: 'Clinic not found' })
+    }
+
+    const schedule = resolveClinicSchedule(clinic)
+
+    const validSlots = generateDailySlots({
+      date,
+      operating_hours: schedule.operating_hours,
+      appointment_duration_minutes: schedule.appointment_duration_minutes,
+    })
+
+    if (!validSlots.includes(normalizedTime)) {
+      return res.status(400).json({
+        error: 'Selected time is outside clinic hours or does not match the appointment duration',
+      })
+    }
+
+    const newSlot = await findOrCreateClinicSlot(
+      appointment.clinic_id,
+      slotDatetime.toISOString()
+    )
+
+    const staffCount = await fetchClinicBookingCapacity(appointment.clinic_id)
+
+    const { data: existingAppointments, error: existingError } = await supabase
+      .from('appointments')
+      .select('id')
+      .eq('clinic_id', appointment.clinic_id)
+      .eq('slot_id', newSlot.id)
+      .in('status', BOOKED_APPOINTMENT_STATUSES)
+      .neq('id', appointment.id)
+
+    if (existingError) throw existingError
+
+    const bookedCount = Array.isArray(existingAppointments)
+      ? existingAppointments.length
+      : existingAppointments
+        ? 1
+        : 0
+
+    if (bookedCount >= staffCount) {
+      return res.status(409).json({ error: 'This slot is already booked' })
+    }
+
+    const { data, error } = await supabase
+      .from('appointments')
+      .update({
+        slot_id: newSlot.id,
+        status: 'Confirmed',
+      })
+      .eq('id', appointment.id)
+      .select('*')
+      .single()
+
+    if (error) throw error
+
+    return res.json({
+      message: 'Appointment rescheduled successfully',
+      appointment: data,
+    })
+  } catch (err) {
+    console.error('Failed to reschedule appointment:', err)
+    return res.status(500).json({ error: 'Failed to reschedule appointment' })
+  }
+})
+
+
+app.patch('/api/appointments/:id/cancel', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+    if (!uuidRegex.test(id)) {
+      return res.status(400).json({ error: 'Invalid appointment ID format' })
+    }
+
+    const { data: appointment, error: fetchError } = await supabase
+      .from('appointments')
+      .select('id, status')
+      .eq('id', id)
+      .maybeSingle()
+
+    if (fetchError) throw fetchError
+
+    if (!appointment) {
+      return res.status(404).json({ error: 'Appointment not found' })
+    }
+
+    if (appointment.status === 'Cancelled') {
+      return res.status(409).json({ error: 'Appointment is already cancelled' })
+    }
+
+    if (['Completed', 'No-show'].includes(appointment.status)) {
+      return res.status(409).json({
+        error: `Cannot cancel an appointment that is ${appointment.status}`,
+      })
+    }
+
+    const { data, error } = await supabase
+      .from('appointments')
+      .update({ status: 'Cancelled' })
+      .eq('id', id)
+      .select('*')
+      .single()
+
+    if (error) throw error
+
+    return res.json({
+      message: 'Appointment cancelled successfully',
+      appointment: data,
+    })
+  } catch (err) {
+    console.error('Failed to cancel appointment:', err)
+    return res.status(500).json({ error: 'Failed to cancel appointment' })
+  }
+})
 
 // Serve built frontend
 const publicPath = path.join(__dirname, '..', 'public')

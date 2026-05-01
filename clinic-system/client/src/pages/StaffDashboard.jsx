@@ -44,6 +44,34 @@ const styles = `
     color: var(--uh-text);
   }
 
+  .sd-clinic-card {
+  background: var(--uh-surface);
+  border: 1px solid var(--uh-border);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  box-shadow: var(--uh-shadow);
+}
+
+.sd-clinic-card-label {
+  font-size: 12px;
+  color: var(--uh-muted);
+  margin-bottom: 4px;
+}
+
+.sd-clinic-card-name {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--uh-text);
+  margin: 0;
+}
+
+.sd-clinic-card-meta {
+  font-size: 13px;
+  color: var(--uh-muted);
+  margin-top: 4px;
+}
+
   .sd-stat-value--black { color: #040404; }
   .sd-stat-value--yellow { color: #eff30c; }
   .sd-stat-value--blue { color: #59bcd7; }
@@ -213,16 +241,84 @@ const styles = `
     padding: 16px 20px 20px;
   }
 
-  .sd-availability-row {
-    display: grid;
-    grid-template-columns: 140px 120px 1fr 1fr auto;
-    gap: 10px;
-    align-items: center;
-    padding: 12px;
-    border: 1px solid var(--uh-border);
-    border-radius: 10px;
-    background: var(--uh-bg);
+  .sd-availability-table {
+  display: grid;
+  gap: 10px;
+  padding: 16px 20px 20px;
+}
+
+.sd-availability-table-header,
+.sd-availability-row {
+  display: grid;
+  grid-template-columns: 160px 120px 1fr 1fr 90px;
+  gap: 12px;
+  align-items: center;
+}
+
+.sd-availability-table-header {
+  padding: 0 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--uh-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.sd-availability-row {
+  padding: 12px;
+  border: 1px solid var(--uh-border);
+  border-radius: 10px;
+  background: var(--uh-bg);
+}
+
+.sd-availability-day {
+  font-weight: 700;
+  color: var(--uh-text);
+}
+
+.sd-availability-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--uh-text);
+}
+
+.sd-availability-input {
+  width: 100%;
+  max-width: 130px;
+  height: 40px;
+  border: 1px solid var(--uh-border);
+  border-radius: 8px;
+  padding: 0 10px;
+  font: inherit;
+  background: white;
+  color: var(--uh-text);
+}
+
+.sd-availability-status {
+  font-size: 13px;
+  color: var(--uh-muted);
+}
+
+.sd-availability-error {
+  color: #B91C1C;
+  font-size: 12px;
+}
+
+@media (max-width: 820px) {
+  .sd-availability-table-header {
+    display: none;
   }
+
+  .sd-availability-row {
+    grid-template-columns: 1fr;
+  }
+
+  .sd-availability-input {
+    max-width: none;
+  }
+}
 
   .sd-availability-day {
     font-weight: 600;
@@ -274,6 +370,85 @@ const styles = `
     z-index: 200;
     padding: 24px;
   }
+
+  .sd-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.sd-sidebar {
+  background: var(--uh-surface);
+  border: 1px solid var(--uh-border);
+  border-radius: 14px;
+  box-shadow: var(--uh-shadow);
+  padding: 12px;
+  position: sticky;
+  top: 20px;
+}
+
+.sd-sidebar-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--uh-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 8px 10px 12px;
+}
+
+.sd-nav-btn {
+  width: 100%;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  padding: 11px 12px;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--uh-text);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: inherit;
+}
+
+.sd-nav-btn:hover {
+  background: var(--uh-bg);
+}
+
+.sd-nav-btn--active {
+  background: #EFF6FF;
+  color: #1D4ED8;
+}
+
+.sd-nav-count {
+  font-size: 11px;
+  background: var(--uh-bg);
+  color: var(--uh-muted);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.sd-nav-btn--active .sd-nav-count {
+  background: #DBEAFE;
+  color: #1D4ED8;
+}
+
+.sd-content {
+  min-width: 0;
+}
+
+@media (max-width: 820px) {
+  .sd-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sd-sidebar {
+    position: static;
+  }
+}
   .sd-dialog {
     background: var(--uh-surface);
     border-radius: 22px;
@@ -348,6 +523,56 @@ const styles = `
     font-weight: 500;
     margin-top: 14px;
   }
+
+  .sd-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.sd-slot-btn {
+  padding: 10px 6px;
+  border-radius: 10px;
+  border: 1.5px solid var(--uh-border);
+  background: var(--uh-surface);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--uh-muted);
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.12s;
+}
+
+.sd-slot-btn:hover {
+  border-color: #2563EB;
+  color: #2563EB;
+  background: #EFF6FF;
+}
+
+.sd-slot-btn--selected {
+  background: #2563EB;
+  border-color: #2563EB;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+}
+
+.sd-slot-empty {
+  text-align: center;
+  padding: 18px;
+  color: var(--uh-muted);
+  font-size: 13px;
+  background: #F9FAFB;
+  border-radius: 12px;
+  border: 1.5px dashed var(--uh-border);
+}
+
+@media (max-width: 520px) {
+  .sd-slot-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
   .sd-dialog-actions {
     display: flex;
     gap: 10px;
@@ -392,6 +617,19 @@ function createDefaultAvailability() {
     is_available: false,
     error: '',
   }))
+}
+
+function formatDisplayDate(dateStr) {
+  if (!dateStr) return ''
+
+  const [year, month, day] = dateStr.split('-').map(Number)
+
+  return new Date(year, month - 1, day).toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
 }
 
   function getClinicDayHours(clinic, dayLabel) {
@@ -440,6 +678,8 @@ const BADGE_CLASS = {
   Confirmed: 'sd-badge--confirmed',
   Completed: 'sd-badge--complete',
   Cancelled: 'sd-badge--cancelled',
+  'No-show': 'sd-badge--cancelled',
+  
 }
 
 function Toast({ message, type, visible }) {
@@ -452,6 +692,15 @@ function Toast({ message, type, visible }) {
       {message}
     </aside>
   )
+}
+function formatTimeLabel(timeStr) {
+  if (!timeStr) return ''
+
+  const [h, m] = timeStr.split(':').map(Number)
+  const period = h >= 12 ? 'PM' : 'AM'
+  const hour = h % 12 || 12
+
+  return `${hour}:${String(m).padStart(2, '0')} ${period}`
 }
 
 function getDisplayName(entry) {
@@ -500,14 +749,20 @@ export default function StaffDashboard() {
   const [appointmentsLoading, setAppointmentsLoading] = useState(false)
   const [appointmentsError, setAppointmentsError] = useState(null)
 
-  const [cancelAppointmentLoading, setCancelAppointmentLoading] = useState(null)
   const [rescheduleAppointmentLoading, setRescheduleAppointmentLoading] = useState(null)
+  const [appointmentStatusLoading, setAppointmentStatusLoading] = useState(null)
 
   const [showReschedulePopup, setShowReschedulePopup] = useState(false)
   const [selectedAppointment, setSelectedAppointment] = useState(null)
   const [rescheduleDate, setRescheduleDate] = useState('')
   const [rescheduleTime, setRescheduleTime] = useState('')
   const [rescheduleError, setRescheduleError] = useState('')
+
+  const [rescheduleSlots, setRescheduleSlots] = useState([])
+  const [rescheduleSlotsLoading, setRescheduleSlotsLoading] = useState(false)
+  const [rescheduleSlotsError, setRescheduleSlotsError] = useState('')
+
+  const [activeSection, setActiveSection] = useState('queue')
 
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type, visible: true })
@@ -516,19 +771,27 @@ export default function StaffDashboard() {
     }, 3000)
   }, [])
 
-    const validateAvailabilityRow = row => {
-    if (!row.is_available) return ''
+  
+const validateAvailabilityRow = row => {
+  if (!row.is_available) return ''
 
-    if (!row.start_time || !row.end_time) {
-      return 'Start and end time are required.'
-    }
+  const hasStart = Boolean(row.start_time)
+  const hasEnd = Boolean(row.end_time)
 
-    if (row.start_time >= row.end_time) {
-      return 'Start time must be before end time.'
-    }
-
+  if (!hasStart && !hasEnd) {
     return ''
   }
+
+  if (hasStart !== hasEnd) {
+    return 'Both start and end time are required.'
+  }
+
+  if (row.start_time >= row.end_time) {
+    return 'Start time must be before end time.'
+  }
+
+  return ''
+}
 
   const fetchClinicDetails = useCallback(async () => {
   if (authLoading || !resolvedClinicId) return
@@ -631,83 +894,95 @@ export default function StaffDashboard() {
   }
 
   const handleSaveAvailability = async () => {
-    if (!user?.id) return
+  if (!user?.id) return
 
-    const prepared = availability.map(row => ({
-      ...row,
-      error: validateAvailabilityRow(row),
-    }))
+  const prepared = availability.map(row => ({
+    ...row,
+    error: validateAvailabilityRow(row),
+  }))
 
-    setAvailability(prepared)
+  setAvailability(prepared)
 
-    if (prepared.some(row => row.error)) {
-      showToast('Please fix availability errors first.', 'error')
-      return
-    }
+  if (prepared.some(row => row.error)) {
+    showToast('Please fix availability errors first.', 'error')
+    return
+  }
 
-    setAvailabilitySaving(true)
+  const rowsToSave = prepared.filter(row => {
+    if (!row.is_available) return row.id
+    return row.start_time && row.end_time
+  })
 
-    try {
-      for (const row of prepared) {
-        const payload = {
-          start_time: row.start_time,
-          end_time: row.end_time,
-          is_available: row.is_available,
-        }
+  if (rowsToSave.length === 0) {
+    showToast('No availability changes to save.', 'error')
+    return
+  }
 
-        if (row.id) {
-          const res = await fetch(
-            `${API_BASE}/api/staff/${user.id}/availability/${row.id}`,
-            {
-              method: 'PATCH',
-              headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-              },
-              body: JSON.stringify(payload),
-            }
-          )
+  setAvailabilitySaving(true)
 
-          const body = await res.json().catch(() => ({}))
+  try {
+    for (const row of rowsToSave) {
+      const payload = {
+        start_time: row.start_time || null,
+        end_time: row.end_time || null,
+        is_available: row.is_available,
+      }
 
-          if (!res.ok) {
-            throw new Error(body.error || `Failed to update ${row.day_label}.`)
-          }
-        } else {
-          const res = await fetch(`${API_BASE}/api/staff/${user.id}/availability`, {
-            method: 'POST',
+      if (row.id) {
+        const res = await fetch(
+          `${API_BASE}/api/staff/${user.id}/availability/${row.id}`,
+          {
+            method: 'PATCH',
             headers: {
               'Content-Type': 'application/json',
               Accept: 'application/json',
             },
-            body: JSON.stringify({
-              day_of_week: row.day_of_week,
-              start_time: row.start_time,
-              end_time: row.end_time,
-              is_available: row.is_available,
-            }),
-          })
-
-          const body = await res.json().catch(() => ({}))
-
-          if (!res.ok) {
-            if (body.error?.includes('already exists')) {
-              continue
-            }
-            throw new Error(body.error || `Failed to create ${row.day_label}.`)
+            body: JSON.stringify(payload),
           }
+        )
+
+        const body = await res.json().catch(() => ({}))
+
+        if (!res.ok) {
+          throw new Error(body.error || `Failed to update ${row.day_label}.`)
+        }
+      } else if (row.is_available && row.start_time && row.end_time) {
+        const res = await fetch(`${API_BASE}/api/staff/${user.id}/availability`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            day_of_week: row.day_of_week,
+            start_time: row.start_time,
+            end_time: row.end_time,
+            is_available: true,
+          }),
+        })
+
+        const body = await res.json().catch(() => ({}))
+
+        if (!res.ok) {
+          if (body.error?.includes('already exists')) {
+            continue
+          }
+
+          throw new Error(body.error || `Failed to create ${row.day_label}.`)
         }
       }
-
-      await fetchAvailability()
-      showToast('Availability saved successfully.', 'success')
-    } catch (err) {
-      showToast(err.message, 'error')
-    } finally {
-      setAvailabilitySaving(false)
     }
-  }
 
+    await fetchClinicDetails()
+    await fetchAvailability()
+
+    showToast('Availability saved successfully.', 'success')
+  } catch (err) {
+    showToast(err.message, 'error')
+  } finally {
+    setAvailabilitySaving(false)
+  }
+}
   
 const fetchAppointmentsByDate = useCallback(async () => {
   if (authLoading || !resolvedClinicId || !appointmentDate) return
@@ -729,7 +1004,25 @@ const fetchAppointmentsByDate = useCallback(async () => {
       throw new Error(data.error || 'Failed to load appointments.')
     }
 
-    setAppointments(Array.isArray(data.appointments) ? data.appointments : [])
+    const finalStatuses = ['Cancelled', 'Completed', 'No-show']
+
+    const activeFutureAppointments = (Array.isArray(data.appointments)
+      ? data.appointments
+      : []
+    ).filter(appointment => {
+      if (!appointment.slot_datetime) return false
+
+      const appointmentDateTime = new Date(appointment.slot_datetime)
+      const now = new Date()
+
+      return (
+        appointmentDateTime > now &&
+        !finalStatuses.includes(appointment.status)
+      )
+    })
+
+    setAppointments(activeFutureAppointments)
+
   } catch (err) {
     setAppointmentsError(err.message)
   } finally {
@@ -830,11 +1123,17 @@ useEffect(() => {
     const interval = setInterval(() => {
       fetchQueue()
       fetchCompletedCount()
+      fetchPatients()
+      fetchAppointmentsByDate()
     }, 30000)
 
     return () => clearInterval(interval)
-  }, [fetchQueue, fetchCompletedCount])
-
+  }, [
+    fetchQueue,
+    fetchCompletedCount,
+    fetchPatients,
+    fetchAppointmentsByDate,
+  ])
   const handleStatusUpdate = async entry => {
     const currentIndex = STATUS_SEQUENCE.indexOf(entry.status)
     const nextStatus =
@@ -909,45 +1208,109 @@ useEffect(() => {
       setRemoveLoading(null)
     }
   }
-
-
-  const handleCancelAppointment = async appointment => {
-  setCancelAppointmentLoading(appointment.id)
+const handleAppointmentStatusUpdate = async (appointment, status) => {
+  setAppointmentStatusLoading(`${appointment.id}-${status}`)
 
   try {
-    const res = await fetch(`${API_BASE}/api/appointments/${appointment.id}/cancel`, {
+    const res = await fetch(`${API_BASE}/api/appointments/${appointment.id}/status`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
+      body: JSON.stringify({ status }),
     })
 
     const data = await res.json().catch(() => ({}))
 
     if (!res.ok) {
-      throw new Error(data.error || 'Could not cancel appointment.')
+      throw new Error(data.error || 'Could not update appointment status.')
     }
 
-    await fetchAppointmentsByDate()
-    showToast('Appointment cancelled successfully.', 'success')
+    setAppointments(current =>
+      current.map(item =>
+        item.id === appointment.id
+          ? { ...item, status: data.appointment.status }
+          : item
+      )
+    )
+
+    showToast(data.message || `Appointment marked as ${status}.`, 'success')
   } catch (err) {
     showToast(err.message, 'error')
   } finally {
-    setCancelAppointmentLoading(null)
+    setAppointmentStatusLoading(null)
   }
 }
 
+
+
 const openReschedulePopup = appointment => {
   const slotDate = appointment.slot_datetime?.slice(0, 10) || appointmentDate
-  const slotTime = appointment.slot_datetime?.slice(11, 16) || ''
 
   setSelectedAppointment(appointment)
   setRescheduleDate(slotDate)
-  setRescheduleTime(slotTime)
+  setRescheduleTime('')
   setRescheduleError('')
+  setRescheduleSlots([])
+  setRescheduleSlotsError('')
   setShowReschedulePopup(true)
 }
+
+useEffect(() => {
+  if (!showReschedulePopup || !selectedAppointment || !rescheduleDate) {
+    setRescheduleSlots([])
+    setRescheduleSlotsError('')
+    return
+  }
+
+  async function fetchRescheduleSlots() {
+    setRescheduleSlotsLoading(true)
+    setRescheduleSlotsError('')
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/appointments/slots?clinic_id=${selectedAppointment.clinic_id}&date=${rescheduleDate}`,
+        {
+          headers: { Accept: 'application/json' },
+        }
+      )
+
+      const data = await res.json().catch(() => [])
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to load slots.')
+      }
+
+      const rawSlots = Array.isArray(data) ? data : []
+
+      const availableFutureSlots = rawSlots.filter(slot => {
+        const slotDateTime = new Date(`${rescheduleDate}T${slot}:00`)
+        return slotDateTime > new Date()
+      })
+
+      setRescheduleSlots(availableFutureSlots)
+
+      if (!availableFutureSlots.includes(rescheduleTime)) {
+        setRescheduleTime('')
+      }
+    } catch (err) {
+      setRescheduleSlots([])
+      setRescheduleSlotsError(err.message || 'Failed to load available slots.')
+    } finally {
+      setRescheduleSlotsLoading(false)
+    }
+  }
+
+  fetchRescheduleSlots()
+}, [
+  showReschedulePopup,
+  selectedAppointment,
+  rescheduleDate,
+  rescheduleTime,
+  API_BASE,
+])
+
 
 const handleRescheduleAppointment = async () => {
   if (!selectedAppointment) return
@@ -1004,6 +1367,71 @@ const formatAppointmentTime = appointment => {
   return appointment.slot_datetime.slice(11, 16)
 }
   
+const handleAddNewPatient = async () => {
+  let valid = true
+  setNewPatientNameError('')
+  setNewPatientEmailError('')
+  setAddPatientError('')
+
+  if (!newPatientName.trim()) {
+    setNewPatientNameError('Name is required.')
+    valid = false
+  }
+
+  if (!newPatientEmail.trim()) {
+    setNewPatientEmailError('Email is required.')
+    valid = false
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newPatientEmail.trim())) {
+    setNewPatientEmailError('Enter a valid email address.')
+    valid = false
+  }
+
+  if (!valid) return
+
+  setAddingPatient(true)
+
+  try {
+    const res = await fetch(`${API_BASE}/api/patients`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        full_name: newPatientName.trim(),
+        email: newPatientEmail.trim(),
+        created_by: user.id,
+      }),
+    })
+
+    const data = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to create patient.')
+    }
+
+    const created = data.patient
+
+    setShowAddPatientPopup(false)
+    setNewPatientName('')
+    setNewPatientEmail('')
+    setSelectedPatientId(created.id)
+
+    await Promise.all([
+      fetchPatients(),
+      fetchQueue(),
+      fetchCompletedCount(),
+      fetchAppointmentsByDate(),
+    ])
+
+    showToast(`${created.full_name} added as a new patient.`, 'success')
+  } catch (err) {
+    setAddPatientError(err.message)
+  } finally {
+    setAddingPatient(false)
+  }
+}
+
 const handleAddPatientToQueue = async () => {
   if (!resolvedClinicId || !selectedPatientId) return
 
@@ -1028,61 +1456,19 @@ const handleAddPatientToQueue = async () => {
       throw new Error(body.error || 'Failed to add patient to queue')
     }
 
-    await fetchQueue()
-    await fetchCompletedCount()
+    await Promise.all([
+      fetchQueue(),
+      fetchCompletedCount(),
+      fetchPatients(),
+      fetchAppointmentsByDate(),
+    ])
+
     setSelectedPatientId('')
     showToast('Patient added to queue.', 'success')
   } catch (err) {
     showToast(err.message || 'Failed to add patient to queue', 'error')
   } finally {
     setAddPatientLoading(false)
-  }
-}  
-
-const handleAddNewPatient = async () => {
-  let valid = true
-  setNewPatientNameError('')
-  setNewPatientEmailError('')
-  setAddPatientError('')
-
-  if (!newPatientName.trim()) {
-    setNewPatientNameError('Name is required.')
-    valid = false
-  }
-  if (!newPatientEmail.trim()) {
-    setNewPatientEmailError('Email is required.')
-    valid = false
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newPatientEmail.trim())) {
-    setNewPatientEmailError('Enter a valid email address.')
-    valid = false
-  }
-  if (!valid) return
-
-  setAddingPatient(true)
-  try {
-    const res = await fetch(`${API_BASE}/api/patients`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        full_name: newPatientName.trim(),
-        email: newPatientEmail.trim(),
-        created_by: user.id,
-      }),
-    })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(data.error || 'Failed to create patient.')
-
-    const created = data.patient
-    setAllPatients(prev => [...prev, created])
-    setSelectedPatientId(created.id)
-    setShowAddPatientPopup(false)
-    setNewPatientName('')
-    setNewPatientEmail('')
-    showToast(`${created.full_name} added as a new patient.`, 'success')
-  } catch (err) {
-    setAddPatientError(err.message)
-  } finally {
-    setAddingPatient(false)
   }
 }
 
@@ -1126,456 +1512,740 @@ const handleGoToBooking = async () => {
     complete: completedCount,  
   }
 
-  return (
-    <>
-      <style>{styles}</style>
+  const appointmentStats = {
+    total: appointments.length,
+    confirmed: appointments.filter(appointment => appointment.status === 'Confirmed').length,
+    waiting: appointments.filter(appointment => appointment.status === 'Waiting').length,
+    completed: appointments.filter(appointment =>
+      ['Completed', 'Complete'].includes(appointment.status)
+    ).length,
+    cancelled: appointments.filter(appointment => appointment.status === 'Cancelled').length,
+  }
 
-      <section className="sd-page">
-        <h1 className="sd-heading">Clinic queue</h1>
+return (
+  <>
+    <style>{styles}</style>
 
-        <ul className="sd-stats" aria-label="Queue summary">
-          <li className="sd-stat">
-            <p className="sd-stat-label">Waiting</p>
-            <p className="sd-stat-value sd-stat-value--blue">{stats.waiting}</p>
-          </li>
-          <li className="sd-stat">
-            <p className="sd-stat-label">In Consultation</p>
-            <p className="sd-stat-value sd-stat-value--yellow">{stats.consultation}</p>
-          </li>
-          <li className="sd-stat">
-            <p className="sd-stat-label">Complete</p>
-            <p className="sd-stat-value sd-stat-value--green">{stats.complete}</p>
-          </li>
-        </ul>
+    <section className="sd-page">
+      <h1 className="sd-heading">Staff dashboard</h1>
 
-        <section className="sd-panel">
-          <header className="sd-panel-header">
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+      <section className="sd-layout">
+        <aside className="sd-sidebar">
+          <p className="sd-sidebar-title">Sections</p>
 
-              <button
-                className="sd-act-btn"
-                type="button"
-                onClick={() => {
-                  setNewPatientName('')
-                  setNewPatientEmail('')
-                  setNewPatientNameError('')
-                  setNewPatientEmailError('')
-                  setAddPatientError('')
-                  setShowAddPatientPopup(true)
-                }}
-              >
-                + Add new patient
-              </button>
-            </div>
+          <button
+            type="button"
+            className={`sd-nav-btn ${activeSection === 'clinic' ? 'sd-nav-btn--active' : ''}`}
+            onClick={() => setActiveSection('clinic')}
+          >
+            Clinic
+          </button>
 
-            <form
-              onSubmit={e => {
-                e.preventDefault()
-                handleAddPatientToQueue()
-              }}
-              style={{
-                display: 'flex',
-                gap: '8px',
-                flexWrap: 'wrap',
-                alignItems: 'center',
-              }}
-            >
-              <label htmlFor="patientSelect" className="sr-only">
-                Select patient
-              </label>
+          <button
+            type="button"
+            className={`sd-nav-btn ${activeSection === 'queue' ? 'sd-nav-btn--active' : ''}`}
+            onClick={() => setActiveSection('queue')}
+          >
+            Queue
+            <span className="sd-nav-count">{queue.length}</span>
+          </button>
 
-              <select
-                id="patientSelect"
-                value={selectedPatientId}
-                onChange={e => setSelectedPatientId(e.target.value)}
-                className="sd-act-btn"
-                style={{ minWidth: '240px', background: 'white' }}
-              >
-                <option value="">Select a patient</option>
-                {allPatients.map(patient => (
-                  <option key={patient.id} value={patient.id}>
-                    {patient.full_name} ({patient.role})
-                  </option>
-                ))}
-              </select>
+          <button
+            type="button"
+            className={`sd-nav-btn ${activeSection === 'appointments' ? 'sd-nav-btn--active' : ''}`}
+            onClick={() => setActiveSection('appointments')}
+          >
+            Appointments
+            <span className="sd-nav-count">{appointments.length}</span>
+          </button>
 
-              <button
-                type="submit"
-                className="sd-act-btn"
-                disabled={addPatientLoading || !selectedPatientId}
-              >
-                {addPatientLoading ? 'Adding…' : 'Add to queue'}
-              </button>
-            </form>
-          </header>
+          <button
+            type="button"
+            className={`sd-nav-btn ${activeSection === 'availability' ? 'sd-nav-btn--active' : ''}`}
+            onClick={() => setActiveSection('availability')}
+          >
+            Availability
+          </button>
+        </aside>
 
-          {fetchLoading && <p className="sd-empty">Loading queue…</p>}
+        <section className="sd-content">
+          {activeSection === 'clinic' && (
+            <>
+              {resolvedClinicId ? (
+                <section className="sd-clinic-card">
+                  <p className="sd-clinic-card-label">Assigned clinic</p>
 
-          {fetchError && !fetchLoading && (
-            <p className="sd-empty" style={{ color: '#B91C1C' }}>
-              {fetchError}
-              <button
-                className="sd-act-btn"
-                style={{ display: 'inline', marginLeft: 8 }}
-                onClick={fetchQueue}
-              >
-                Retry
-              </button>
-            </p>
-          )}
+                  <h2 className="sd-clinic-card-name">
+                    {clinicDetails?.name || 'Loading clinic...'}
+                  </h2>
 
-          {!fetchLoading && !fetchError && queue.length === 0 && (
-            <p className="sd-empty">No patients in queue right now.</p>
-          )}
-
-          {!fetchLoading && !fetchError && queue.length > 0 && (
-            <section className="sd-table-wrap">
-              <table className="sd-table" aria-label="Patient queue">
-                <thead>
-                  <tr>
-                    <th className="sd-pos">#</th>
-                    <th>Patient</th>
-                    <th>Patient Email</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {queue.map((entry, index) => (
-                    <tr key={entry.id}>
-                      <td className="sd-pos">
-                        {entry.status === 'In Consultation'
-                          ? 0
-                          : queue.filter(
-                              item =>
-                                item.status !== 'In Consultation' &&
-                                (item.position ?? 999999) < (entry.position ?? 999999)
-                            ).length + 1}
-                      </td>
-                      <td>{getDisplayName(entry)}</td>
-                      <td>{entry.patient?.email}</td>
-                      <td>
-                        <span className={`sd-badge ${BADGE_CLASS[entry.status] ?? ''}`}>
-                          {entry.status}
-                        </span>
-                      </td>
-                      <td>
-                        <ul className="sd-actions">
-                          {entry.status !== 'Complete' && (
-                            <li>
-                              <button
-                                className="sd-act-btn"
-                                onClick={() => handleStatusUpdate(entry)}
-                                disabled={statusLoading === entry.id}
-                              >
-                                {statusLoading === entry.id ? 'Saving…' : 'Next status'}
-                              </button>
-                            </li>
-                          )}
-                          <li>
-                            <button
-                              className="sd-act-btn sd-act-btn--danger"
-                              onClick={() => handleRemove(entry)}
-                              disabled={removeLoading === entry.id}
-                            >
-                              {removeLoading === entry.id ? 'Removing…' : 'Remove'}
-                            </button>
-                          </li>
-                        </ul>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </section>
-          )}
-        </section>
-
-        <section className="sd-panel" style={{ marginTop: 24 }}>
-          <header className="sd-panel-header">
-            <section>
-              <h2 className="sd-panel-title">Clinic appointments</h2>
-              <p className="sd-stat-label">
-                View, add, cancel, and reschedule appointments for the selected date.
-              </p>
-            </section>
-
-            <form
-              onSubmit={e => {
-                e.preventDefault()
-                fetchAppointmentsByDate()
-              }}
-              style={{
-                display: 'flex',
-                gap: '8px',
-                flexWrap: 'wrap',
-                alignItems: 'center',
-              }}
-            >
-              <label htmlFor="appointmentDate" className="sr-only">
-                Appointment date
-              </label>
-
-              <input
-                id="appointmentDate"
-                type="date"
-                className="sd-act-btn"
-                style={{ background: 'white' }}
-                value={appointmentDate}
-                onChange={e => setAppointmentDate(e.target.value)}
-              />
-
-              <button type="submit" className="sd-act-btn">
-                View
-              </button>
-
-              <button
-                type="button"
-                className="sd-act-btn sd-act-btn--primary"
-                onClick={handleGoToBooking}
-              >
-                Add appointment
-              </button>
-            </form>
-          </header>
-
-          {appointmentsLoading && <p className="sd-empty">Loading appointments…</p>}
-
-          {appointmentsError && !appointmentsLoading && (
-            <p className="sd-empty" style={{ color: '#B91C1C' }}>
-              {appointmentsError}
-              <button
-                className="sd-act-btn"
-                style={{ display: 'inline', marginLeft: 8 }}
-                onClick={fetchAppointmentsByDate}
-              >
-                Retry
-              </button>
-            </p>
-          )}
-
-          {!appointmentsLoading && !appointmentsError && appointments.length === 0 && (
-            <p className="sd-empty">No appointments found for this date.</p>
-          )}
-
-          {!appointmentsLoading && !appointmentsError && appointments.length > 0 && (
-            <section className="sd-table-wrap">
-              <table className="sd-table" aria-label="Clinic appointments">
-                <thead>
-                  <tr>
-                    <th>Time</th>
-                    <th>Patient</th>
-                    <th>Patient Email</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {appointments.map(appointment => (
-                    <tr key={appointment.id}>
-                      <td>{formatAppointmentTime(appointment)}</td>
-                      <td>{getAppointmentPatientName(appointment)}</td>
-                      <td>{getAppointmentPatientEmail(appointment)}</td>
-                      <td>
-                        <span className={`sd-badge ${BADGE_CLASS[appointment.status] ?? ''}`}>
-                          {appointment.status}
-                        </span>
-                      </td>
-                      <td>
-                        <ul className="sd-actions">
-                          <li>
-                            <button
-                              type="button"
-                              className="sd-act-btn"
-                              onClick={() => openReschedulePopup(appointment)}
-                              disabled={
-                                appointment.status === 'Cancelled' ||
-                                rescheduleAppointmentLoading === appointment.id
-                              }
-                            >
-                              {rescheduleAppointmentLoading === appointment.id
-                                ? 'Saving…'
-                                : 'Reschedule'}
-                            </button>
-                          </li>
-
-                          <li>
-                            <button
-                              type="button"
-                              className="sd-act-btn sd-act-btn--danger"
-                              onClick={() => handleCancelAppointment(appointment)}
-                              disabled={
-                                appointment.status === 'Cancelled' ||
-                                cancelAppointmentLoading === appointment.id
-                              }
-                            >
-                              {cancelAppointmentLoading === appointment.id
-                                ? 'Cancelling…'
-                                : 'Cancel'}
-                            </button>
-                          </li>
-                        </ul>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </section>
-          )}
-        </section>
-      
-          
-        {resolvedClinicId && (
-        <section className="sd-availability">
-
-        <header className="sd-availability-header">
-          <h2 className="sd-panel-title">Availability</h2>
-          <p className="sd-stat-label">Set the days and times you are available for bookings.</p>
-        </header>
-
-        {availabilityLoading ? (
-          <p className="sd-empty">Loading availability…</p>
-        ) : (
-          <section className="sd-availability-grid">
-            {availability.map(row => (
-              <section key={row.day_of_week} className="sd-availability-row">
-                <span className="sd-availability-day">{row.day_label}</span>
-
-                <label className="sd-availability-toggle">
-                  <input
-                    type="checkbox"
-                    checked={row.is_available}
-                    onChange={e =>
-                      updateAvailabilityField(row.day_of_week, 'is_available', e.target.checked)
-                    }
-                  />
-                  Available
-                </label>
-
-                <label>
-                  <span className="sr-only">{row.day_label} start time</span>
-                  <input
-                    type="time"
-                    className="sd-availability-input"
-                    value={row.start_time}
-                    disabled={!row.is_available}
-                    onChange={e =>
-                      updateAvailabilityField(row.day_of_week, 'start_time', e.target.value)
-                    }
-                  />
-                </label>
-
-                <label>
-                  <span className="sr-only">{row.day_label} end time</span>
-                  <input
-                    type="time"
-                    className="sd-availability-input"
-                    value={row.end_time}
-                    disabled={!row.is_available}
-                    onChange={e =>
-                      updateAvailabilityField(row.day_of_week, 'end_time', e.target.value)
-                    }
-                  />
-                </label>
-
-                <section>
-                  {row.error ? (
-                    <p className="sd-availability-error">{row.error}</p>
-                  ) : row.start_time && row.end_time ? (
-                    <span className="sd-stat-label">Ready</span>
-                  ) : (
-                    <span className="sd-stat-label">Clinic closed</span>
+                  {clinicDetails && (
+                    <p className="sd-clinic-card-meta">
+                      {[clinicDetails.facility_type, clinicDetails.municipality, clinicDetails.district]
+                        .filter(Boolean)
+                        .join(' • ')}
+                    </p>
                   )}
                 </section>
-              </section>
-            ))}
+              ) : (
+                <p className="sd-empty">No clinic is linked to this staff account.</p>
+              )}
+            </>
+          )}
 
+          {activeSection === 'queue' && (
+            <>
+              <ul className="sd-stats" aria-label="Queue summary">
+                <li className="sd-stat">
+                  <p className="sd-stat-label">Waiting</p>
+                  <p className="sd-stat-value sd-stat-value--blue">{stats.waiting}</p>
+                </li>
+
+                <li className="sd-stat">
+                  <p className="sd-stat-label">In Consultation</p>
+                  <p className="sd-stat-value sd-stat-value--yellow">{stats.consultation}</p>
+                </li>
+
+                <li className="sd-stat">
+                  <p className="sd-stat-label">Complete</p>
+                  <p className="sd-stat-value sd-stat-value--green">{stats.complete}</p>
+                </li>
+              </ul>
+
+              <section className="sd-panel">
+                <header className="sd-panel-header">
+                  <section>
+                    <h2 className="sd-panel-title">Clinic queue</h2>
+                    <p className="sd-stat-label">
+                      View, add, and manage walk-in patients currently waiting at the clinic.
+                    </p>
+                  </section>
+
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <button
+                      className="sd-act-btn"
+                      type="button"
+                      onClick={() => {
+                        setNewPatientName('')
+                        setNewPatientEmail('')
+                        setNewPatientNameError('')
+                        setNewPatientEmailError('')
+                        setAddPatientError('')
+                        setShowAddPatientPopup(true)
+                      }}
+                    >
+                      + Add new patient
+                    </button>
+                  </div>
+
+                  <form
+                    onSubmit={e => {
+                      e.preventDefault()
+                      handleAddPatientToQueue()
+                    }}
+                    style={{
+                      display: 'flex',
+                      gap: '8px',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <label htmlFor="patientSelect" className="sr-only">
+                      Select patient
+                    </label>
+
+                    <select
+                      id="patientSelect"
+                      value={selectedPatientId}
+                      onChange={e => setSelectedPatientId(e.target.value)}
+                      className="sd-act-btn"
+                      style={{ minWidth: '240px', background: 'white' }}
+                    >
+                      <option value="">Select a patient</option>
+                      {allPatients.map(patient => (
+                        <option key={patient.id} value={patient.id}>
+                          {patient.full_name} ({patient.role})
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      type="submit"
+                      className="sd-act-btn"
+                      disabled={addPatientLoading || !selectedPatientId}
+                    >
+                      {addPatientLoading ? 'Adding…' : 'Add to queue'}
+                    </button>
+                  </form>
+                </header>
+
+                {fetchLoading && <p className="sd-empty">Loading queue…</p>}
+
+                {fetchError && !fetchLoading && (
+                  <p className="sd-empty" style={{ color: '#B91C1C' }}>
+                    {fetchError}
+                    <button
+                      className="sd-act-btn"
+                      style={{ display: 'inline', marginLeft: 8 }}
+                      onClick={fetchQueue}
+                    >
+                      Retry
+                    </button>
+                  </p>
+                )}
+
+                {!fetchLoading && !fetchError && queue.length === 0 && (
+                  <p className="sd-empty">No patients in queue right now.</p>
+                )}
+
+                {!fetchLoading && !fetchError && queue.length > 0 && (
+                  <section className="sd-table-wrap">
+                    <table className="sd-table" aria-label="Patient queue">
+                      <thead>
+                        <tr>
+                          <th className="sd-pos">#</th>
+                          <th>Patient</th>
+                          <th>Patient Email</th>
+                          <th>Status</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {queue.map(entry => (
+                          <tr key={entry.id}>
+                            <td className="sd-pos">
+                              {entry.status === 'In Consultation'
+                                ? 0
+                                : queue.filter(
+                                    item =>
+                                      item.status !== 'In Consultation' &&
+                                      (item.position ?? 999999) < (entry.position ?? 999999)
+                                  ).length + 1}
+                            </td>
+
+                            <td>{getDisplayName(entry)}</td>
+                            <td>{entry.patient?.email}</td>
+
+                            <td>
+                              <span className={`sd-badge ${BADGE_CLASS[entry.status] ?? ''}`}>
+                                {entry.status}
+                              </span>
+                            </td>
+
+                            <td>
+                              <ul className="sd-actions">
+                                {entry.status !== 'Complete' && (
+                                  <li>
+                                    <button
+                                      className="sd-act-btn"
+                                      onClick={() => handleStatusUpdate(entry)}
+                                      disabled={statusLoading === entry.id}
+                                    >
+                                      {statusLoading === entry.id ? 'Saving…' : 'Next status'}
+                                    </button>
+                                  </li>
+                                )}
+
+                                <li>
+                                  <button
+                                    className="sd-act-btn sd-act-btn--danger"
+                                    onClick={() => handleRemove(entry)}
+                                    disabled={removeLoading === entry.id}
+                                  >
+                                    {removeLoading === entry.id ? 'Removing…' : 'Remove'}
+                                  </button>
+                                </li>
+                              </ul>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </section>
+                )}
+              </section>
+            </>
+          )}
+
+          {activeSection === 'appointments' && (
+            <>
+              <h2 className="sd-heading" style={{ marginTop: 0 }}>
+                Clinic appointments for {formatDisplayDate(appointmentDate)} ({appointmentDate})
+              </h2>
+
+              <ul className="sd-stats" aria-label="Appointment summary">
+                <li className="sd-stat">
+                  <p className="sd-stat-label">Total appointments</p>
+                  <p className="sd-stat-value sd-stat-value--black">{appointmentStats.total}</p>
+                </li>
+
+                <li className="sd-stat">
+                  <p className="sd-stat-label">Confirmed</p>
+                  <p className="sd-stat-value sd-stat-value--blue">{appointmentStats.confirmed}</p>
+                </li>
+
+                <li className="sd-stat">
+                  <p className="sd-stat-label">Waiting</p>
+                  <p className="sd-stat-value sd-stat-value--yellow">{appointmentStats.waiting}</p>
+                </li>
+
+                <li className="sd-stat">
+                  <p className="sd-stat-label">Completed</p>
+                  <p className="sd-stat-value sd-stat-value--green">{appointmentStats.completed}</p>
+                </li>
+
+                <li className="sd-stat">
+                  <p className="sd-stat-label">Cancelled</p>
+                  <p className="sd-stat-value" style={{ color: '#B91C1C' }}>
+                    {appointmentStats.cancelled}
+                  </p>
+                </li>
+              </ul>
+
+              <section className="sd-panel">
+                <header className="sd-panel-header">
+                  <section>
+                    <h2 className="sd-panel-title">Clinic appointments</h2>
+                    <p className="sd-stat-label">
+                      View, add, and reschedule upcoming appointments for the selected date.
+                    </p>
+                  </section>
+
+                  <form
+                    onSubmit={e => {
+                      e.preventDefault()
+                      fetchAppointmentsByDate()
+                    }}
+                    style={{
+                      display: 'flex',
+                      gap: '8px',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <label htmlFor="appointmentDate" className="sr-only">
+                      Appointment date
+                    </label>
+
+                    <input
+                      id="appointmentDate"
+                      type="date"
+                      className="sd-act-btn"
+                      style={{ background: 'white' }}
+                      value={appointmentDate}
+                      onChange={e => setAppointmentDate(e.target.value)}
+                    />
+
+                    <button type="submit" className="sd-act-btn">
+                      View
+                    </button>
+
+                    <button
+                      type="button"
+                      className="sd-act-btn sd-act-btn--primary"
+                      onClick={handleGoToBooking}
+                    >
+                      Add appointment
+                    </button>
+                  </form>
+                </header>
+
+                {appointmentsLoading && <p className="sd-empty">Loading appointments…</p>}
+
+                {appointmentsError && !appointmentsLoading && (
+                  <p className="sd-empty" style={{ color: '#B91C1C' }}>
+                    {appointmentsError}
+                    <button
+                      className="sd-act-btn"
+                      style={{ display: 'inline', marginLeft: 8 }}
+                      onClick={fetchAppointmentsByDate}
+                    >
+                      Retry
+                    </button>
+                  </p>
+                )}
+
+                {!appointmentsLoading && !appointmentsError && appointments.length === 0 && (
+                  <p className="sd-empty">No appointments found for this date.</p>
+                )}
+
+                {!appointmentsLoading && !appointmentsError && appointments.length > 0 && (
+                  <section className="sd-table-wrap">
+                    <table className="sd-table" aria-label="Clinic appointments">
+                      <thead>
+                        <tr>
+                          <th>Time</th>
+                          <th>Patient</th>
+                          <th>Patient Email</th>
+                          <th>Status</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {appointments.map(appointment => (
+                          <tr key={appointment.id}>
+                            <td>{formatAppointmentTime(appointment)}</td>
+                            <td>{getAppointmentPatientName(appointment)}</td>
+                            <td>{getAppointmentPatientEmail(appointment)}</td>
+
+                            <td>
+                              <span className={`sd-badge ${BADGE_CLASS[appointment.status] ?? ''}`}>
+                                {appointment.status}
+                              </span>
+                            </td>
+
+                            <td>
+                              <ul className="sd-actions">
+                                {!['Cancelled', 'Completed', 'No-show'].includes(appointment.status) && (
+                                  <>
+                                    <li>
+                                      <button
+                                        type="button"
+                                        className="sd-act-btn"
+                                        onClick={() =>
+                                          handleAppointmentStatusUpdate(appointment, 'Completed')
+                                        }
+                                        disabled={
+                                          appointmentStatusLoading === `${appointment.id}-Completed`
+                                        }
+                                      >
+                                        {appointmentStatusLoading === `${appointment.id}-Completed`
+                                          ? 'Saving…'
+                                          : 'Completed'}
+                                      </button>
+                                    </li>
+
+                                    <li>
+                                      <button
+                                        type="button"
+                                        className="sd-act-btn sd-act-btn--danger"
+                                        onClick={() =>
+                                          handleAppointmentStatusUpdate(appointment, 'No-show')
+                                        }
+                                        disabled={
+                                          appointmentStatusLoading === `${appointment.id}-No-show`
+                                        }
+                                      >
+                                        {appointmentStatusLoading === `${appointment.id}-No-show`
+                                          ? 'Saving…'
+                                          : 'No-show'}
+                                      </button>
+                                    </li>
+
+                                    <li>
+                                      <button
+                                        type="button"
+                                        className="sd-act-btn"
+                                        onClick={() => openReschedulePopup(appointment)}
+                                        disabled={rescheduleAppointmentLoading === appointment.id}
+                                      >
+                                        {rescheduleAppointmentLoading === appointment.id
+                                          ? 'Saving…'
+                                          : 'Reschedule'}
+                                      </button>
+                                    </li>
+                                  </>
+                                )}
+                              </ul>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </section>
+                )}
+              </section>
+            </>
+          )}
+
+          {activeSection === 'availability' && resolvedClinicId && (
+            <section className="sd-availability" style={{ marginTop: 0 }}>
+              <header className="sd-availability-header">
+                <h2 className="sd-panel-title">Availability</h2>
+                <p className="sd-stat-label">
+                  Set the days and times you are available for bookings.
+                </p>
+              </header>
+
+              {availabilityLoading ? (
+                <p className="sd-empty">Loading availability…</p>
+              ) : (
+                  <section className="sd-availability-table">
+                  <section className="sd-availability-table-header">
+                    <span>Day</span>
+                    <span>Available</span>
+                    <span>Start time</span>
+                    <span>End time</span>
+                    <span>Status</span>
+                  </section>
+
+                  {availability.map(row => (
+                    <section key={row.day_of_week} className="sd-availability-row">
+                      <span className="sd-availability-day">{row.day_label}</span>
+
+                      <label className="sd-availability-toggle">
+                        <input
+                          type="checkbox"
+                          checked={row.is_available}
+                          onChange={e =>
+                            updateAvailabilityField(row.day_of_week, 'is_available', e.target.checked)
+                          }
+                        />
+                        Available
+                      </label>
+
+                      <input
+                        type="time"
+                        className="sd-availability-input"
+                        value={row.start_time}
+                        disabled={!row.is_available}
+                        aria-label={`${row.day_label} start time`}
+                        onChange={e =>
+                          updateAvailabilityField(row.day_of_week, 'start_time', e.target.value)
+                        }
+                      />
+
+                      <input
+                        type="time"
+                        className="sd-availability-input"
+                        value={row.end_time}
+                        disabled={!row.is_available}
+                        aria-label={`${row.day_label} end time`}
+                        onChange={e =>
+                          updateAvailabilityField(row.day_of_week, 'end_time', e.target.value)
+                        }
+                      />
+
+                      <section className="sd-availability-status">
+                        {row.error ? (
+                          <p className="sd-availability-error">{row.error}</p>
+                        ) : row.start_time && row.end_time ? (
+                          <span>Ready</span>
+                        ) : (
+                          <span>Clinic closed</span>
+                        )}
+                      </section>
+                    </section>
+                  ))}
+
+                  <button
+                    type="button"
+                    className="sd-act-btn"
+                    onClick={handleSaveAvailability}
+                    disabled={availabilitySaving}
+                  >
+                    {availabilitySaving ? 'Saving…' : 'Save availability'}
+                  </button>
+                </section>
+              )}
+            </section>
+          )}
+        </section>
+      </section>
+    </section>
+
+    <Toast message={toast.message} type={toast.type} visible={toast.visible} />
+
+    {showAddPatientPopup && (
+      <div
+        className="sd-overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-patient-title"
+        onClick={e => {
+          if (e.target === e.currentTarget) setShowAddPatientPopup(false)
+        }}
+      >
+        <div className="sd-dialog">
+          <div className="sd-dialog-icon">🧑‍⚕️</div>
+          <h2 className="sd-dialog-title" id="add-patient-title">
+            Add New Patient
+          </h2>
+          <p className="sd-dialog-subtitle">
+            Enter the patient's details to create their record.
+          </p>
+
+          <div className="sd-dialog-field">
+            <label className="sd-dialog-label" htmlFor="sd-new-patient-name">
+              Full name
+            </label>
+            <input
+              id="sd-new-patient-name"
+              className={`sd-dialog-input ${
+                newPatientNameError ? 'sd-dialog-input--error' : ''
+              }`}
+              type="text"
+              placeholder="e.g. Amara Dlamini"
+              value={newPatientName}
+              onChange={e => {
+                setNewPatientName(e.target.value)
+                setNewPatientNameError('')
+              }}
+            />
+            {newPatientNameError && (
+              <span className="sd-dialog-error-text">{newPatientNameError}</span>
+            )}
+          </div>
+
+          <div className="sd-dialog-field">
+            <label className="sd-dialog-label" htmlFor="sd-new-patient-email">
+              Email address
+            </label>
+            <input
+              id="sd-new-patient-email"
+              className={`sd-dialog-input ${
+                newPatientEmailError ? 'sd-dialog-input--error' : ''
+              }`}
+              type="email"
+              placeholder="e.g. amara@example.com"
+              value={newPatientEmail}
+              onChange={e => {
+                setNewPatientEmail(e.target.value)
+                setNewPatientEmailError('')
+              }}
+            />
+            {newPatientEmailError && (
+              <span className="sd-dialog-error-text">{newPatientEmailError}</span>
+            )}
+          </div>
+
+          {addPatientError && (
+            <div className="sd-dialog-submit-error" role="alert">
+              ⚠ {addPatientError}
+            </div>
+          )}
+
+          <div className="sd-dialog-actions">
+            <button
+              className="sd-act-btn"
+              onClick={() => setShowAddPatientPopup(false)}
+              disabled={addingPatient}
+            >
+              Cancel
+            </button>
+
+            <button
+              className="sd-act-btn sd-act-btn--primary"
+              onClick={handleAddNewPatient}
+              disabled={addingPatient}
+            >
+              {addingPatient ? 'Saving…' : 'Add Patient'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {showReschedulePopup && selectedAppointment && (
+      <div
+        className="sd-overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reschedule-appointment-title"
+        onClick={e => {
+          if (e.target === e.currentTarget) {
+            setShowReschedulePopup(false)
+            setSelectedAppointment(null)
+          }
+        }}
+      >
+        <div className="sd-dialog">
+          <div className="sd-dialog-icon">📅</div>
+
+          <h2 className="sd-dialog-title" id="reschedule-appointment-title">
+            Reschedule Appointment
+          </h2>
+
+          <p className="sd-dialog-subtitle">
+            Choose a new date and time for {getAppointmentPatientName(selectedAppointment)}.
+          </p>
+
+          <div className="sd-dialog-field">
+            <label className="sd-dialog-label" htmlFor="reschedule-date">
+              New date
+            </label>
+            <input
+              id="reschedule-date"
+              className="sd-dialog-input"
+              type="date"
+              value={rescheduleDate}
+              onChange={e => setRescheduleDate(e.target.value)}
+            />
+          </div>
+
+          <div className="sd-dialog-field">
+            <label className="sd-dialog-label">New time</label>
+
+            {!rescheduleDate ? (
+              <div className="sd-slot-empty">Pick a date first.</div>
+            ) : rescheduleSlotsLoading ? (
+              <div className="sd-slot-empty">Loading slots…</div>
+            ) : rescheduleSlotsError ? (
+              <div className="sd-slot-empty" role="alert">
+                {rescheduleSlotsError}
+              </div>
+            ) : rescheduleSlots.length === 0 ? (
+              <div className="sd-slot-empty">No slots available for this date.</div>
+            ) : (
+              <div
+                className="sd-slot-grid"
+                role="group"
+                aria-label="Available reschedule times"
+              >
+                {rescheduleSlots.map(slot => (
+                  <button
+                    key={slot}
+                    type="button"
+                    className={`sd-slot-btn ${
+                      rescheduleTime === slot ? 'sd-slot-btn--selected' : ''
+                    }`}
+                    onClick={() => setRescheduleTime(slot)}
+                    aria-pressed={rescheduleTime === slot}
+                  >
+                    {formatTimeLabel(slot)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {rescheduleError && (
+            <div className="sd-dialog-submit-error" role="alert">
+              ⚠ {rescheduleError}
+            </div>
+          )}
+
+          <div className="sd-dialog-actions">
             <button
               type="button"
               className="sd-act-btn"
-              onClick={handleSaveAvailability}
-              disabled={availabilitySaving}
+              onClick={() => {
+                setShowReschedulePopup(false)
+                setSelectedAppointment(null)
+                setRescheduleError('')
+              }}
+              disabled={rescheduleAppointmentLoading === selectedAppointment.id}
             >
-              {availabilitySaving ? 'Saving…' : 'Save availability'}
-            </button> 
-          </section>
-        )}
-      </section>)}
+              Cancel
+            </button>
 
-
-      </section>
-      
-      
-      <Toast message={toast.message} type={toast.type} visible={toast.visible} />
-
-      {/* ── Add new patient popup ── */}
-      {showAddPatientPopup && (
-        <div
-          className="sd-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="add-patient-title"
-          onClick={e => { if (e.target === e.currentTarget) setShowAddPatientPopup(false) }}
-        >
-          <div className="sd-dialog">
-            <div className="sd-dialog-icon">🧑‍⚕️</div>
-            <h2 className="sd-dialog-title" id="add-patient-title">Add New Patient</h2>
-            <p className="sd-dialog-subtitle">Enter the patient's details to create their record.</p>
-
-            <div className="sd-dialog-field">
-              <label className="sd-dialog-label" htmlFor="sd-new-patient-name">Full name</label>
-              <input
-                id="sd-new-patient-name"
-                className={`sd-dialog-input ${newPatientNameError ? 'sd-dialog-input--error' : ''}`}
-                type="text"
-                placeholder="e.g. Amara Dlamini"
-                value={newPatientName}
-                onChange={e => { setNewPatientName(e.target.value); setNewPatientNameError('') }}
-              />
-              {newPatientNameError && <span className="sd-dialog-error-text">{newPatientNameError}</span>}
-            </div>
-
-            <div className="sd-dialog-field">
-              <label className="sd-dialog-label" htmlFor="sd-new-patient-email">Email address</label>
-              <input
-                id="sd-new-patient-email"
-                className={`sd-dialog-input ${newPatientEmailError ? 'sd-dialog-input--error' : ''}`}
-                type="email"
-                placeholder="e.g. amara@example.com"
-                value={newPatientEmail}
-                onChange={e => { setNewPatientEmail(e.target.value); setNewPatientEmailError('') }}
-              />
-              {newPatientEmailError && <span className="sd-dialog-error-text">{newPatientEmailError}</span>}
-            </div>
-
-            {addPatientError && (
-              <div className="sd-dialog-submit-error" role="alert">⚠ {addPatientError}</div>
-            )}
-
-            <div className="sd-dialog-actions">
-              <button
-                className="sd-act-btn"
-                onClick={() => setShowAddPatientPopup(false)}
-                disabled={addingPatient}
-              >
-                Cancel
-              </button>
-              <button
-                className="sd-act-btn sd-act-btn--primary"
-                onClick={handleAddNewPatient}
-                disabled={addingPatient}
-              >
-                {addingPatient ? 'Saving…' : 'Add Patient'}
-              </button>
-            </div>
+            <button
+              type="button"
+              className="sd-act-btn sd-act-btn--primary"
+              onClick={handleRescheduleAppointment}
+              disabled={rescheduleAppointmentLoading === selectedAppointment.id}
+            >
+              {rescheduleAppointmentLoading === selectedAppointment.id
+                ? 'Saving…'
+                : 'Confirm Reschedule'}
+            </button>
           </div>
         </div>
-      )}
+      </div>
+    )}
+  </>
+)
 
-
-
-      
-    </>
-  )
 }

@@ -489,6 +489,7 @@ const fetchQueue = useCallback(async () => {
       people_ahead: peopleAhead,
       clinic_name: clinicName,
       estimated_wait_minutes: waitData?.estimatedWaitTime ?? null,
+      estimated_wait_message: waitData?.message ?? null,
     })
   } catch (err) {
     setFetchError(err.message)
@@ -600,6 +601,7 @@ const fetchQueue = useCallback(async () => {
       setQueueEntry(null)
       setPendingClinic(null)
       setActionSuccess('You have been removed from the queue.')
+      setTimeout(() => navigate('/clinic'), 2000)
     } catch (err) {
       setActionError(err.message)
     } finally {
@@ -744,12 +746,20 @@ const fetchQueue = useCallback(async () => {
                 </span>
               )}
 
-              {queueEntry.estimated_wait_minutes != null && (
+              {queueEntry.estimated_wait_message ? (
                 <span className="q-detail-row">
                   <dt className="q-detail-key">Estimated wait</dt>
-                  <dd className="q-detail-val">{queueEntry.estimated_wait_minutes} min</dd>
+                  <dd className="q-detail-val">{queueEntry.estimated_wait_message}</dd>
                 </span>
+              ) : (
+                queueEntry.estimated_wait_minutes != null && (
+                  <span className="q-detail-row">
+                    <dt className="q-detail-key">Estimated wait</dt>
+                    <dd className="q-detail-val">{queueEntry.estimated_wait_minutes} min</dd>
+                  </span>
+                )
               )}
+              
             </dl>
           </article>
         )}
