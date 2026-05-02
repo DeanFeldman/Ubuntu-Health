@@ -201,6 +201,21 @@ const styles = `
     font-size: 1rem;
     margin-bottom: 6px;
   }
+  .operating-hours-header {
+  display: grid;
+  grid-template-columns: 140px 110px 1fr 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 0 12px;
+  color: var(--uh-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.operating-hours-header span {
+  display: block;
+  white-space: nowrap;
+}
 
   .admin-selected-banner {
     align-items: center;
