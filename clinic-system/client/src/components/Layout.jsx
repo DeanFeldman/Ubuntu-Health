@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { canAccess } from '../Utils/Permissions'
 import logo from '../assets/logo.png'
 
-
+//STYLES
 const styles = `
   :root {
     --uh-primary: #2563EB;
@@ -214,9 +214,10 @@ const styles = `
   }
 }
 
-
 `
 
+
+// The Layout component defines the overall structure of the application, including the navigation bar and main content area.
 export default function Layout() {
   const { logout, user, role, RoleRequest } = useAuth()
   const location = useLocation()
@@ -236,6 +237,7 @@ export default function Layout() {
 
   const isFlowPage = isQueuePage || isBookingPage || isAppointmentsPage
 
+  {/* The return statement of the Layout component conditionally renders the navigation bar based on whether the user is on the login page. */}
   return (
   <>
     <style>{styles}</style>

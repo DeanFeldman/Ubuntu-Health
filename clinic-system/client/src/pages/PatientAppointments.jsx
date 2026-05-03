@@ -2,6 +2,9 @@ import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import getApiBase from '../lib/getApiBase'
 import { useAuth } from '../context/AuthContext'
+
+
+// Mapping of appointment statuses to CSS classes for the status dot indicator.
 const styles = `
   .q-page {
     max-width: 680px;
@@ -308,6 +311,8 @@ const styles = `
     margin-top: 12px;
   }
 `
+
+// Mapping of appointment statuses to CSS classes for the status dot indicator.
 const STATUS_DOT = {
   Confirmed: 'served',
   Waiting: 'waiting',
@@ -315,6 +320,11 @@ const STATUS_DOT = {
   Cancelled: 'skipped',
 }
 
+
+// The PatientAppointments component displays a list of the patient's upcoming appointments. 
+// It fetches the appointments from the API when the component mounts and whenever the patient ID changes. 
+// It handles loading states, error states, and displays an empty state if there are no appointments. 
+// Each appointment card shows the clinic name, date, time, and status with a colored dot indicator.
 export default function PatientAppointments() {
   const { user, dbUser } = useAuth()
   const navigate = useNavigate()
@@ -326,6 +336,8 @@ export default function PatientAppointments() {
   const [loadingAppointments, setLoadingAppointments] = useState(true)
   const [fetchError, setFetchError] = useState(null)
 
+  // The fetchAppointments function retrieves the patient's appointments from the API. It handles loading and error states, and updates the appointments state with the fetched data. 
+  // It is memoized with useCallback to prevent unnecessary re-fetching unless the API base URL or patient ID changes.
   const fetchAppointments = useCallback(async () => {
     try {
       setLoadingAppointments(true)
@@ -354,10 +366,14 @@ export default function PatientAppointments() {
     }
   }, [API_BASE, patientId])
 
+
+  // Fetch the appointments when the component mounts and whenever the patient ID changes. 
+  // This ensures that we always have the latest appointment data for the logged-in patient.
   useEffect(() => {
     fetchAppointments()
   }, [fetchAppointments])
 
+  // Helper function to format a date string into a more readable format
   function formatDate(dateString) {
     if (!dateString) return '—'
 
@@ -369,6 +385,7 @@ export default function PatientAppointments() {
     })
   }
 
+  // Helper function to format a date string into a time format (e.g., "2:30 PM")
   function formatTime(dateString) {
     if (!dateString) return '—'
 
@@ -378,8 +395,10 @@ export default function PatientAppointments() {
     })
   }
 
+  // The JSX for the PatientAppointments component, which includes a header and conditional rendering for loading states, error states, empty states, and the list of appointment cards.
   return (
     <>
+    {/* Inject the styles defined in the `styles` string into the page. This allows us to keep the styles scoped to this component and easily manage them as a single string. */}
     <style>{styles}</style>
     <main className="q-page">
       <header className="q-page-header">
@@ -401,6 +420,7 @@ export default function PatientAppointments() {
         </p>
       )}
 
+      {/* If there are no appointments and we're not currently loading or in an error state, show an empty state message with a call to action to browse clinics. */}
       {!loadingAppointments && !fetchError && appointments.length === 0 && (
         <article className="q-card">
           <section className="q-empty-state">
@@ -417,6 +437,7 @@ export default function PatientAppointments() {
         </article>
       )}
 
+      {/* Render the list of appointment cards if there are appointments available and we're not in a loading or error state. */}
       {!loadingAppointments && !fetchError && appointments.map((appointment) => (
         <article className="q-card" key={appointment.id}>
           <header className="q-status-row">
@@ -445,6 +466,7 @@ export default function PatientAppointments() {
             </address>
           </section>
 
+        {/* The details grid shows key information about the appointment, such as the clinic name, date, time, and status. It uses a definition list (<dl>) for semantic markup, with each piece of information represented as a term (<dt>) and its corresponding value (<dd>). */}
           <dl className="q-detail-grid" aria-label="Appointment details">
             <span className="q-detail-row">
               <dt className="q-detail-key">Clinic</dt>

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
+// STYLES FOR THE PAGE
 const styles = `
   :root {
     --uh-primary: #2563EB;
@@ -321,6 +322,7 @@ const handleJoinQueue = (clinic) => {
   navigate('/queue', { state: { clinic } })
 }
 
+// When the "Book Appointment" button is clicked for a clinic, navigate to the booking page and pass the selected clinic and booking mode as state parameters.
 const handleBookAppointment = (clinic) => {
   navigate('/booking', {
     state: {

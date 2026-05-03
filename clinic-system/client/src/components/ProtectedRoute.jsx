@@ -2,6 +2,7 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { canAccess } from '../Utils/Permissions'
 
+// The ProtectedRoute component is a wrapper for routes that require authentication and role-based access control. 
 export default function ProtectedRoute({ children, routeName }) {
   const { user, role, loading } = useAuth()
 

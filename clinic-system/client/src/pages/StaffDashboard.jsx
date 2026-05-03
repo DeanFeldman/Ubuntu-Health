@@ -3,6 +3,9 @@ import { useAuth } from '../context/AuthContext'
 import getApiBase from '../lib/getApiBase'
 import { useNavigate } from 'react-router-dom'
 
+
+
+// The styles variable contains all the CSS styles for the StaffDashboard component, defined as a template literal string.
 const styles = `
   .sd-page {
     max-width: 1100px;
@@ -597,6 +600,10 @@ const styles = `
   .sd-badge--confirmed { background: #DBEAFE; color: #1E40AF; }
   .sd-badge--cancelled { background: #FEE2E2; color: #991B1B; }
 `
+
+
+// The DAYS constant defines an array of objects representing the days of the week, 
+// each with a label and a corresponding value (0 for Monday through 6 for Sunday).
 const DAYS = [
   { label: 'Monday', value: 0 },
   { label: 'Tuesday', value: 1 },
@@ -619,6 +626,7 @@ function createDefaultAvailability() {
   }))
 }
 
+// The formatDisplayDate function takes a date string in the format 'YYYY-MM-DD' and returns a formatted date string in the format 'Weekday, Day Month Year'.
 function formatDisplayDate(dateStr) {
   if (!dateStr) return ''
 
@@ -631,7 +639,7 @@ function formatDisplayDate(dateStr) {
     year: 'numeric',
   })
 }
-
+// The getClinicDayHours function retrieves the operating hours for a specific day of the week from the clinic's details. 
   function getClinicDayHours(clinic, dayLabel) {
     if (!clinic) return { start_time: '', end_time: '' }
 
@@ -667,6 +675,7 @@ function formatDisplayDate(dateStr) {
     }
   }
 
+// The STATUS_SEQUENCE array defines the order of queue statuses for display purposes, while the BADGE_CLASS object maps each status to a corresponding CSS class for styling badges in the UI.
 const STATUS_SEQUENCE = ['Waiting', 'In Consultation', 'Complete']
 
 const BADGE_CLASS = {
@@ -682,6 +691,7 @@ const BADGE_CLASS = {
   
 }
 
+// The Toast component is a reusable component for displaying temporary notification messages to the user. 
 function Toast({ message, type, visible }) {
   return (
     <aside
@@ -693,6 +703,8 @@ function Toast({ message, type, visible }) {
     </aside>
   )
 }
+
+// The formatTimeLabel function takes a time string in the format 'HH:MM' and converts it to a more user-friendly format with AM/PM notation, such as '2:30 PM'. 
 function formatTimeLabel(timeStr) {
   if (!timeStr) return ''
 
@@ -706,6 +718,8 @@ function formatTimeLabel(timeStr) {
 function getDisplayName(entry) {
   return entry.patient?.full_name || entry.patient_id
 }
+
+// The StaffDashboard component is the main component for the staff dashboard page, responsible for fetching and displaying clinic details, managing staff availability, and handling appointments and queue management. 
 export default function StaffDashboard() {
   const { user, clinicId, loading: authLoading } = useAuth()
   const resolvedClinicId = clinicId || user?.clinic_id || null
@@ -772,6 +786,9 @@ export default function StaffDashboard() {
   }, [])
 
   
+  // The validateAvailabilityRow function checks the validity of an availability entry for a specific day, 
+  // ensuring that if the day is marked as available,
+  // both start and end times are provided and that the start time is before the end time.
 const validateAvailabilityRow = row => {
   if (!row.is_available) return ''
 
@@ -793,6 +810,7 @@ const validateAvailabilityRow = row => {
   return ''
 }
 
+// The fetchClinicDetails function is responsible for fetching the details of the clinic associated with the staff member. 
   const fetchClinicDetails = useCallback(async () => {
   if (authLoading || !resolvedClinicId) return
 
@@ -814,7 +832,8 @@ const validateAvailabilityRow = row => {
 }, [authLoading, resolvedClinicId, API_BASE, showToast])
 
 
-  const fetchAvailability = useCallback(async () => {
+// The fetchAvailability function retrieves the staff member's availability for each day of the week from the server. 
+const fetchAvailability = useCallback(async () => {
   if (authLoading || !user?.id || !clinicDetails) return
 
   setAvailabilityLoading(true)
@@ -865,7 +884,8 @@ const validateAvailabilityRow = row => {
   }
 }, [clinicDetails, fetchAvailability])
 
-  const updateAvailabilityField = (dayOfWeek, field, value) => {
+// The updateAvailabilityField function is used to update a specific field (such as start time, end time, or availability status) for a given day of the week in the staff member's availability.
+const updateAvailabilityField = (dayOfWeek, field, value) => {
     setAvailability(current =>
       current.map(row => {
         if (row.day_of_week !== dayOfWeek) return row
@@ -893,6 +913,7 @@ const validateAvailabilityRow = row => {
     )
   }
 
+  // The handleSaveAvailability function is responsible for validating the staff member's availability entries and sending the appropriate API requests to save any changes to the server.
   const handleSaveAvailability = async () => {
   if (!user?.id) return
 
@@ -919,7 +940,7 @@ const validateAvailabilityRow = row => {
   }
 
   setAvailabilitySaving(true)
-
+// The function iterates through the availability entries that need to be saved.
   try {
     for (const row of rowsToSave) {
       const payload = {
@@ -984,6 +1005,7 @@ const validateAvailabilityRow = row => {
   }
 }
   
+// The fetchAppointmentsByDate function retrieves the list of appointments for the clinic on a specific date, filtering out any past appointments or those with final statuses (Cancelled, Completed, No-show) to display only active future appointments.
 const fetchAppointmentsByDate = useCallback(async () => {
   if (authLoading || !resolvedClinicId || !appointmentDate) return
 
@@ -1030,8 +1052,8 @@ const fetchAppointmentsByDate = useCallback(async () => {
   }
 }, [authLoading, resolvedClinicId, appointmentDate, API_BASE])
 
-
-  const fetchQueue = useCallback(async () => {
+// The fetchQueue function is responsible for fetching the current queue of patients for the clinic, handling loading and error states, and updating the queue state with the retrieved data.
+const fetchQueue = useCallback(async () => {
     if (authLoading) return
 
     if (!resolvedClinicId) {
@@ -1064,6 +1086,7 @@ const fetchAppointmentsByDate = useCallback(async () => {
     }
   }, [authLoading, resolvedClinicId])
 
+// The fetchCompletedCount function retrieves the count of completed appointments for the clinic.
 const fetchCompletedCount = useCallback(async () => {
   if (authLoading || !resolvedClinicId) return
 
@@ -1083,7 +1106,7 @@ const fetchCompletedCount = useCallback(async () => {
     console.error('Failed to fetch completed count:', err.message)
   }
 }, [authLoading, resolvedClinicId, API_BASE])
-
+// The fetchPatients function retrieves the list of all patients from the server, handling loading and error states, and updating the allPatients state with the retrieved data.
 const fetchPatients = useCallback(async () => {
   if (authLoading) return
 
@@ -1104,7 +1127,7 @@ const fetchPatients = useCallback(async () => {
   }
 }, [authLoading, API_BASE])
 
-
+// The useEffect hook is used to trigger the initial data fetching for the queue, completed count, patients, clinic details, and appointments when the component mounts or when any of the dependencies change.
 useEffect(() => {
   fetchQueue()
   fetchCompletedCount()
@@ -1183,7 +1206,7 @@ useEffect(() => {
       setStatusLoading(null)
     }
   }
-
+  // The handleRemove function is responsible for removing a patient from the queue by sending a DELETE request to the server, updating the queue state, and handling loading and error states.
   const handleRemove = async entry => {
     setRemoveLoading(entry.id)
 
@@ -1208,6 +1231,8 @@ useEffect(() => {
       setRemoveLoading(null)
     }
   }
+
+  // The handleAppointmentStatusUpdate function updates the status of a specific appointment by sending a PATCH request to the server, updating the appointments state, and handling loading and error states.
 const handleAppointmentStatusUpdate = async (appointment, status) => {
   setAppointmentStatusLoading(`${appointment.id}-${status}`)
 
@@ -1244,6 +1269,7 @@ const handleAppointmentStatusUpdate = async (appointment, status) => {
 }
 
 
+// The openReschedulePopup function is called when the user wants to reschedule an appointment. 
 
 const openReschedulePopup = appointment => {
   const slotDate = appointment.slot_datetime?.slice(0, 10) || appointmentDate
@@ -1257,6 +1283,7 @@ const openReschedulePopup = appointment => {
   setShowReschedulePopup(true)
 }
 
+// The useEffect hook is used to fetch available time slots for rescheduling an appointment whenever the reschedule popup is shown, the selected appointment changes, or the reschedule date changes. 
 useEffect(() => {
   if (!showReschedulePopup || !selectedAppointment || !rescheduleDate) {
     setRescheduleSlots([])
@@ -1311,7 +1338,7 @@ useEffect(() => {
   API_BASE,
 ])
 
-
+// The handleRescheduleAppointment function is responsible for validating the rescheduling inputs, sending a PATCH request to the server to update the appointment's date and time, and handling loading and error states.
 const handleRescheduleAppointment = async () => {
   if (!selectedAppointment) return
 
@@ -1353,7 +1380,7 @@ const handleRescheduleAppointment = async () => {
     setRescheduleAppointmentLoading(null)
   }
 }
-
+// The getAppointmentPatientName function retrieves the patient's name for a given appointment, checking multiple possible fields to accommodate different data structures.
 const getAppointmentPatientName = appointment => {
   return appointment.patient?.full_name || appointment.patient_name || appointment.patient_id
 }
@@ -1367,6 +1394,7 @@ const formatAppointmentTime = appointment => {
   return appointment.slot_datetime.slice(11, 16)
 }
   
+// The handleAddNewPatient function validates the inputs for adding a new patient, sends a POST request to create the patient on the server, and updates the state accordingly while handling loading and error states. 
 const handleAddNewPatient = async () => {
   let valid = true
   setNewPatientNameError('')
@@ -1432,6 +1460,8 @@ const handleAddNewPatient = async () => {
   }
 }
 
+
+// The handleAddPatientToQueue function adds a selected patient to the queue by sending a POST request to the server, updating the queue and related states, and handling loading and error states.
 const handleAddPatientToQueue = async () => {
   if (!resolvedClinicId || !selectedPatientId) return
 
@@ -1472,6 +1502,7 @@ const handleAddPatientToQueue = async () => {
   }
 }
 
+// The handleGoToBooking function checks if a clinic is linked to the staff account, fetches the clinic details, and navigates to the booking page with the clinic information and booking mode set to 'staff'. 
 const handleGoToBooking = async () => {
   if (!resolvedClinicId) {
     showToast('No clinic is linked to this staff account.', 'error')
@@ -1522,6 +1553,7 @@ const handleGoToBooking = async () => {
     cancelled: appointments.filter(appointment => appointment.status === 'Cancelled').length,
   }
 
+  // The return statement of the StaffDashboard component renders the UI for the staff dashboard, including sections for clinic details, queue management, appointments, and availability settings, along with a toast component for notifications.
 return (
   <>
     <style>{styles}</style>
@@ -1593,6 +1625,7 @@ return (
             </>
           )}
 
+          {/* Queue Section * */}
           {activeSection === 'queue' && (
             <>
               <ul className="sd-stats" aria-label="Queue summary">
@@ -1693,7 +1726,7 @@ return (
                     </button>
                   </p>
                 )}
-
+                {/* The code above checks if the queue is currently being loaded (fetchLoading) and displays a loading message if it is. */}
                 {!fetchLoading && !fetchError && queue.length === 0 && (
                   <p className="sd-empty">No patients in queue right now.</p>
                 )}
@@ -1768,6 +1801,7 @@ return (
             </>
           )}
 
+          {/* Appointments Section * */}
           {activeSection === 'appointments' && (
             <>
               <h2 className="sd-heading" style={{ marginTop: 0 }}>
@@ -2047,7 +2081,8 @@ return (
     </section>
 
     <Toast message={toast.message} type={toast.type} visible={toast.visible} />
-
+    
+    {/* Add Patient Popup * */}
     {showAddPatientPopup && (
       <div
         className="sd-overlay"
