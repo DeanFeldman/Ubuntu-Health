@@ -101,7 +101,7 @@ const styles = `
   }
   .uh-search-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
     align-items: end;
   }
@@ -136,7 +136,7 @@ const styles = `
 
   .uh-clinic-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 16px;
     list-style: none;
     padding: 0;
@@ -246,17 +246,56 @@ const styles = `
     margin-bottom: 16px;
   }
 
-  /* ── Responsive ── */
-  @media (max-width: 1024px) {
-    .uh-clinic-grid { grid-template-columns: repeat(3, 1fr); }
-    .uh-search-grid { grid-template-columns: 1fr 1fr 1fr; }
-    .uh-nav-links { display: none; }
+    /* ── Responsive ── */
+@media (max-width: 1200px) {
+  .uh-clinic-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  @media (max-width: 640px) {
-    .uh-clinic-grid { grid-template-columns: 1fr; }
-    .uh-search-grid { grid-template-columns: 1fr; }
-    .uh-section-header { flex-direction: column; align-items: flex-start; }
+
+  .uh-search-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+@media (max-width: 768px) {
+  .uh-search-section {
+    padding: 18px 16px 0;
+  }
+
+  .uh-clinics-section {
+    padding: 20px 16px 40px;
+  }
+
+  .uh-search-card {
+    padding: 16px;
+  }
+
+  .uh-search-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .uh-clinic-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .uh-field,
+  .uh-field input,
+  .uh-field select {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .uh-clinic-card {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .uh-clinic-top {
+    flex-wrap: wrap;
+  }
+}
+
+
 `
 
 // Maps facility_type values to badge CSS classes and display labels
