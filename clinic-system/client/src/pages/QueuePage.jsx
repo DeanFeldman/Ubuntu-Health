@@ -311,6 +311,8 @@ const styles = `
   }
 `
 
+
+// Status mappings for display purposes. 
 const STATUS_DOT = {
   Waiting: 'waiting',
   Called: 'called',
@@ -329,6 +331,7 @@ const STATUS_LABEL = {
   Complete: 'Complete',
 }
 
+// The main component for the Queue Page, which displays the patient's current queue status at a clinic, their position in the queue, and relevant details.
 export default function QueuePage() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -346,6 +349,7 @@ export default function QueuePage() {
     }
   })
 
+  // State variables for handling user actions such as joining or leaving the queue, and requesting clinic access. 
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError, setActionError] = useState(null)
   const [actionSuccess, setActionSuccess] = useState(null)
@@ -353,7 +357,7 @@ export default function QueuePage() {
   const [clinicRequestLoading, setClinicRequestLoading] = useState(false)
   const [clinicRequestSuccess, setClinicRequestSuccess] = useState(null)
  
-  
+  // Function to handle requesting access to a clinic. This is relevant for staff users who may need to request access to manage the queue at a specific clinic. 
   async function handleRequestClinicAccess() {
     const clinicId = localStorage.getItem('selectedClinicId')
     const clinicName = pendingClinic?.name || queueEntry?.clinic_name || 'this clinic'
@@ -394,6 +398,7 @@ export default function QueuePage() {
     }
   }
 
+  // Function to fetch the patient's current queue entry from the backend API. 
 const fetchQueue = useCallback(async () => {
   try {
     setLoadingQueue(true)
@@ -508,6 +513,8 @@ const fetchQueue = useCallback(async () => {
     return () => clearInterval(id)
   }, [fetchQueue])
 
+
+  // When the pendingClinic state changes (e.g., when a user initiates joining a queue for a clinic), we update the browser history state to include the clinic information. 
   const handleConfirmJoin = async () => {
     const clinicId = pendingClinic?.id
     const clinicName = pendingClinic?.name
@@ -566,7 +573,7 @@ const fetchQueue = useCallback(async () => {
     }
   }
 
-
+// If the user cancels joining the queue, we clear the pendingClinic state and remove any related error messages. 
   const handleCancelJoin = () => {
     setPendingClinic(null)
     setActionError(null)
@@ -618,13 +625,18 @@ const fetchQueue = useCallback(async () => {
     )
   }, [pendingClinic])
 
+  // Determine if the user can request clinic access based on their role and whether there is a pending clinic selection. 
   const canRequestClinicAccess =
     ['Staff', 'Admin', 'Clinic Staff'].includes(user?.role) &&
     !!pendingClinic?.id
-    
+  
+
+  // The return statement renders the JSX for the Queue Page, including the header, any alerts for actions or fetch errors, loading states, and the main content showing the queue status and details.
   return (
     <>
       <style>{styles}</style>
+
+    {/* The QueueNotifications component is responsible for displaying real-time notifications related to the patient's queue status, such as when their position changes or when they are called.*/}
 
       <main className="q-page">
         <header className="q-page-header">
@@ -782,7 +794,7 @@ const fetchQueue = useCallback(async () => {
       </div>
     )}
       </main>
-
+    
       {pendingClinic && !loadingQueue && (
         <aside
           className="q-overlay"

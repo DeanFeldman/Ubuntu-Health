@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import getApiBase from '../lib/getApiBase'
 
+// Define constants for days of the week and facility types`
 const WEEK_DAYS = [
   'monday',
   'tuesday',
@@ -12,6 +13,7 @@ const WEEK_DAYS = [
   'sunday',
 ]
 
+// These are example facility types in our database
 const FACILITY_TYPE_OPTIONS = [
   'Clinic',
   'Community Health Centre',
@@ -21,6 +23,7 @@ const FACILITY_TYPE_OPTIONS = [
   'Primary Health Care Clinic',
 ]
 
+// This is the initial shape of the clinic form when no clinic is selected
 const EMPTY_CLINIC_FORM = {
   name: '',
   facility_type: '',
@@ -31,6 +34,7 @@ const EMPTY_CLINIC_FORM = {
   appointment_duration_minutes: '',
 }
 
+// This function creates an operating hours object with all days set to closed and no times
 function createEmptyOperatingHours() {
   return WEEK_DAYS.reduce((hours, day) => {
     hours[day] = {
@@ -42,6 +46,9 @@ function createEmptyOperatingHours() {
   }, {})
 }
 
+
+// This function creates a default operating hours object with weekdays open from 07:30 to 16:30 and weekends closed 
+// This is mirrored in the DB
 function createDefaultOperatingHours() {
   return WEEK_DAYS.reduce((hours, day) => {
     const isWeekday = !['saturday', 'sunday'].includes(day)
@@ -56,6 +63,7 @@ function createDefaultOperatingHours() {
   }, {})
 }
 
+// This is the CSS for the admin dashboard, included here as a template literal for simplicity.
 const styles = `
   .admin-header {
     margin-bottom: 24px;
@@ -528,6 +536,11 @@ const styles = `
     }
   }
 `
+/*
+This function reads the text from an API response and tries to parse it as JSON. 
+If the response is empty, it returns an empty object. 
+If parsing fails, it checks if the text looks like HTML (which might indicate a 404 page) and throws an appropriate error message.
+*/
 
 async function readApiResponse(response) {
   const text = await response.text()
@@ -541,6 +554,7 @@ async function readApiResponse(response) {
   }
 }
 
+// This function takes the operating hours data from the clinic and formats it for display in the clinic details section.
 function formatClinicOperatingHours(operatingHours) {
   if (!operatingHours) {
     return <p>Not available</p>
@@ -562,6 +576,7 @@ function formatClinicOperatingHours(operatingHours) {
   ))
 }
 
+// This function takes the operating hours data from the clinic and formats it for display in the clinic details section.
 function normaliseOperatingHours(operatingHours) {
   const editableHours = createDefaultOperatingHours()
 
@@ -602,6 +617,7 @@ function normaliseOperatingHours(operatingHours) {
   return editableHours
 }
 
+// This function takes the operating hours data from the clinic form and formats it for sending to the API.
 function buildOperatingHoursPayload(operatingHoursForm) {
   return WEEK_DAYS.reduce((hours, day) => {
     const currentDay = operatingHoursForm[day]
@@ -623,28 +639,27 @@ function buildOperatingHoursPayload(operatingHoursForm) {
   }, {})
 }
 
+// This is the main component for the admin dashboard page. 
 export default function AdminDashboard() {
+  // Get the current user from the authentication context and the API base URL from our config helper
   const { user } = useAuth()
   const API_BASE_URL = getApiBase()
 
+  // Define all the state variables we need to manage the data and UI state of the dashboard
   const [roleRequests, setRoleRequests] = useState([])
   const [loadingRoleRequests, setLoadingRoleRequests] = useState(true)
   const [processingRoleRequestId, setProcessingRoleRequestId] = useState('')
   const [roleFeedback, setRoleFeedback] = useState('')
   const [roleError, setRoleError] = useState('')
-
   const [clinics, setClinics] = useState([])
   const [selectedClinic, setSelectedClinic] = useState(null)
   const [staffUsers, setStaffUsers] = useState([])
   const [loadingAssignmentData, setLoadingAssignmentData] = useState(true)
-
   const [selectedClinicId, setSelectedClinicId] = useState('')
   const [selectedStaffId, setSelectedStaffId] = useState('')
-
   const [assignmentFeedback, setAssignmentFeedback] = useState('')
   const [assignmentError, setAssignmentError] = useState('')
   const [assigningStaff, setAssigningStaff] = useState(false)
-
   const [clinicForm, setClinicForm] = useState(EMPTY_CLINIC_FORM)
   const [operatingHoursForm, setOperatingHoursForm] = useState(createEmptyOperatingHours())
   const [savingClinic, setSavingClinic] = useState(false)
@@ -656,6 +671,7 @@ export default function AdminDashboard() {
   const selectedClinicStaff = staffUsers.filter((staffUser) => staffUser.clinic_id === selectedClinicId)
   const unassignedStaffUsers = staffUsers.filter((staffUser) => !staffUser.clinic_id)
 
+  // This effect runs when the component mounts and whenever the user's ID changes.
   useEffect(() => {
     async function loadRoleRequests() {
       if (!user?.id) return
@@ -687,6 +703,7 @@ export default function AdminDashboard() {
       }
     }
 
+    // This function loads the clinics and staff users from the API so we can manage staff assignments and clinic details.
     async function loadAssignmentData() {
       if (!user?.id) return
 
@@ -732,6 +749,8 @@ export default function AdminDashboard() {
     loadAssignmentData()
   }, [API_BASE_URL, user?.id])
 
+  // This effect runs whenever the selected clinic changes. 
+  // It updates the clinic form and operating hours form with the data from the selected clinic, or resets them if no clinic is selected.  
   useEffect(() => {
     if (!selectedClinic) {
       setClinicForm(EMPTY_CLINIC_FORM)
@@ -757,6 +776,7 @@ export default function AdminDashboard() {
     setOperatingHoursForm(normaliseOperatingHours(selectedClinic.operating_hours))
   }, [selectedClinic])
 
+  // This function handles changes to the clinic form inputs and updates the clinicForm state accordingly.
   function handleClinicFormChange(event) {
     const { name, value } = event.target
 
@@ -766,6 +786,9 @@ export default function AdminDashboard() {
     }))
   }
 
+  // This function is called when a clinic is selected from the list. 
+  // It updates the selected clinic ID and resets any related state for staff selection and feedback messages. 
+  // It also finds the selected clinic's data and sets it in the state for display and editing.
   function handleClinicSelect(clinicId) {
     setSelectedClinicId(clinicId)
     setSelectedStaffId('')
@@ -778,6 +801,7 @@ export default function AdminDashboard() {
     setSelectedClinic(clinic)
   }
 
+  // This function handles changes to the operating hours form inputs and updates the operatingHoursForm state accordingly.
   function handleOperatingHoursChange(day, field, value) {
     setOperatingHoursForm((currentForm) => ({
       ...currentForm,
@@ -788,6 +812,7 @@ export default function AdminDashboard() {
     }))
   }
 
+  // This function handles toggling the closed status for a specific day in the operating hours form.
   function handleClosedToggle(day, checked) {
     setOperatingHoursForm((currentForm) => ({
       ...currentForm,
@@ -799,6 +824,7 @@ export default function AdminDashboard() {
     }))
   }
 
+  // This function is called when the admin clicks the "Approve" button for a role request.
   async function approveRoleRequest(request) {
     setProcessingRoleRequestId(request.id)
     setRoleFeedback('')
@@ -832,6 +858,7 @@ export default function AdminDashboard() {
     }
   }
 
+  // This function is called when the admin clicks the "Reject" button for a role request.
   async function rejectRoleRequest(request) {
     setProcessingRoleRequestId(request.id)
     setRoleFeedback('')
@@ -865,6 +892,7 @@ export default function AdminDashboard() {
     }
   }
 
+  // This function is called when the admin clicks the "Save changes" button after editing clinic details.
   async function saveClinicChanges() {
     if (!selectedClinicId) {
       setClinicEditError('Please select a clinic first.')
@@ -919,6 +947,7 @@ export default function AdminDashboard() {
     }
   }
 
+  // This function is called when the admin clicks the "Assign" button to link a staff member to a clinic.
   async function assignStaffToClinic() {
     if (!selectedClinicId || !selectedStaffId) {
       setAssignmentError('Please select both a clinic and a staff member.')
@@ -969,6 +998,7 @@ export default function AdminDashboard() {
     }
   }
 
+  // This function is called when the admin clicks the "Unassign" button to unlink a staff member from their clinic.
   async function unassignStaffFromClinic(staffUserId) {
     setAssignmentError('')
     setAssignmentFeedback('')
@@ -1011,15 +1041,18 @@ export default function AdminDashboard() {
     }
   }
 
+  // The return statement contains the JSX for rendering the admin dashboard UI, including the header, sidebar navigation, and main content area with conditional rendering based on the active section.
   return (
   <section>
     <style>{styles}</style>
 
+    {/* The header section of the admin dashboard, with a title and description. */}
     <header className="admin-header">
       <h1>Admin Dashboard</h1>
       <p>Manage role approvals, staff placement, and clinic details from one place.</p>
     </header>
 
+    {/* The main layout of the admin dashboard, with a sidebar for navigation and a content area that changes based on the selected section. */}
     <section className="admin-layout">
       <aside className="admin-sidebar">
         <p className="admin-sidebar-title">Sections</p>
@@ -1057,6 +1090,7 @@ export default function AdminDashboard() {
         </button>
       </aside>
 
+      {/* The content area of the admin dashboard, which conditionally renders different sections based on the activeSection state. */}
       <section className="admin-content">
         {activeSection === 'overview' && (
           <section className="admin-overview" aria-label="Admin overview">
@@ -1074,6 +1108,7 @@ export default function AdminDashboard() {
           </section>
         )}
 
+        {/* The section for managing role requests, which includes a table of pending requests and actions to approve or reject each one. */}
         {activeSection === 'roles' && (
           <section className="admin-stack">
             <section className="admin-panel" aria-labelledby="role-requests-heading">
@@ -1099,6 +1134,7 @@ export default function AdminDashboard() {
                 </p>
               )}
 
+              {/* Conditional rendering for the role requests table, showing a loading message, an empty state, or the table of requests depending on the current state. */}
               {loadingRoleRequests ? (
                 <p className="admin-message">Loading role requests...</p>
               ) : roleRequests.length === 0 ? (
@@ -1165,6 +1201,7 @@ export default function AdminDashboard() {
           </section>
         )}
 
+        {/* The section for managing clinic details, which includes selecting a clinic, viewing and editing its details, and managing staff assignments. */}
         {activeSection === 'clinics' && (
           <section className="admin-stack">
             <section className="admin-panel" aria-labelledby="staff-assignment-heading">
@@ -1190,6 +1227,7 @@ export default function AdminDashboard() {
                 </p>
               )}
 
+              {/* Conditional rendering for the clinic details and staff assignment section, showing a loading message or the form to manage staff and edit clinic details depending on the current state. */}
               {loadingAssignmentData ? (
                 <p className="admin-message">Loading clinics and staff...</p>
               ) : (
@@ -1224,6 +1262,7 @@ export default function AdminDashboard() {
                     </section>
                   )}
 
+                  {/* When a clinic is selected, show the details and staff management sections. */}
                   {selectedClinicId && (
                     <>
                       <section className="admin-selected-banner" aria-live="polite">
@@ -1277,7 +1316,7 @@ export default function AdminDashboard() {
                         </section>
 
                         <br />
-
+                        {/* The form to assign a new staff member to the selected clinic, which includes a dropdown of unassigned staff and a button to confirm the assignment. */}
                         <label htmlFor="staff-select">Add staff member</label>
                         <select
                           id="staff-select"
@@ -1325,6 +1364,7 @@ export default function AdminDashboard() {
                             />
                           </label>
 
+                          {/* The grid section for editing clinic details, including facility type, location, services, and appointment duration. */}
                           <section className="edit-clinic-grid">
                             <label className="edit-field" htmlFor="facility-type">
                               Facility type
@@ -1371,7 +1411,7 @@ export default function AdminDashboard() {
                                 onChange={handleClinicFormChange}
                               />
                             </label>
-
+                                
                             <label className="edit-field" htmlFor="services">
                               Services
                               <textarea
@@ -1404,6 +1444,7 @@ export default function AdminDashboard() {
                             </label>
                           </section>
 
+                          {/* The section for editing operating hours, which includes a grid with inputs for opening and closing times for each day of the week, as well as a checkbox to mark the day as closed. */}
                           <section className="admin-subsection">
                             <header className="admin-subsection-header">
                               <h3>Operating hours</h3>
@@ -1470,7 +1511,8 @@ export default function AdminDashboard() {
                               ))}
                             </section>
                           </section>
-
+                          
+                          {/* The section for the "Save changes" button and any feedback messages related to saving clinic details. */}
                           <section
                             style={{
                               display: 'flex',

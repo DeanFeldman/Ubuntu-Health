@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import logo from '../assets/logo.png'
 
+// The login page component, which provides a Google sign-in button and handles the authentication flow, including redirecting users based on their role and displaying any login errors.
 export default function LoginPage() {
   const { loginWithGoogle, error, user, role, loading } = useAuth()
   const navigate = useNavigate()
   const [localError, setLocalError] = useState('')
 
+  // Redirect users after successful login based on their role. Admins go to /admin, staff to /staff, and patients to /clinic. Also clears the 'oauth_started' flag from sessionStorage to prevent stale state.
   useEffect(() => {
     if (!user || !role) return
 
@@ -18,6 +20,7 @@ export default function LoginPage() {
     else navigate('/clinic')
   }, [user, role, navigate])
 
+  // Check for login cancellation or failure. If the OAuth flow was started but we end up with no user and no loading, it likely means the user cancelled the login or there was an error that didn't get captured in the `error` state. In this case, we set a local error message to inform the user.
   useEffect(() => {
     const started = sessionStorage.getItem('oauth_started')
 
@@ -27,12 +30,15 @@ export default function LoginPage() {
     }
   }, [loading, user])
 
+  // Handle the login button click by initiating the Google login flow and setting a flag in sessionStorage to track that the OAuth process has started.
   async function handleLogin() {
     setLocalError('')
     sessionStorage.setItem('oauth_started', 'true')
     await loginWithGoogle()
   }
 
+  // The JSX for the login page, which includes a left panel with information about the platform and a right panel with the login card. 
+  // The login card displays the logo, a welcome message, any error messages, and the Google sign-in button.
   return (
     <main style={styles.page}>
       <section style={styles.layout}>
@@ -129,6 +135,8 @@ export default function LoginPage() {
   )
 }
 
+// Styles for the login page, defined as a JavaScript object. 
+// This includes styles for the overall page layout, the left and right panels, the hero section, the information cards, the login card, buttons, and error messages.
 const styles = {
   page: {
     minHeight: '100vh',

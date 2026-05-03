@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import getApiBase from '../lib/getApiBase'
 
-
+// The QueueNotifications component is responsible for fetching and displaying notifications related to a patient's position in the clinic queue. 
 const API_BASE = getApiBase()
 
 const NOTIFICATION_MESSAGES = {

@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import getApiBase from '../lib/getApiBase'
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+
 
 /**
  * Generate appointment slots for a given date.
@@ -447,6 +447,7 @@ const styles = `
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
+// Simple toast component for showing success/error messages after booking attempts.
 function Toast({ message, type, visible }) {
   return (
     <div
@@ -459,6 +460,7 @@ function Toast({ message, type, visible }) {
   )
 }
 
+// The main booking page component, which handles both patient and staff booking flows depending on the navigation state. It includes date and slot selection, patient selection for staff, a confirmation dialog, and submission handling with success/error feedback.
 export default function BookingPage() {
   const API_BASE_URL = getApiBase()
   const { user, role } = useAuth()
@@ -535,7 +537,7 @@ export default function BookingPage() {
   const [slotsLoading, setSlotsLoading] = useState(false)
   const [slotsError, setSlotsError] = useState('')
   
-
+  // Whenever the selected date or clinic changes, fetch the available appointment slots for that date and clinic. This simulates what would happen in a real system where slots are generated based on clinic hours and existing appointments.
   useEffect(() => {
     if (!selectedDate || !clinic?.id) {
       setSlots([])
@@ -611,6 +613,8 @@ export default function BookingPage() {
     return valid
   }
 
+
+  // This memoized value determines whether the "Review Booking" button should be enabled. It checks that a clinic is selected, a date and slot are chosen, and if the user is staff, it also checks that either an existing patient is selected or valid new patient information is provided.
   const canProceed = useMemo(() => {
     if (!clinic?.id) return false
     if (!selectedDate || !selectedSlot) return false
