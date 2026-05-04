@@ -16,7 +16,10 @@ const {
   generateDailySlots,
   resolveClinicSchedule,
 } = require('./clinicSchedule')
-
+const {
+  validateRequiredUuid,
+  validateRequiredUuids,
+} = require('./commonValidation')
 app.use(cors())
 app.use(express.json())
 
@@ -207,21 +210,6 @@ async function fetchWaitingQueuePosition(clinicId, patientId) {
     patientsAhead: patientsAhead || 0,
   }
 }
-
-/*function getTimeFromAppointmentDatetime(slotDatetime) {
-  if (!slotDatetime) return null
-
-  if (typeof slotDatetime === 'string') {
-    const match = slotDatetime.match(/(\d{2}:\d{2})/)
-    if (match) return match[1]
-  }
-
-
-  const parsedDate = new Date(slotDatetime)
-  if (Number.isNaN(parsedDate.getTime())) return null
-
-  return `${String(parsedDate.getHours()).padStart(2, '0')}:${String(parsedDate.getMinutes()).padStart(2, '0')}`
-}*/
 function getTimeFromAppointmentDatetime(slotDatetime) {
   if (!slotDatetime) return null
 
@@ -424,9 +412,14 @@ app.get('/api/clinics/:id/queue-metrics', async (req, res) => {
   try {
     const { id } = req.params
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    /*const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (!uuidRegex.test(id)) {
       return res.status(400).json({ error: 'Invalid clinic ID format' })
+    }*/
+    const idValidation = validateRequiredUuid(id, 'clinic ID')
+
+    if (!idValidation.valid) {
+      return res.status(idValidation.status).json({ error: idValidation.error })
     }
 
     const metrics = await fetchClinicQueueMetrics(id)
@@ -450,9 +443,10 @@ app.get('/api/clinics/:id', async (req, res) => {
   try {
     const { id } = req.params
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(id)) {
-      return res.status(400).json({ error: 'Invalid clinic ID format' })
+    const idValidation = validateRequiredUuid(id, 'clinic ID')
+
+    if (!idValidation.valid) {
+      return res.status(idValidation.status).json({ error: idValidation.error })
     }
 
     const { data, error } = await supabase
