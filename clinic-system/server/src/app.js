@@ -1229,14 +1229,13 @@ app.get('/api/clinic-requests', async (req, res) => {
 
     const { admin_id, status } = req.query
 
-    if (!admin_id) {
-      return res.status(400).json({ error: 'admin_id is required' })
-    }
+    const adminIdValidation = validateRequiredUuid(admin_id, 'admin_id')
 
-    const uuidRegex = /^[0-9a-f-]{36}$/i
-    if (!uuidRegex.test(admin_id)) {
-      return res.status(400).json({ error: 'Invalid admin ID format' })
-    }
+if (!adminIdValidation.valid) {
+  return res.status(adminIdValidation.status).json({
+    error: !admin_id ? 'admin_id is required' : 'Invalid admin ID format',
+  })
+}
 
     const { data: admin, error: adminError } = await supabase
       .from('users')
@@ -1286,14 +1285,13 @@ app.patch('/api/clinic-requests/:id/approve', async (req, res) => {
     const { id } = req.params
     const { admin_id } = req.body
 
-    if (!admin_id) {
-      return res.status(400).json({ error: 'admin_id is required' })
-    }
+    const idValidation = validateRequiredUuids({ id, admin_id })
 
-    const uuidRegex = /^[0-9a-f-]{36}$/i
-    if (!uuidRegex.test(id) || !uuidRegex.test(admin_id)) {
-      return res.status(400).json({ error: 'Invalid request or admin ID format' })
-    }
+if (!idValidation.valid) {
+  return res.status(400).json({
+    error: !admin_id ? 'admin_id is required' : 'Invalid request or admin ID format',
+  })
+}
 
     const { data: admin, error: adminError } = await supabase
       .from('users')
@@ -1367,14 +1365,13 @@ app.patch('/api/clinic-requests/:id/reject', async (req, res) => {
     const { id } = req.params
     const { admin_id } = req.body
 
-    if (!admin_id) {
-      return res.status(400).json({ error: 'admin_id is required' })
-    }
+    const idValidation = validateRequiredUuids({ id, admin_id })
 
-    const uuidRegex = /^[0-9a-f-]{36}$/i
-    if (!uuidRegex.test(id) || !uuidRegex.test(admin_id)) {
-      return res.status(400).json({ error: 'Invalid request or admin ID format' })
-    }
+if (!idValidation.valid) {
+  return res.status(400).json({
+    error: !admin_id ? 'admin_id is required' : 'Invalid request or admin ID format',
+  })
+}
 
     const { data: admin, error: adminError } = await supabase
       .from('users')
