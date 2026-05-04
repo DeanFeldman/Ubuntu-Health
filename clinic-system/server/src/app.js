@@ -1453,9 +1453,11 @@ app.patch('/api/users/:userId/assign-clinic', async (req, res) => {
     const { userId } = req.params
     const { admin_id, clinic_id } = req.body
 
-    if (!isValidClinicUuid(userId) || !isValidClinicUuid(admin_id) || !isValidClinicUuid(clinic_id)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
+    const idValidation = validateRequiredUuids({ userId, admin_id, clinic_id })
+
+if (!idValidation.valid) {
+  return res.status(400).json({ error: 'Invalid ID format' })
+}
 
     const { data: admin, error: adminError } = await supabase
       .from('users')
@@ -1522,9 +1524,11 @@ app.patch('/api/users/:userId/unassign-clinic', async (req, res) => {
     const { userId } = req.params
     const { admin_id } = req.body
 
-    if (!isValidClinicUuid(userId) || !isValidClinicUuid(admin_id)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
+    const idValidation = validateRequiredUuids({ userId, admin_id })
+
+if (!idValidation.valid) {
+  return res.status(400).json({ error: 'Invalid ID format' })
+}
 
     const { data: admin, error: adminError } = await supabase
       .from('users')
@@ -1573,7 +1577,7 @@ app.patch('/api/users/:userId/unassign-clinic', async (req, res) => {
     res.status(500).json({ error: 'Failed to unassign staff from clinic' })
   }
 })
-
+//PATCH /api/clinics/:id
 app.patch('/api/clinics/:id', async (req, res) => {
   try {
     const { id } = req.params
@@ -1586,13 +1590,19 @@ app.patch('/api/clinics/:id', async (req, res) => {
       services,
     } = req.body
 
-    if (!isValidClinicUuid(id)) {
-      return res.status(400).json({ error: 'Invalid clinic ID format' })
-    }
+    const clinicIdValidation = validateRequiredUuid(id, 'clinic ID')
 
-    if (!admin_id || !isValidClinicUuid(admin_id)) {
-      return res.status(400).json({ error: 'Valid admin_id is required' })
-    }
+if (!clinicIdValidation.valid) {
+  return res
+    .status(clinicIdValidation.status)
+    .json({ error: clinicIdValidation.error })
+}
+
+const adminIdValidation = validateRequiredUuid(admin_id, 'admin_id')
+
+if (!adminIdValidation.valid) {
+  return res.status(400).json({ error: 'Valid admin_id is required' })
+}
 
     const { data: adminUser, error: adminError } = await supabase
       .from('users')
