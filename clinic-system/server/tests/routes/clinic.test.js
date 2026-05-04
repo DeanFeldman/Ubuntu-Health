@@ -1,4 +1,31 @@
 const request = require('supertest')
+
+// Mock @supabase/supabase-js before app is loaded so no real DB connection is made
+jest.mock('@supabase/supabase-js', () => {
+  const mockRange = jest.fn().mockResolvedValue({ data: [], error: null })
+  const mockIlike = jest.fn().mockReturnValue({ range: mockRange })
+  const mockMaybeSingle = jest.fn().mockResolvedValue({ data: null, error: null })
+  const mockEq = jest.fn().mockReturnValue({
+    eq: jest.fn().mockReturnValue({ range: mockRange, maybeSingle: mockMaybeSingle }),
+    ilike: mockIlike,
+    range: mockRange,
+    maybeSingle: mockMaybeSingle,
+  })
+  const mockSelect = jest.fn().mockReturnValue({
+    eq: mockEq,
+    ilike: mockIlike,
+    range: mockRange,
+    maybeSingle: mockMaybeSingle,
+  })
+  const mockFrom = jest.fn().mockReturnValue({ select: mockSelect })
+
+  return {
+    createClient: jest.fn(() => ({
+      from: mockFrom,
+    })),
+  }
+})
+
 const app = require('../../src/app')
 
 describe('Clinic endpoints', () => {
@@ -19,6 +46,7 @@ describe('Clinic endpoints', () => {
     expect(res.statusCode).toBe(400)
   })
 })
+
 test('GET /api/clinics with district filter returns 200', async () => {
   const res = await request(app).get('/api/clinics?district=Test')
   expect(res.statusCode).toBe(200)
