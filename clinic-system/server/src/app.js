@@ -617,10 +617,11 @@ app.get('/api/queue/:clinicId/entry/:patientId', async (req, res) => {
   try {
     const { clinicId, patientId } = req.params
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(clinicId) || !uuidRegex.test(patientId)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
+    const idValidation = validateRequiredUuids({ clinicId, patientId })
+
+if (!idValidation.valid) {
+  return res.status(400).json({ error: 'Invalid ID format' })
+}
 
     const { data, error } = await supabase
       .from('queue_entries')
@@ -780,10 +781,10 @@ app.get('/api/queue/:clinicId/status/:patientId', async (req, res) => {
   try {
     const { clinicId, patientId } = req.params
 
-    const idValidation = validateRequiredUuid(clinicId, 'clinic ID')
+    const idValidation = validateRequiredUuids({ clinicId, patientId })
 
 if (!idValidation.valid) {
-  return res.status(idValidation.status).json({ error: idValidation.error })
+  return res.status(400).json({ error: 'Invalid ID format' })
 }
     const { data, error } = await supabase
       .from('queue_entries')
