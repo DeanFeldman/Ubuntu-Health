@@ -1055,10 +1055,11 @@ app.patch('/api/queue/:clinicId/entry/:entryId/status', async (req, res) => {
     const { clinicId, entryId } = req.params
     const { status } = req.body
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(clinicId) || !uuidRegex.test(entryId)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
+    const idValidation = validateRequiredUuids({ clinicId, entryId })
+
+if (!idValidation.valid) {
+  return res.status(400).json({ error: 'Invalid ID format' })
+}
 
     const validStatuses = ['Waiting', 'In Consultation', 'Complete', 'Called']
     if (!status || !validStatuses.includes(status)) {
@@ -1139,10 +1140,11 @@ app.delete('/api/queue/:clinicId/entry/:entryId', async (req, res) => {
   try {
     const { clinicId, entryId } = req.params
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(clinicId) || !uuidRegex.test(entryId)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
+    const idValidation = validateRequiredUuids({ clinicId, entryId })
+
+if (!idValidation.valid) {
+  return res.status(400).json({ error: 'Invalid ID format' })
+}
 
     const oldQueue = await tryFetchActiveQueueSnapshot(clinicId)
 
@@ -1656,10 +1658,11 @@ app.get('/api/queue/:clinicId/completed-count', async (req, res) => {
   try {
     const { clinicId } = req.params
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(clinicId)) {
-      return res.status(400).json({ error: 'Invalid clinic ID format' })
-    }
+    const idValidation = validateRequiredUuid(clinicId, 'clinic ID')
+
+if (!idValidation.valid) {
+  return res.status(idValidation.status).json({ error: idValidation.error })
+}
 
     const { count, error } = await supabase
       .from('queue_entries')
@@ -1726,16 +1729,17 @@ const manualPatients = (patients || [])
     res.status(500).json({ error: 'Failed to fetch users' })
   }
 })
-
+//POST /api/queue/:clinicId/add-patient
 app.post('/api/queue/:clinicId/add-patient', async (req, res) => {
   try {
     const { clinicId } = req.params
     const { patient_id } = req.body
 
-    const uuidRegex = /^[0-9a-f-]{36}$/i
-    if (!uuidRegex.test(clinicId) || !uuidRegex.test(patient_id)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
+    const idValidation = validateRequiredUuids({ clinicId, patient_id })
+
+if (!idValidation.valid) {
+  return res.status(400).json({ error: 'Invalid ID format' })
+}
 
     // check patient not already in queue (same as join logic)
     const { data: activeQueues, error: activeError } = await supabase
