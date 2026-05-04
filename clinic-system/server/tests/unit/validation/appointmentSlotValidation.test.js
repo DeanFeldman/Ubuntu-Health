@@ -3,8 +3,12 @@ const {
   isValidDateFormat,
   isPastDate,
   validateSlotRetrievalInput,
+  sanitizeGeneratedSlots,
+  validateGeneratedSlots,
+  validateSelectedSlot,
+  removeFullyBookedSlots,
+  normalizeSlotTime,
 } = require('../../../src/appointmentSlotValidation')
-
 const VALID_UUID = '0b0d9f9a-9a5e-47fe-92e0-7d1696e41464'
 const INVALID_UUID = 'not-a-uuid'
 
@@ -136,23 +140,195 @@ describe('appointmentSlotValidation', () => {
       expect(result).toEqual({ valid: true })
     })
   })
-  const {
-  sanitizeGeneratedSlots,
-} = require('../../../src/appointmentSlotValidation')
 
-describe('sanitizeGeneratedSlots', () => {
-  it('removes invalid slot formats', () => {
-    expect(sanitizeGeneratedSlots(['09:00', 'bad', '25:99'], '2099-05-10'))
-      .toEqual(['09:00'])
+  describe('sanitizeGeneratedSlots', () => {
+    it('removes invalid slot formats', () => {
+      expect(sanitizeGeneratedSlots(['09:00', 'bad', '25:99'], '2099-05-10'))
+        .toEqual(['09:00'])
+    })
+
+    it('removes duplicate slots and sorts valid slots', () => {
+      expect(sanitizeGeneratedSlots(['10:00', '09:00', '09:00'], '2099-05-10'))
+        .toEqual(['09:00', '10:00'])
+    })
+
+    it('returns empty array when input is not an array', () => {
+      expect(sanitizeGeneratedSlots(null, '2099-05-10')).toEqual([])
+    })
   })
 
-  it('removes duplicate slots and sorts valid slots', () => {
-    expect(sanitizeGeneratedSlots(['10:00', '09:00', '09:00'], '2099-05-10'))
-      .toEqual(['09:00', '10:00'])
+  describe('validateGeneratedSlots', () => {
+    it('rejects non-array generated slots', () => {
+      const result = validateGeneratedSlots(null, '2099-05-10')
+
+      expect(result).toEqual({
+        valid: false,
+        status: 500,
+        error: 'Generated slots must be an array',
+      })
+    })
+
+    it('returns sanitized valid slots', () => {
+      const result = validateGeneratedSlots(
+        ['10:00', '09:00', '09:00', 'bad'],
+        '2099-05-10'
+      )
+
+      expect(result).toEqual({
+        valid: true,
+        slots: ['09:00', '10:00'],
+      })
+    })
   })
 
-  it('returns empty array when input is not an array', () => {
-    expect(sanitizeGeneratedSlots(null, '2099-05-10')).toEqual([])
+  describe('validateSelectedSlot', () => {
+    it('rejects invalid selected time format', () => {
+      const result = validateSelectedSlot({
+        date: '2099-05-10',
+        time: 'bad-time',
+        validSlots: ['09:00', '09:30'],
+      })
+
+      expect(result).toEqual({
+        valid: false,
+        status: 400,
+        error: 'Invalid date or time format',
+      })
+    })
+
+    it('rejects a selected time that is not in the generated slot list', () => {
+      const result = validateSelectedSlot({
+        date: '2099-05-10',
+        time: '11:00',
+        validSlots: ['09:00', '09:30'],
+      })
+
+      expect(result).toEqual({
+        valid: false,
+        status: 400,
+        error: 'Selected time is outside clinic hours or does not match the appointment duration',
+      })
+    })
+
+    it('accepts a selected time that exists in the generated slot list', () => {
+      const result = validateSelectedSlot({
+        date: '2099-05-10',
+        time: '09:00',
+        validSlots: ['09:00', '09:30'],
+      })
+
+      expect(result.valid).toBe(true)
+      expect(result.normalizedTime).toBe('09:00')
+      expect(result.slotDateTime).toBeInstanceOf(Date)
+    })
+
+    it('rejects a past selected slot', () => {
+      const result = validateSelectedSlot({
+        date: getPastDate(),
+        time: '09:00',
+        validSlots: ['09:00', '09:30'],
+      })
+
+      expect(result).toEqual({
+        valid: false,
+        status: 400,
+        error: 'Cannot book a past time slot',
+      })
+    })
+  })
+
+  describe('removeFullyBookedSlots', () => {
+    it('removes fully booked slots from generated slots', () => {
+      const result = removeFullyBookedSlots(
+        ['09:00', '09:30', '10:00'],
+        new Set(['09:30'])
+      )
+
+      expect(result).toEqual(['09:00', '10:00'])
+    })
+
+    it('returns all slots when no booked times are provided', () => {
+      const result = removeFullyBookedSlots(['09:00', '09:30'])
+
+      expect(result).toEqual(['09:00', '09:30'])
+    })
+  })
+  describe('normalizeSlotTime', () => {
+  it('returns null for missing time', () => {
+    expect(normalizeSlotTime()).toBeNull()
+  })
+
+  it('returns HH:MM time strings unchanged', () => {
+    expect(normalizeSlotTime('09:30')).toBe('09:30')
+  })
+
+  it('returns null for invalid time strings', () => {
+    expect(normalizeSlotTime('not-a-time')).toBeNull()
+  })
+
+  it('normalizes valid datetime strings into HH:MM format', () => {
+    const result = normalizeSlotTime('2099-05-10T09:30:00.000Z')
+
+    expect(result).toMatch(/^([01]\d|2[0-3]):[0-5]\d$/)
+  })
+})
+
+describe('sanitizeGeneratedSlots same-day filtering', () => {
+  it('removes past slots for today', () => {
+    const today = new Date().toISOString().split('T')[0]
+
+    expect(sanitizeGeneratedSlots(['00:00'], today)).toEqual([])
+  })
+
+  it('keeps slots for future dates without comparing them to current time', () => {
+    expect(sanitizeGeneratedSlots(['00:00'], getFutureDate())).toEqual(['00:00'])
+  })
+})
+
+describe('validateSelectedSlot extra branches', () => {
+  it('rejects when validSlots is not an array', () => {
+    const result = validateSelectedSlot({
+      date: '2099-05-10',
+      time: '09:00',
+      validSlots: null,
+    })
+
+    expect(result).toEqual({
+      valid: false,
+      status: 400,
+      error: 'Selected time is outside clinic hours or does not match the appointment duration',
+    })
+  })
+
+  it('rejects invalid date even when time format is valid', () => {
+    const result = validateSelectedSlot({
+      date: 'not-a-date',
+      time: '09:00',
+      validSlots: ['09:00'],
+    })
+
+    expect(result).toEqual({
+      valid: false,
+      status: 400,
+      error: 'Invalid date or time format',
+    })
+  })
+})
+
+describe('removeFullyBookedSlots extra branches', () => {
+  it('accepts booked times as an array', () => {
+    const result = removeFullyBookedSlots(
+      ['09:00', '09:30', '10:00'],
+      ['09:00', '10:00']
+    )
+
+    expect(result).toEqual(['09:30'])
+  })
+
+  it('treats null booked times as empty', () => {
+    const result = removeFullyBookedSlots(['09:00', '09:30'], null)
+
+    expect(result).toEqual(['09:00', '09:30'])
   })
 })
 })

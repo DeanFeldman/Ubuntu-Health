@@ -240,7 +240,12 @@ function getTimeFromAppointmentDatetime(slotDatetime) {
   })
 }
 
-const { validateSlotRetrievalInput, sanitizeGeneratedSlots } = require('./appointmentSlotValidation')
+const {
+  validateSlotRetrievalInput,
+  validateGeneratedSlots,
+  validateSelectedSlot,
+  removeFullyBookedSlots,
+} = require('./appointmentSlotValidation')
 
 async function fetchClinicBookingCapacity(clinicId) {
   try {
@@ -2196,9 +2201,18 @@ app.get('/api/appointments/slots', async (req, res) => {
     )
 
     //return res.json(dailySlots.filter((slot) => !bookedTimes.has(slot)))
-    const availableSlots = dailySlots.filter((slot) => !bookedTimes.has(slot))
+    //const availableSlots = dailySlots.filter((slot) => !bookedTimes.has(slot))
 
-    return res.json(sanitizeGeneratedSlots(availableSlots, date))
+    //return res.json(sanitizeGeneratedSlots(availableSlots, date))
+    const availableSlots = removeFullyBookedSlots(dailySlots, bookedTimes)
+
+const slotValidation = validateGeneratedSlots(availableSlots, date)
+
+if (!slotValidation.valid) {
+  return res.status(slotValidation.status).json({ error: slotValidation.error })
+}
+
+return res.json(slotValidation.slots)
   } catch (err) {
     console.error(err)
     return res.status(500).json({ error: 'Failed to fetch appointment slots' })
@@ -2259,13 +2273,14 @@ app.post('/api/appointments', async (req, res) => {
       createdPatientId = patient_id
     }
 
-    const normalizedTime = getTimeFromAppointmentDatetime(time)
+    /*const normalizedTime = getTimeFromAppointmentDatetime(time)
     const slot_datetime = new Date(`${date}T${normalizedTime}:00`)
 
     if (Number.isNaN(slot_datetime.getTime())) {
       await rollbackCreatedPatient()
       return res.status(400).json({ error: 'Invalid date or time format' })
-    }
+    }*/
+   //const normalizedTime = normalizeSlotTime(time)
 
     const { data: clinic, error: clinicError } = await supabase
       .from('clinics')
@@ -2280,7 +2295,7 @@ app.post('/api/appointments', async (req, res) => {
       return res.status(404).json({ error: 'Clinic not found' })
     }
 
-    const schedule = resolveClinicSchedule(clinic)
+    /*const schedule = resolveClinicSchedule(clinic)
     const validSlots = generateDailySlots({
       date,
       operating_hours: schedule.operating_hours,
@@ -2292,7 +2307,30 @@ app.post('/api/appointments', async (req, res) => {
       return res.status(400).json({
         error: 'Selected time is outside clinic hours or does not match the appointment duration',
       })
-    }
+    }*/
+    const schedule = resolveClinicSchedule(clinic)
+
+const validSlots = generateDailySlots({
+  date,
+  operating_hours: schedule.operating_hours,
+  appointment_duration_minutes: schedule.appointment_duration_minutes,
+})
+
+const selectedSlotValidation = validateSelectedSlot({
+  date,
+  time,
+  validSlots,
+})
+
+if (!selectedSlotValidation.valid) {
+  await rollbackCreatedPatient()
+  return res
+    .status(selectedSlotValidation.status)
+    .json({ error: selectedSlotValidation.error })
+}
+
+const normalizedTime = selectedSlotValidation.normalizedTime
+const slot_datetime = selectedSlotValidation.slotDateTime
 
     if (patient_id === booked_by) {
       const { data: bookedByUser, error: bookedByUserError } = await supabase
