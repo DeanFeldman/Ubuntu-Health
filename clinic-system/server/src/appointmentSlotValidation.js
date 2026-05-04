@@ -58,11 +58,105 @@ function sanitizeGeneratedSlots(slots, date) {
     })
     .sort()
 }
+function normalizeSlotTime(time) {
+  if (!time) return null
 
+  if (typeof time === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+    return time
+  }
+
+  const parsedDate = new Date(time)
+  if (Number.isNaN(parsedDate.getTime())) return null
+
+  return parsedDate.toLocaleTimeString('en-ZA', {
+    timeZone: 'Africa/Johannesburg',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+}
+
+function validateGeneratedSlots(slots, date) {
+  if (!Array.isArray(slots)) {
+    return {
+      valid: false,
+      status: 500,
+      error: 'Generated slots must be an array',
+    }
+  }
+
+  const sanitizedSlots = sanitizeGeneratedSlots(slots, date)
+
+  if (sanitizedSlots.length !== new Set(sanitizedSlots).size) {
+    return {
+      valid: false,
+      status: 500,
+      error: 'Generated slots contain duplicates',
+    }
+  }
+
+  return {
+    valid: true,
+    slots: sanitizedSlots,
+  }
+}
+
+function validateSelectedSlot({ date, time, validSlots }) {
+  const normalizedTime = normalizeSlotTime(time)
+
+  if (!normalizedTime) {
+    return {
+      valid: false,
+      status: 400,
+      error: 'Invalid date or time format',
+    }
+  }
+
+  const slotDateTime = new Date(`${date}T${normalizedTime}:00`)
+
+  if (Number.isNaN(slotDateTime.getTime())) {
+    return {
+      valid: false,
+      status: 400,
+      error: 'Invalid date or time format',
+    }
+  }
+
+  if (slotDateTime < new Date()) {
+    return {
+      valid: false,
+      status: 400,
+      error: 'Cannot book a past time slot',
+    }
+  }
+
+  if (!Array.isArray(validSlots) || !validSlots.includes(normalizedTime)) {
+    return {
+      valid: false,
+      status: 400,
+      error: 'Selected time is outside clinic hours or does not match the appointment duration',
+    }
+  }
+
+  return {
+    valid: true,
+    normalizedTime,
+    slotDateTime,
+  }
+}
+
+function removeFullyBookedSlots(generatedSlots, bookedTimes) {
+  const bookedSet = bookedTimes instanceof Set ? bookedTimes : new Set(bookedTimes || [])
+  return generatedSlots.filter(slot => !bookedSet.has(slot))
+}
 module.exports = {
   isValidUuid,
   isValidDateFormat,
   isPastDate,
   validateSlotRetrievalInput,
   sanitizeGeneratedSlots,
+  normalizeSlotTime,
+  validateGeneratedSlots,
+  validateSelectedSlot,
+  removeFullyBookedSlots,
 }
