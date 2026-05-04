@@ -720,16 +720,13 @@ app.get('/api/role-requests', async (req, res) => {
   try {
     const { admin_id, status } = req.query
 
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const adminIdValidation = validateRequiredUuid(admin_id, 'admin_id')
 
-    if (!admin_id) {
-      return res.status(400).json({ error: 'admin_id is required' })
-    }
-
-    if (!uuidRegex.test(admin_id)) {
-      return res.status(400).json({ error: 'Invalid admin ID format' })
-    }
+if (!adminIdValidation.valid) {
+  return res.status(adminIdValidation.status).json({
+    error: !admin_id ? 'admin_id is required' : 'Invalid admin ID format',
+  })
+}
 
     const { data: adminUser, error: adminError } = await supabase
       .from('users')
@@ -810,20 +807,21 @@ app.patch('/api/role-requests/:id/approve', async (req, res) => {
     const { id } = req.params
     const { admin_id } = req.body
 
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const requestIdValidation = validateRequiredUuid(id, 'request ID')
 
-    if (!uuidRegex.test(id)) {
-      return res.status(400).json({ error: 'Invalid request ID format' })
-    }
+if (!requestIdValidation.valid) {
+  return res
+    .status(requestIdValidation.status)
+    .json({ error: 'Invalid request ID format' })
+}
 
-    if (!admin_id) {
-      return res.status(400).json({ error: 'admin_id is required' })
-    }
+const adminIdValidation = validateRequiredUuid(admin_id, 'admin_id')
 
-    if (!uuidRegex.test(admin_id)) {
-      return res.status(400).json({ error: 'Invalid admin ID format' })
-    }
+if (!adminIdValidation.valid) {
+  return res.status(adminIdValidation.status).json({
+    error: !admin_id ? 'admin_id is required' : 'Invalid admin ID format',
+  })
+}
 
     const { data: adminUser, error: adminError } = await supabase
       .from('users')
@@ -908,20 +906,21 @@ app.patch('/api/role-requests/:id/reject', async (req, res) => {
     const { id } = req.params
     const { admin_id } = req.body
 
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const requestIdValidation = validateRequiredUuid(id, 'request ID')
 
-    if (!uuidRegex.test(id)) {
-      return res.status(400).json({ error: 'Invalid request ID format' })
-    }
+if (!requestIdValidation.valid) {
+  return res
+    .status(requestIdValidation.status)
+    .json({ error: 'Invalid request ID format' })
+}
 
-    if (!admin_id) {
-      return res.status(400).json({ error: 'admin_id is required' })
-    }
+const adminIdValidation = validateRequiredUuid(admin_id, 'admin_id')
 
-    if (!uuidRegex.test(admin_id)) {
-      return res.status(400).json({ error: 'Invalid admin ID format' })
-    }
+if (!adminIdValidation.valid) {
+  return res.status(adminIdValidation.status).json({
+    error: !admin_id ? 'admin_id is required' : 'Invalid admin ID format',
+  })
+}
 
     const { data: adminUser, error: adminError } = await supabase
       .from('users')
@@ -1056,10 +1055,11 @@ app.patch('/api/queue/:clinicId/entry/:entryId/status', async (req, res) => {
     const { clinicId, entryId } = req.params
     const { status } = req.body
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(clinicId) || !uuidRegex.test(entryId)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
+    const idValidation = validateRequiredUuids({ clinicId, entryId })
+
+if (!idValidation.valid) {
+  return res.status(400).json({ error: 'Invalid ID format' })
+}
 
     const validStatuses = ['Waiting', 'In Consultation', 'Complete', 'Called']
     if (!status || !validStatuses.includes(status)) {
@@ -1140,10 +1140,11 @@ app.delete('/api/queue/:clinicId/entry/:entryId', async (req, res) => {
   try {
     const { clinicId, entryId } = req.params
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(clinicId) || !uuidRegex.test(entryId)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
+    const idValidation = validateRequiredUuids({ clinicId, entryId })
+
+if (!idValidation.valid) {
+  return res.status(400).json({ error: 'Invalid ID format' })
+}
 
     const oldQueue = await tryFetchActiveQueueSnapshot(clinicId)
 
@@ -1189,14 +1190,23 @@ app.get('/api/queue-notifications/:patientId', async (req, res) => {
     const { patientId } = req.params
     const { queue_entry_id } = req.query
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(patientId)) {
-      return res.status(400).json({ error: 'Invalid patient ID format' })
-    }
+    const patientIdValidation = validateRequiredUuid(patientId, 'patient ID')
 
-    if (queue_entry_id && !uuidRegex.test(queue_entry_id)) {
-      return res.status(400).json({ error: 'Invalid queue entry ID format' })
-    }
+if (!patientIdValidation.valid) {
+  return res
+    .status(patientIdValidation.status)
+    .json({ error: patientIdValidation.error })
+}
+
+if (queue_entry_id) {
+  const queueEntryIdValidation = validateRequiredUuid(queue_entry_id, 'queue entry ID')
+
+  if (!queueEntryIdValidation.valid) {
+    return res
+      .status(queueEntryIdValidation.status)
+      .json({ error: queueEntryIdValidation.error })
+  }
+}
 
     let query = supabase
       .from('queue_notifications')
@@ -1230,14 +1240,13 @@ app.get('/api/clinic-requests', async (req, res) => {
 
     const { admin_id, status } = req.query
 
-    if (!admin_id) {
-      return res.status(400).json({ error: 'admin_id is required' })
-    }
+    const adminIdValidation = validateRequiredUuid(admin_id, 'admin_id')
 
-    const uuidRegex = /^[0-9a-f-]{36}$/i
-    if (!uuidRegex.test(admin_id)) {
-      return res.status(400).json({ error: 'Invalid admin ID format' })
-    }
+if (!adminIdValidation.valid) {
+  return res.status(adminIdValidation.status).json({
+    error: !admin_id ? 'admin_id is required' : 'Invalid admin ID format',
+  })
+}
 
     const { data: admin, error: adminError } = await supabase
       .from('users')
@@ -1287,14 +1296,13 @@ app.patch('/api/clinic-requests/:id/approve', async (req, res) => {
     const { id } = req.params
     const { admin_id } = req.body
 
-    if (!admin_id) {
-      return res.status(400).json({ error: 'admin_id is required' })
-    }
+    const idValidation = validateRequiredUuids({ id, admin_id })
 
-    const uuidRegex = /^[0-9a-f-]{36}$/i
-    if (!uuidRegex.test(id) || !uuidRegex.test(admin_id)) {
-      return res.status(400).json({ error: 'Invalid request or admin ID format' })
-    }
+if (!idValidation.valid) {
+  return res.status(400).json({
+    error: !admin_id ? 'admin_id is required' : 'Invalid request or admin ID format',
+  })
+}
 
     const { data: admin, error: adminError } = await supabase
       .from('users')
@@ -1368,14 +1376,13 @@ app.patch('/api/clinic-requests/:id/reject', async (req, res) => {
     const { id } = req.params
     const { admin_id } = req.body
 
-    if (!admin_id) {
-      return res.status(400).json({ error: 'admin_id is required' })
-    }
+    const idValidation = validateRequiredUuids({ id, admin_id })
 
-    const uuidRegex = /^[0-9a-f-]{36}$/i
-    if (!uuidRegex.test(id) || !uuidRegex.test(admin_id)) {
-      return res.status(400).json({ error: 'Invalid request or admin ID format' })
-    }
+if (!idValidation.valid) {
+  return res.status(400).json({
+    error: !admin_id ? 'admin_id is required' : 'Invalid request or admin ID format',
+  })
+}
 
     const { data: admin, error: adminError } = await supabase
       .from('users')
@@ -1660,10 +1667,11 @@ app.get('/api/queue/:clinicId/completed-count', async (req, res) => {
   try {
     const { clinicId } = req.params
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(clinicId)) {
-      return res.status(400).json({ error: 'Invalid clinic ID format' })
-    }
+    const idValidation = validateRequiredUuid(clinicId, 'clinic ID')
+
+if (!idValidation.valid) {
+  return res.status(idValidation.status).json({ error: idValidation.error })
+}
 
     const { count, error } = await supabase
       .from('queue_entries')
@@ -1730,16 +1738,17 @@ const manualPatients = (patients || [])
     res.status(500).json({ error: 'Failed to fetch users' })
   }
 })
-
+//POST /api/queue/:clinicId/add-patient
 app.post('/api/queue/:clinicId/add-patient', async (req, res) => {
   try {
     const { clinicId } = req.params
     const { patient_id } = req.body
 
-    const uuidRegex = /^[0-9a-f-]{36}$/i
-    if (!uuidRegex.test(clinicId) || !uuidRegex.test(patient_id)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
+    const idValidation = validateRequiredUuids({ clinicId, patient_id })
+
+if (!idValidation.valid) {
+  return res.status(400).json({ error: 'Invalid ID format' })
+}
 
     // check patient not already in queue (same as join logic)
     const { data: activeQueues, error: activeError } = await supabase
@@ -1808,10 +1817,13 @@ const {
 app.get('/api/staff/:staffId/availability', async (req, res) => {
   try {
     const { staffId } = req.params
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(staffId)) {
-      return res.status(400).json({ error: 'Invalid staff ID format' })
-    }
+    const staffIdValidation = validateRequiredUuid(staffId, 'staff ID')
+
+if (!staffIdValidation.valid) {
+  return res
+    .status(staffIdValidation.status)
+    .json({ error: staffIdValidation.error })
+}
     const { data, error } = await supabase
       .from('staff_availability')
       .select('*')
