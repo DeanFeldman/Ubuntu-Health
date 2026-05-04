@@ -708,7 +708,8 @@ export default function BookingPage() {
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Booking failed. Please try again.')
-        resolvedBookingPatientId = data.patient?.id
+        //resolvedBookingPatientId = data.patient?.id
+          resolvedBookingPatientId = data.patient?.user_id
         if (!resolvedBookingPatientId) {
           throw new Error('Missing patient information')
         }
