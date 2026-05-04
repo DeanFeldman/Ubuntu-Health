@@ -720,16 +720,13 @@ app.get('/api/role-requests', async (req, res) => {
   try {
     const { admin_id, status } = req.query
 
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const adminIdValidation = validateRequiredUuid(admin_id, 'admin_id')
 
-    if (!admin_id) {
-      return res.status(400).json({ error: 'admin_id is required' })
-    }
-
-    if (!uuidRegex.test(admin_id)) {
-      return res.status(400).json({ error: 'Invalid admin ID format' })
-    }
+if (!adminIdValidation.valid) {
+  return res.status(adminIdValidation.status).json({
+    error: !admin_id ? 'admin_id is required' : 'Invalid admin ID format',
+  })
+}
 
     const { data: adminUser, error: adminError } = await supabase
       .from('users')
@@ -810,20 +807,21 @@ app.patch('/api/role-requests/:id/approve', async (req, res) => {
     const { id } = req.params
     const { admin_id } = req.body
 
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const requestIdValidation = validateRequiredUuid(id, 'request ID')
 
-    if (!uuidRegex.test(id)) {
-      return res.status(400).json({ error: 'Invalid request ID format' })
-    }
+if (!requestIdValidation.valid) {
+  return res
+    .status(requestIdValidation.status)
+    .json({ error: 'Invalid request ID format' })
+}
 
-    if (!admin_id) {
-      return res.status(400).json({ error: 'admin_id is required' })
-    }
+const adminIdValidation = validateRequiredUuid(admin_id, 'admin_id')
 
-    if (!uuidRegex.test(admin_id)) {
-      return res.status(400).json({ error: 'Invalid admin ID format' })
-    }
+if (!adminIdValidation.valid) {
+  return res.status(adminIdValidation.status).json({
+    error: !admin_id ? 'admin_id is required' : 'Invalid admin ID format',
+  })
+}
 
     const { data: adminUser, error: adminError } = await supabase
       .from('users')
@@ -908,20 +906,21 @@ app.patch('/api/role-requests/:id/reject', async (req, res) => {
     const { id } = req.params
     const { admin_id } = req.body
 
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const requestIdValidation = validateRequiredUuid(id, 'request ID')
 
-    if (!uuidRegex.test(id)) {
-      return res.status(400).json({ error: 'Invalid request ID format' })
-    }
+if (!requestIdValidation.valid) {
+  return res
+    .status(requestIdValidation.status)
+    .json({ error: 'Invalid request ID format' })
+}
 
-    if (!admin_id) {
-      return res.status(400).json({ error: 'admin_id is required' })
-    }
+const adminIdValidation = validateRequiredUuid(admin_id, 'admin_id')
 
-    if (!uuidRegex.test(admin_id)) {
-      return res.status(400).json({ error: 'Invalid admin ID format' })
-    }
+if (!adminIdValidation.valid) {
+  return res.status(adminIdValidation.status).json({
+    error: !admin_id ? 'admin_id is required' : 'Invalid admin ID format',
+  })
+}
 
     const { data: adminUser, error: adminError } = await supabase
       .from('users')
