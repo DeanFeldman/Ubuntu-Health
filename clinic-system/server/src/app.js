@@ -34,29 +34,6 @@ if (!supabaseUrl || !supabaseKey) {
 const supabase = createClient(supabaseUrl, supabaseKey)
 configureQueueNotificationService(supabase)
 
-const APPOINTMENT_STATUSES = ['Confirmed', 'Waiting', 'Completed', 'Cancelled', 'No-show']
-const BOOKED_APPOINTMENT_STATUSES = ['Confirmed', 'Waiting']
-
-function isValidAppointmentStatus(status) {
-  return APPOINTMENT_STATUSES.includes(status)
-}
-
-function normalizeAppointmentStatus(status) {
-  if (!status) return 'Confirmed'
-
-  const normalized = String(status).trim()
-
-  const legacyStatusMap = {
-    Pending: 'Confirmed',
-    Rescheduled: 'Confirmed',
-    Complete: 'Completed',
-    'No-show': 'No-show',
-    NoShow: 'No-show',
-    No_Show: 'No-show',
-  }
-
-  return legacyStatusMap[normalized] || normalized
-}
 
 async function fetchActiveQueueSnapshot(clinicId) {
   const { data, error } = await supabase
@@ -2637,6 +2614,15 @@ if (!idValidation.valid) {
     res.status(500).json({ error: 'Failed to fetch clinic appointments' })
   }
 })
+const {
+  BOOKED_APPOINTMENT_STATUSES,
+  normalizeAppointmentStatus,
+  canMarkAppointmentStatus,
+  canRescheduleAppointment,
+  canCancelAppointment,
+} = require('./appointmentStatusValidation')
+
+//PATCH /api/appointments/:id/status
 //PATCH /api/appointments/:id/status
 app.patch('/api/appointments/:id/status', async (req, res) => {
   try {
@@ -2645,9 +2631,9 @@ app.patch('/api/appointments/:id/status', async (req, res) => {
 
     const idValidation = validateRequiredUuid(id, 'appointment ID')
 
-if (!idValidation.valid) {
-  return res.status(idValidation.status).json({ error: idValidation.error })
-}
+    if (!idValidation.valid) {
+      return res.status(idValidation.status).json({ error: idValidation.error })
+    }
 
     const normalizedStatus = normalizeAppointmentStatus(status)
 
@@ -2667,10 +2653,15 @@ if (!idValidation.valid) {
       return res.status(404).json({ error: 'Appointment not found' })
     }
 
-    if (['Cancelled', 'Completed', 'No-show'].includes(appointment.status)) {
-      return res.status(409).json({
-        error: `Appointment is already ${appointment.status}`,
-      })
+    const statusValidation = canMarkAppointmentStatus(
+      appointment.status,
+      normalizedStatus
+    )
+
+    if (!statusValidation.valid) {
+      return res
+        .status(statusValidation.status)
+        .json({ error: statusValidation.error })
     }
 
     const { data, error } = await supabase
@@ -2727,11 +2718,13 @@ if (!idValidation.valid) {
       return res.status(404).json({ error: 'Appointment not found' })
     }
 
-    if (['Cancelled', 'Completed', 'No-show'].includes(appointment.status)) {
-      return res.status(409).json({
-        error: `Cannot reschedule an appointment that is ${appointment.status}`,
-      })
-    }
+    const rescheduleValidation = canRescheduleAppointment(appointment.status)
+
+if (!rescheduleValidation.valid) {
+  return res
+    .status(rescheduleValidation.status)
+    .json({ error: rescheduleValidation.error })
+}
 
     const { data: clinic, error: clinicError } = await supabase
       .from('clinics')
@@ -2830,15 +2823,13 @@ if (!idValidation.valid) {
       return res.status(404).json({ error: 'Appointment not found' })
     }
 
-    if (appointment.status === 'Cancelled') {
-      return res.status(409).json({ error: 'Appointment is already cancelled' })
-    }
+    const cancelValidation = canCancelAppointment(appointment.status)
 
-    if (['Completed', 'No-show'].includes(appointment.status)) {
-      return res.status(409).json({
-        error: `Cannot cancel an appointment that is ${appointment.status}`,
-      })
-    }
+if (!cancelValidation.valid) {
+  return res
+    .status(cancelValidation.status)
+    .json({ error: cancelValidation.error })
+}
 
     const { data, error } = await supabase
       .from('appointments')
