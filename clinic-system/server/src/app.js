@@ -411,11 +411,6 @@ app.get('/api/clinics', async (req, res) => {
 app.get('/api/clinics/:id/queue-metrics', async (req, res) => {
   try {
     const { id } = req.params
-
-    /*const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(id)) {
-      return res.status(400).json({ error: 'Invalid clinic ID format' })
-    }*/
     const idValidation = validateRequiredUuid(id, 'clinic ID')
 
     if (!idValidation.valid) {
@@ -533,10 +528,12 @@ app.get('/api/queue/:clinicId/estimated-wait-time/:patientId', async (req, res) 
   try {
     const { clinicId, patientId } = req.params
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(clinicId) || !uuidRegex.test(patientId)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
+    const idValidation = validateRequiredUuids({ clinicId, patientId })
+
+if (!idValidation.valid) {
+  return res.status(400).json({ error: 'Invalid ID format' })
+}
+
 
     const queuePosition = await fetchWaitingQueuePosition(clinicId, patientId)
 
@@ -575,10 +572,11 @@ app.get('/api/queue/:clinicId/position/:patientId', async (req, res) => {
   try {
     const { clinicId, patientId } = req.params
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(clinicId) || !uuidRegex.test(patientId)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
+    const idValidation = validateRequiredUuids({ clinicId, patientId })
+
+if (!idValidation.valid) {
+  return res.status(400).json({ error: 'Invalid ID format' })
+}
 
     const queuePosition = await fetchWaitingQueuePosition(clinicId, patientId)
 
@@ -782,11 +780,11 @@ app.get('/api/queue/:clinicId/status/:patientId', async (req, res) => {
   try {
     const { clinicId, patientId } = req.params
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(clinicId) || !uuidRegex.test(patientId)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
+    const idValidation = validateRequiredUuid(clinicId, 'clinic ID')
 
+if (!idValidation.valid) {
+  return res.status(idValidation.status).json({ error: idValidation.error })
+}
     const { data, error } = await supabase
       .from('queue_entries')
       .select('status, position, joined_at')
@@ -968,10 +966,11 @@ app.post('/api/queue/:clinicId/join', async (req, res) => {
     const { clinicId } = req.params
     const { patient_id, confirmed } = req.body
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(clinicId) || !uuidRegex.test(patient_id)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
+   const idValidation = validateRequiredUuids({ clinicId, patient_id })
+
+if (!idValidation.valid) {
+  return res.status(400).json({ error: 'Invalid ID format' })
+}
 
     const { data: clinic, error: clinicError } = await supabase
       .from('clinics')
@@ -2193,11 +2192,6 @@ app.get('/api/appointments/slots', async (req, res) => {
       startOfDay.toISOString(),
       startOfNextDay.toISOString()
     )
-
-    //return res.json(dailySlots.filter((slot) => !bookedTimes.has(slot)))
-    //const availableSlots = dailySlots.filter((slot) => !bookedTimes.has(slot))
-
-    //return res.json(sanitizeGeneratedSlots(availableSlots, date))
     const availableSlots = removeFullyBookedSlots(dailySlots, bookedTimes)
 
 const slotValidation = validateGeneratedSlots(availableSlots, date)
