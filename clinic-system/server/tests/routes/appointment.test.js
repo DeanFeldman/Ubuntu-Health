@@ -1333,4 +1333,85 @@ describe('POST /api/appointments', () => {
     expect(res.body).toEqual({ error: 'Failed to create appointment' })
   })
 })
+test('PATCH /api/appointments/:id/reschedule returns 409 when appointment is completed', async () => {
+  scenario.maybeSingle.appointments = [
+    {
+      data: {
+        id: validAppointmentId,
+        clinic_id: validClinicId,
+        patient_id: validPatientId,
+        slot_id: validSlotId,
+        status: 'Completed',
+      },
+      error: null,
+    },
+  ]
+
+  const res = await request(app)
+    .patch(`/api/appointments/${validAppointmentId}/reschedule`)
+    .send({
+      date: FUTURE_MONDAY,
+      time: '07:45',
+    })
+
+  expect(res.statusCode).toBe(409)
+  expect(res.body).toEqual({
+    error: 'Cannot reschedule an appointment that is Completed',
+  })
+})
+test('PATCH /api/appointments/:id/cancel returns 409 when appointment is no-show', async () => {
+  scenario.maybeSingle.appointments = [
+    {
+      data: {
+        id: validAppointmentId,
+        status: 'No-show',
+      },
+      error: null,
+    },
+  ]
+
+  const res = await request(app).patch(
+    `/api/appointments/${validAppointmentId}/cancel`
+  )
+
+  expect(res.statusCode).toBe(409)
+  expect(res.body).toEqual({
+    error: 'Cannot cancel an appointment that is No-show',
+  })
+})
+test('PATCH /api/appointments/:id/status marks appointment as No-show successfully', async () => {
+  scenario.maybeSingle.appointments = [
+    {
+      data: {
+        id: validAppointmentId,
+        status: 'Confirmed',
+      },
+      error: null,
+    },
+  ]
+
+  scenario.single.appointments = [
+    {
+      data: {
+        id: validAppointmentId,
+        status: 'No-show',
+      },
+      error: null,
+    },
+  ]
+
+  const res = await request(app)
+    .patch(`/api/appointments/${validAppointmentId}/status`)
+    .send({ status: 'No-show' })
+
+  expect(res.statusCode).toBe(200)
+  expect(res.body).toEqual({
+    message: 'Appointment marked as No-show',
+    appointment: {
+      id: validAppointmentId,
+      status: 'No-show',
+    },
+  })
+})
+
 })
