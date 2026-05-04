@@ -465,10 +465,11 @@ app.get('/api/queue/:clinicId', async (req, res) => {
   try {
     const { clinicId } = req.params
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(clinicId)) {
-      return res.status(400).json({ error: 'Invalid clinic ID format' })
-    }
+    const idValidation = validateRequiredUuid(clinicId, 'clinic ID')
+
+if (!idValidation.valid) {
+  return res.status(idValidation.status).json({ error: idValidation.error })
+}
 
     const { data: queueData, error: queueError } = await supabase
       .from('queue_entries')
@@ -2428,17 +2429,16 @@ const slot_datetime = selectedSlotValidation.slotDateTime
     return res.status(500).json({ error: 'Failed to create appointment' })
   }
 })
-
+//GET /api/appointments/patient/:patientId
 app.get('/api/appointments/patient/:patientId', async (req, res) => {
   try {
     const { patientId } = req.params
 
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const idValidation = validateRequiredUuid(patientId, 'patient ID')
 
-    if (!uuidRegex.test(patientId)) {
-      return res.status(400).json({ error: 'Invalid patient ID format' })
-    }
+if (!idValidation.valid) {
+  return res.status(idValidation.status).json({ error: idValidation.error })
+}
 
     const { data: appointments, error: appointmentError } = await supabase
       .from('appointments')
@@ -2510,18 +2510,17 @@ app.get('/api/appointments/patient/:patientId', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch patient appointments' })
   }
 })
-
+//GET /api/appointments/clinic/:clinicId
 app.get('/api/appointments/clinic/:clinicId', async (req, res) => {
   try {
     const { clinicId } = req.params
     const { date } = req.query
 
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const idValidation = validateRequiredUuid(clinicId, 'clinic ID')
 
-    if (!uuidRegex.test(clinicId)) {
-      return res.status(400).json({ error: 'Invalid clinic ID format' })
-    }
+if (!idValidation.valid) {
+  return res.status(idValidation.status).json({ error: idValidation.error })
+}
 
     if (!date) {
       return res.status(400).json({ error: 'Date is required' })
@@ -2616,18 +2615,17 @@ app.get('/api/appointments/clinic/:clinicId', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch clinic appointments' })
   }
 })
-
+//PATCH /api/appointments/:id/status
 app.patch('/api/appointments/:id/status', async (req, res) => {
   try {
     const { id } = req.params
     const { status } = req.body
 
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const idValidation = validateRequiredUuid(id, 'appointment ID')
 
-    if (!uuidRegex.test(id)) {
-      return res.status(400).json({ error: 'Invalid appointment ID format' })
-    }
+if (!idValidation.valid) {
+  return res.status(idValidation.status).json({ error: idValidation.error })
+}
 
     const normalizedStatus = normalizeAppointmentStatus(status)
 
@@ -2672,18 +2670,17 @@ app.patch('/api/appointments/:id/status', async (req, res) => {
   }
 })
 
-
+//PATCH /api/appointments/:id/reschedule
 app.patch('/api/appointments/:id/reschedule', async (req, res) => {
   try {
     const { id } = req.params
     const { date, time } = req.body
 
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const idValidation = validateRequiredUuid(id, 'appointment ID')
 
-    if (!uuidRegex.test(id)) {
-      return res.status(400).json({ error: 'Invalid appointment ID format' })
-    }
+if (!idValidation.valid) {
+  return res.status(idValidation.status).json({ error: idValidation.error })
+}
 
     if (!date || !time) {
       return res.status(400).json({ error: 'date and time are required' })
@@ -2788,18 +2785,16 @@ app.patch('/api/appointments/:id/reschedule', async (req, res) => {
     return res.status(500).json({ error: 'Failed to reschedule appointment' })
   }
 })
-
-
+//PATCH /api/appointments/:id/cancel
 app.patch('/api/appointments/:id/cancel', async (req, res) => {
   try {
     const { id } = req.params
 
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const idValidation = validateRequiredUuid(id, 'appointment ID')
 
-    if (!uuidRegex.test(id)) {
-      return res.status(400).json({ error: 'Invalid appointment ID format' })
-    }
+if (!idValidation.valid) {
+  return res.status(idValidation.status).json({ error: idValidation.error })
+}
 
     const { data: appointment, error: fetchError } = await supabase
       .from('appointments')
