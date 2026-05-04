@@ -1190,14 +1190,23 @@ app.get('/api/queue-notifications/:patientId', async (req, res) => {
     const { patientId } = req.params
     const { queue_entry_id } = req.query
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(patientId)) {
-      return res.status(400).json({ error: 'Invalid patient ID format' })
-    }
+    const patientIdValidation = validateRequiredUuid(patientId, 'patient ID')
 
-    if (queue_entry_id && !uuidRegex.test(queue_entry_id)) {
-      return res.status(400).json({ error: 'Invalid queue entry ID format' })
-    }
+if (!patientIdValidation.valid) {
+  return res
+    .status(patientIdValidation.status)
+    .json({ error: patientIdValidation.error })
+}
+
+if (queue_entry_id) {
+  const queueEntryIdValidation = validateRequiredUuid(queue_entry_id, 'queue entry ID')
+
+  if (!queueEntryIdValidation.valid) {
+    return res
+      .status(queueEntryIdValidation.status)
+      .json({ error: queueEntryIdValidation.error })
+  }
+}
 
     let query = supabase
       .from('queue_notifications')
@@ -1808,10 +1817,13 @@ const {
 app.get('/api/staff/:staffId/availability', async (req, res) => {
   try {
     const { staffId } = req.params
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(staffId)) {
-      return res.status(400).json({ error: 'Invalid staff ID format' })
-    }
+    const staffIdValidation = validateRequiredUuid(staffId, 'staff ID')
+
+if (!staffIdValidation.valid) {
+  return res
+    .status(staffIdValidation.status)
+    .json({ error: staffIdValidation.error })
+}
     const { data, error } = await supabase
       .from('staff_availability')
       .select('*')
