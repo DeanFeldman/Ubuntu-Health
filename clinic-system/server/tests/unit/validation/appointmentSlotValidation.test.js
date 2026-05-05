@@ -55,6 +55,10 @@ describe('appointmentSlotValidation', () => {
     it('returns false for invalid date text', () => {
       expect(isValidDateFormat('not-a-date')).toBe(false)
     })
+
+    it('returns false for rolled-over calendar dates', () => {
+      expect(isValidDateFormat('2099-02-31')).toBe(false)
+    })
   })
 
   describe('isPastDate', () => {

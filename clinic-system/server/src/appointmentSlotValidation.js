@@ -12,7 +12,9 @@ function isValidDateFormat(date) {
   if (!dateRegex.test(date)) return false
 
   const parsedDate = new Date(`${date}T00:00:00.000Z`)
-  return !Number.isNaN(parsedDate.getTime())
+  if (Number.isNaN(parsedDate.getTime())) return false
+
+  return parsedDate.toISOString().slice(0, 10) === date
 }
 
 function isPastDate(date) {
