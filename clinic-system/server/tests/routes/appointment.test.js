@@ -94,6 +94,7 @@ const validClinicId = '00000000-0000-0000-0000-000000000001'
 const validPatientId = '00000000-0000-0000-0000-000000000002'
 const validAppointmentId = '00000000-0000-0000-0000-000000000010'
 const validSlotId = '00000000-0000-0000-0000-000000000020'
+const newSlotId = '00000000-0000-0000-0000-000000000021'
 const invalidId = 'invalid-id'
 
 const FUTURE_MONDAY = '2099-05-11'
@@ -1269,7 +1270,18 @@ test('stores appointment using slot_id without extra appointment columns', async
       expect(res.body).toEqual({ error: 'Invalid appointment ID format' })
     })
 
-    test('returns 400 when date or time is missing', async () => {
+    test('returns 400 when date is missing', async () => {
+      const res = await request(app)
+        .patch(`/api/appointments/${validAppointmentId}/reschedule`)
+        .send({
+          time: '07:45',
+        })
+
+      expect(res.statusCode).toBe(400)
+      expect(res.body).toEqual({ error: 'date is required' })
+    })
+
+    test('returns 400 when time is missing', async () => {
       const res = await request(app)
         .patch(`/api/appointments/${validAppointmentId}/reschedule`)
         .send({
@@ -1277,10 +1289,22 @@ test('stores appointment using slot_id without extra appointment columns', async
         })
 
       expect(res.statusCode).toBe(400)
-      expect(res.body).toEqual({ error: 'date and time are required' })
+      expect(res.body).toEqual({ error: 'time is required' })
     })
 
-    test('returns 400 for invalid date or time format', async () => {
+    test('returns 400 for invalid date format', async () => {
+      const res = await request(app)
+        .patch(`/api/appointments/${validAppointmentId}/reschedule`)
+        .send({
+          date: 'not-a-date',
+          time: '07:45',
+        })
+
+      expect(res.statusCode).toBe(400)
+      expect(res.body).toEqual({ error: 'Invalid date format' })
+    })
+
+    test('returns 400 for invalid time format', async () => {
       const res = await request(app)
         .patch(`/api/appointments/${validAppointmentId}/reschedule`)
         .send({
@@ -1289,7 +1313,87 @@ test('stores appointment using slot_id without extra appointment columns', async
         })
 
       expect(res.statusCode).toBe(400)
-      expect(res.body).toEqual({ error: 'Invalid date or time format' })
+      expect(res.body).toEqual({ error: 'Invalid time format' })
+    })
+
+    test('returns 400 when reschedule date is in the past', async () => {
+      scenario.maybeSingle.appointments = [
+        {
+          data: {
+            id: validAppointmentId,
+            clinic_id: validClinicId,
+            patient_id: validPatientId,
+            slot_id: validSlotId,
+            status: 'Confirmed',
+          },
+          error: null,
+        },
+      ]
+
+      scenario.maybeSingle.clinics = [
+        {
+          data: {
+            id: validClinicId,
+            operating_hours: null,
+            appointment_duration_minutes: null,
+          },
+          error: null,
+        },
+      ]
+
+      const res = await request(app)
+        .patch(`/api/appointments/${validAppointmentId}/reschedule`)
+        .send({
+          date: '2020-01-01',
+          time: '07:45',
+        })
+
+      expect(res.statusCode).toBe(400)
+      expect(res.body).toEqual({ error: 'Cannot book a past time slot' })
+    })
+
+    test('returns 400 when reschedule time is earlier today', async () => {
+      const today = new Date().toISOString().slice(0, 10)
+      const weekday = new Date(`${today}T00:00:00`).toLocaleDateString(
+        'en-US',
+        { weekday: 'long' }
+      ).toLowerCase()
+
+      scenario.maybeSingle.appointments = [
+        {
+          data: {
+            id: validAppointmentId,
+            clinic_id: validClinicId,
+            patient_id: validPatientId,
+            slot_id: validSlotId,
+            status: 'Confirmed',
+          },
+          error: null,
+        },
+      ]
+
+      scenario.maybeSingle.clinics = [
+        {
+          data: {
+            id: validClinicId,
+            operating_hours: {
+              [weekday]: { open: '00:00', close: '23:59' },
+            },
+            appointment_duration_minutes: 15,
+          },
+          error: null,
+        },
+      ]
+
+      const res = await request(app)
+        .patch(`/api/appointments/${validAppointmentId}/reschedule`)
+        .send({
+          date: today,
+          time: '00:00',
+        })
+
+      expect(res.statusCode).toBe(400)
+      expect(res.body).toEqual({ error: 'Cannot book a past time slot' })
     })
 
     test('returns 404 when appointment is not found', async () => {
@@ -1362,6 +1466,33 @@ test('stores appointment using slot_id without extra appointment columns', async
       expect(res.statusCode).toBe(409)
       expect(res.body).toEqual({
         error: 'Cannot reschedule an appointment that is Completed',
+      })
+    })
+
+    test('returns 409 when appointment is a no-show', async () => {
+      scenario.maybeSingle.appointments = [
+        {
+          data: {
+            id: validAppointmentId,
+            clinic_id: validClinicId,
+            patient_id: validPatientId,
+            slot_id: validSlotId,
+            status: 'No-show',
+          },
+          error: null,
+        },
+      ]
+
+      const res = await request(app)
+        .patch(`/api/appointments/${validAppointmentId}/reschedule`)
+        .send({
+          date: FUTURE_MONDAY,
+          time: '07:45',
+        })
+
+      expect(res.statusCode).toBe(409)
+      expect(res.body).toEqual({
+        error: 'Cannot reschedule an appointment that is No-show',
       })
     })
 
@@ -1528,7 +1659,7 @@ test('stores appointment using slot_id without extra appointment columns', async
       scenario.maybeSingle.slots = [
         {
           data: {
-            id: validSlotId,
+            id: newSlotId,
             slot_datetime: `${FUTURE_MONDAY}T07:45:00.000Z`,
           },
           error: null,
@@ -1547,13 +1678,32 @@ test('stores appointment using slot_id without extra appointment columns', async
           data: [],
           error: null,
         },
+        {
+          count: 0,
+          error: null,
+        },
+        {
+          count: 1,
+          error: null,
+        },
+      ]
+
+      scenario.thenable.slots = [
+        {
+          data: null,
+          error: null,
+        },
+        {
+          data: null,
+          error: null,
+        },
       ]
 
       scenario.single.appointments = [
         {
           data: {
             id: validAppointmentId,
-            slot_id: validSlotId,
+            slot_id: newSlotId,
             status: 'Confirmed',
           },
           error: null,
@@ -1569,12 +1719,16 @@ test('stores appointment using slot_id without extra appointment columns', async
 
       expect(res.statusCode).toBe(200)
       expect(res.body).toEqual({
+        success: true,
         message: 'Appointment rescheduled successfully',
         appointment: {
           id: validAppointmentId,
-          slot_id: validSlotId,
+          slot_id: newSlotId,
           status: 'Confirmed',
+          slot_datetime: `${FUTURE_MONDAY}T07:45:00.000Z`,
         },
+        old_slot_id: validSlotId,
+        new_slot_id: newSlotId,
       })
 
       const updateBuilder = createdBuilders.find(
@@ -1583,8 +1737,119 @@ test('stores appointment using slot_id without extra appointment columns', async
       )
 
       expect(updateBuilder.update).toHaveBeenCalledWith({
-        slot_id: validSlotId,
+        slot_id: newSlotId,
         status: 'Confirmed',
+      })
+
+      const slotUpdateBuilders = createdBuilders.filter(
+        builder => builder.table === 'slots' && builder.update.mock.calls.length
+      )
+
+      expect(slotUpdateBuilders[0].update).toHaveBeenCalledWith({
+        is_available: true,
+      })
+      expect(slotUpdateBuilders[1].update).toHaveBeenCalledWith({
+        is_available: true,
+      })
+    })
+
+    test('does not release old slot when another active appointment still uses it and marks full new slot unavailable', async () => {
+      scenario.maybeSingle.appointments = [
+        {
+          data: {
+            id: validAppointmentId,
+            clinic_id: validClinicId,
+            patient_id: validPatientId,
+            slot_id: validSlotId,
+            status: 'Confirmed',
+          },
+          error: null,
+        },
+      ]
+
+      scenario.maybeSingle.clinics = [
+        {
+          data: {
+            id: validClinicId,
+            operating_hours: null,
+            appointment_duration_minutes: null,
+          },
+          error: null,
+        },
+      ]
+
+      scenario.maybeSingle.slots = [
+        {
+          data: {
+            id: newSlotId,
+            slot_datetime: `${FUTURE_MONDAY}T07:45:00.000Z`,
+          },
+          error: null,
+        },
+      ]
+
+      scenario.thenable.users = [
+        {
+          count: 1,
+          error: null,
+        },
+      ]
+
+      scenario.thenable.appointments = [
+        {
+          data: [],
+          error: null,
+        },
+        {
+          count: 1,
+          error: null,
+        },
+        {
+          count: 1,
+          error: null,
+        },
+      ]
+
+      scenario.thenable.slots = [
+        {
+          data: null,
+          error: null,
+        },
+        {
+          data: null,
+          error: null,
+        },
+      ]
+
+      scenario.single.appointments = [
+        {
+          data: {
+            id: validAppointmentId,
+            slot_id: newSlotId,
+            status: 'Confirmed',
+          },
+          error: null,
+        },
+      ]
+
+      const res = await request(app)
+        .patch(`/api/appointments/${validAppointmentId}/reschedule`)
+        .send({
+          date: FUTURE_MONDAY,
+          time: '07:45',
+        })
+
+      expect(res.statusCode).toBe(200)
+
+      const slotUpdateBuilders = createdBuilders.filter(
+        builder => builder.table === 'slots' && builder.update.mock.calls.length
+      )
+
+      expect(slotUpdateBuilders[0].update).toHaveBeenCalledWith({
+        is_available: false,
+      })
+      expect(slotUpdateBuilders[1].update).toHaveBeenCalledWith({
+        is_available: false,
       })
     })
   })

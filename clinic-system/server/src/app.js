@@ -206,6 +206,8 @@ function getTimeFromAppointmentDatetime(slotDatetime) {
 }
 
 const {
+  isValidDateFormat,
+  normalizeSlotTime,
   validateSlotRetrievalInput,
   validateGeneratedSlots,
   validateSelectedSlot,
@@ -309,6 +311,44 @@ async function findOrCreateClinicSlot(clinicId, slotDatetimeIso) {
   if (createdSlotError) throw createdSlotError
 
   return createdSlot
+}
+
+async function countActiveAppointmentsForSlot(clinicId, slotId) {
+  if (!slotId) return 0
+
+  const { count, error } = await supabase
+    .from('appointments')
+    .select('id', { count: 'exact', head: true })
+    .eq('clinic_id', clinicId)
+    .eq('slot_id', slotId)
+    .in('status', BOOKED_APPOINTMENT_STATUSES)
+
+  if (error) throw error
+
+  const parsedCount = Number(count)
+  return Number.isFinite(parsedCount) ? parsedCount : 0
+}
+
+async function updateSlotAvailability(slotId, isAvailable) {
+  if (!slotId) return
+
+  const { error } = await supabase
+    .from('slots')
+    .update({ is_available: isAvailable })
+    .eq('id', slotId)
+
+  if (error) throw error
+}
+
+async function refreshSlotAvailability({ clinicId, slotId, capacity }) {
+  if (!slotId) return
+
+  const activeCount = await countActiveAppointmentsForSlot(clinicId, slotId)
+  const safeCapacity = Number.isFinite(Number(capacity)) && Number(capacity) > 0
+    ? Number(capacity)
+    : 1
+
+  await updateSlotAvailability(slotId, activeCount < safeCapacity)
 }
 
 async function resequenceQueue(clinicId) {
@@ -2695,15 +2735,22 @@ if (!idValidation.valid) {
   return res.status(idValidation.status).json({ error: idValidation.error })
 }
 
-    if (!date || !time) {
-      return res.status(400).json({ error: 'date and time are required' })
+    if (!date) {
+      return res.status(400).json({ error: 'date is required' })
     }
 
-    const normalizedTime = getTimeFromAppointmentDatetime(time)
-    const slotDatetime = new Date(`${date}T${normalizedTime}:00`)
+    if (!time) {
+      return res.status(400).json({ error: 'time is required' })
+    }
 
-    if (!normalizedTime || Number.isNaN(slotDatetime.getTime())) {
-      return res.status(400).json({ error: 'Invalid date or time format' })
+    if (!isValidDateFormat(date)) {
+      return res.status(400).json({ error: 'Invalid date format' })
+    }
+
+    const requestedTime = normalizeSlotTime(time)
+
+    if (!requestedTime) {
+      return res.status(400).json({ error: 'Invalid time format' })
     }
 
     const { data: appointment, error: appointmentError } = await supabase
@@ -2746,11 +2793,20 @@ if (!rescheduleValidation.valid) {
       appointment_duration_minutes: schedule.appointment_duration_minutes,
     })
 
-    if (!validSlots.includes(normalizedTime)) {
-      return res.status(400).json({
-        error: 'Selected time is outside clinic hours or does not match the appointment duration',
-      })
+    const selectedSlotValidation = validateSelectedSlot({
+      date,
+      time: requestedTime,
+      validSlots,
+    })
+
+    if (!selectedSlotValidation.valid) {
+      return res
+        .status(selectedSlotValidation.status)
+        .json({ error: selectedSlotValidation.error })
     }
+
+    const oldSlotId = appointment.slot_id
+    const slotDatetime = selectedSlotValidation.slotDateTime
 
     const newSlot = await findOrCreateClinicSlot(
       appointment.clinic_id,
@@ -2791,9 +2847,29 @@ if (!rescheduleValidation.valid) {
 
     if (error) throw error
 
+    await refreshSlotAvailability({
+      clinicId: appointment.clinic_id,
+      slotId: oldSlotId,
+      capacity: staffCount,
+    })
+
+    if (newSlot.id !== oldSlotId) {
+      await refreshSlotAvailability({
+        clinicId: appointment.clinic_id,
+        slotId: newSlot.id,
+        capacity: staffCount,
+      })
+    }
+
     return res.json({
+      success: true,
       message: 'Appointment rescheduled successfully',
-      appointment: data,
+      appointment: {
+        ...data,
+        slot_datetime: newSlot.slot_datetime,
+      },
+      old_slot_id: oldSlotId,
+      new_slot_id: newSlot.id,
     })
   } catch (err) {
     console.error('Failed to reschedule appointment:', err)
