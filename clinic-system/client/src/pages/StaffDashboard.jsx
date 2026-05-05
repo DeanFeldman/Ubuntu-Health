@@ -1283,6 +1283,25 @@ const openReschedulePopup = appointment => {
   setShowReschedulePopup(true)
 }
 
+const closeReschedulePopup = () => {
+  if (rescheduleAppointmentLoading) return
+
+  setShowReschedulePopup(false)
+  setSelectedAppointment(null)
+  setRescheduleDate('')
+  setRescheduleTime('')
+  setRescheduleError('')
+  setRescheduleSlots([])
+  setRescheduleSlotsError('')
+}
+
+const handleRescheduleDateChange = event => {
+  setRescheduleDate(event.target.value)
+  setRescheduleTime('')
+  setRescheduleError('')
+  setRescheduleSlotsError('')
+}
+
 // The useEffect hook is used to fetch available time slots for rescheduling an appointment whenever the reschedule popup is shown, the selected appointment changes, or the reschedule date changes. 
 useEffect(() => {
   if (!showReschedulePopup || !selectedAppointment || !rescheduleDate) {
@@ -1318,9 +1337,9 @@ useEffect(() => {
 
       setRescheduleSlots(availableFutureSlots)
 
-      if (!availableFutureSlots.includes(rescheduleTime)) {
-        setRescheduleTime('')
-      }
+      setRescheduleTime(currentTime =>
+        availableFutureSlots.includes(currentTime) ? currentTime : ''
+      )
     } catch (err) {
       setRescheduleSlots([])
       setRescheduleSlotsError(err.message || 'Failed to load available slots.')
@@ -1334,13 +1353,14 @@ useEffect(() => {
   showReschedulePopup,
   selectedAppointment,
   rescheduleDate,
-  rescheduleTime,
   API_BASE,
 ])
 
 // The handleRescheduleAppointment function is responsible for validating the rescheduling inputs, sending a PATCH request to the server to update the appointment's date and time, and handling loading and error states.
 const handleRescheduleAppointment = async () => {
   if (!selectedAppointment) return
+
+  if (rescheduleAppointmentLoading === selectedAppointment.id) return
 
   setRescheduleError('')
 
@@ -1370,10 +1390,17 @@ const handleRescheduleAppointment = async () => {
       throw new Error(data.error || 'Could not reschedule appointment.')
     }
 
+    const message = data.message || 'Appointment rescheduled successfully.'
+
     setShowReschedulePopup(false)
     setSelectedAppointment(null)
+    setRescheduleDate('')
+    setRescheduleTime('')
+    setRescheduleSlots([])
+    setRescheduleSlotsError('')
+    setRescheduleError('')
     await fetchAppointmentsByDate()
-    showToast('Appointment rescheduled successfully.', 'success')
+    showToast(message, 'success')
   } catch (err) {
     setRescheduleError(err.message)
   } finally {
@@ -2181,8 +2208,7 @@ return (
         aria-labelledby="reschedule-appointment-title"
         onClick={e => {
           if (e.target === e.currentTarget) {
-            setShowReschedulePopup(false)
-            setSelectedAppointment(null)
+            closeReschedulePopup()
           }
         }}
       >
@@ -2206,7 +2232,8 @@ return (
               className="sd-dialog-input"
               type="date"
               value={rescheduleDate}
-              onChange={e => setRescheduleDate(e.target.value)}
+              min={new Date().toISOString().slice(0, 10)}
+              onChange={handleRescheduleDateChange}
             />
           </div>
 
@@ -2256,11 +2283,7 @@ return (
             <button
               type="button"
               className="sd-act-btn"
-              onClick={() => {
-                setShowReschedulePopup(false)
-                setSelectedAppointment(null)
-                setRescheduleError('')
-              }}
+              onClick={closeReschedulePopup}
               disabled={rescheduleAppointmentLoading === selectedAppointment.id}
             >
               Cancel
@@ -2270,7 +2293,11 @@ return (
               type="button"
               className="sd-act-btn sd-act-btn--primary"
               onClick={handleRescheduleAppointment}
-              disabled={rescheduleAppointmentLoading === selectedAppointment.id}
+              disabled={
+                rescheduleAppointmentLoading === selectedAppointment.id ||
+                !rescheduleDate ||
+                !rescheduleTime
+              }
             >
               {rescheduleAppointmentLoading === selectedAppointment.id
                 ? 'Saving…'

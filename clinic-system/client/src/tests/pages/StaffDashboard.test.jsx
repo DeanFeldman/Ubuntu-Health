@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import StaffDashboard from '../../pages/StaffDashboard'
 import { useAuth } from '../../context/AuthContext'
@@ -32,6 +32,19 @@ const defaultClinic = {
   },
 }
 
+const activeAppointment = {
+  id: 'appointment-1',
+  patient_id: 'patient-1',
+  clinic_id: 'clinic-1',
+  slot_id: 'slot-1',
+  status: 'Confirmed',
+  slot_datetime: '2099-05-11T10:00:00Z',
+  patient: {
+    full_name: 'Jane Appointment',
+    email: 'jane.appointment@example.com',
+  },
+}
+
 function renderDashboard(authOverride = {}) {
   useAuth.mockReturnValue({
     user: { id: 'staff-1', clinic_id: 'clinic-1' },
@@ -54,6 +67,11 @@ function setupFetchMock({
   queueError = 'Failed to load queue.',
   appointmentsOk = true,
   appointmentsError = 'Failed to load appointments.',
+  slots = ['09:00', '09:15'],
+  slotsOk = true,
+  slotsError = 'Failed to load slots.',
+  rescheduleOk = true,
+  rescheduleError = 'Could not reschedule appointment.',
   joinOk = true,
   joinError = 'Failed to add patient to queue',
   createPatientOk = true,
@@ -82,6 +100,27 @@ function setupFetchMock({
         ok: appointmentsOk,
         json: async () =>
           appointmentsOk ? { appointments } : { error: appointmentsError },
+      })
+    }
+
+    if (urlString.includes('/api/appointments/slots') && method === 'GET') {
+      return Promise.resolve({
+        ok: slotsOk,
+        json: async () => (slotsOk ? slots : { error: slotsError }),
+      })
+    }
+
+    if (urlString.includes('/api/appointments/') && urlString.includes('/reschedule') && method === 'PATCH') {
+      return Promise.resolve({
+        ok: rescheduleOk,
+        json: async () =>
+          rescheduleOk
+            ? {
+                success: true,
+                message: 'Appointment rescheduled successfully',
+                appointment: {},
+              }
+            : { error: rescheduleError },
       })
     }
 
@@ -413,6 +452,123 @@ describe('StaffDashboard', () => {
     await openSection(/appointments/i)
 
     expect(await screen.findByText('Appointments failed to load.')).toBeInTheDocument()
+  })
+
+  test('staff reschedule fetches slots and does not refetch when selecting a time', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock({
+      appointments: [activeAppointment],
+      slots: ['09:00', '09:15'],
+    })
+
+    renderDashboard()
+    await openSection(/appointments/i)
+
+    await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+
+    const slotButton = await screen.findByRole('button', { name: '9:15 AM' })
+
+    await waitFor(() => {
+      expect(
+        global.fetch.mock.calls.filter(([url]) =>
+          String(url).includes('/api/appointments/slots')
+        )
+      ).toHaveLength(1)
+    })
+
+    await user.click(slotButton)
+
+    expect(slotButton).toHaveAttribute('aria-pressed', 'true')
+    expect(
+      global.fetch.mock.calls.filter(([url]) =>
+        String(url).includes('/api/appointments/slots')
+      )
+    ).toHaveLength(1)
+  })
+
+  test('staff reschedule clears selected time when date changes', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock({
+      appointments: [activeAppointment],
+      slots: ['09:00', '09:15'],
+    })
+
+    renderDashboard()
+    await openSection(/appointments/i)
+
+    await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+
+    const slotButton = await screen.findByRole('button', { name: '9:15 AM' })
+    await user.click(slotButton)
+    expect(slotButton).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.change(screen.getByLabelText(/new date/i), {
+      target: { value: '2099-05-12' },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /confirm reschedule/i }))
+        .toBeDisabled()
+    })
+  })
+
+  test('staff reschedule sends PATCH and refreshes appointments on success', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock({
+      appointments: [activeAppointment],
+      slots: ['09:00', '09:15'],
+    })
+
+    renderDashboard()
+    await openSection(/appointments/i)
+
+    await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+    await user.click(await screen.findByRole('button', { name: '9:15 AM' }))
+    await user.click(screen.getByRole('button', { name: /confirm reschedule/i }))
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:8080/api/appointments/appointment-1/reschedule',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({
+            date: '2099-05-11',
+            time: '09:15',
+          }),
+        })
+      )
+    })
+
+    expect(await screen.findByText('Appointment rescheduled successfully'))
+      .toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: /reschedule appointment/i }))
+      .not.toBeInTheDocument()
+  })
+
+  test('staff reschedule displays backend errors in the modal', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock({
+      appointments: [activeAppointment],
+      slots: ['09:00'],
+      rescheduleOk: false,
+      rescheduleError: 'This slot is already booked',
+    })
+
+    renderDashboard()
+    await openSection(/appointments/i)
+
+    await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+    await user.click(await screen.findByRole('button', { name: '9:00 AM' }))
+    await user.click(screen.getByRole('button', { name: /confirm reschedule/i }))
+
+    expect(await screen.findByText(/This slot is already booked/))
+      .toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: /reschedule appointment/i }))
+      .toBeInTheDocument()
   })
 
   expect(screen.queryByRole('button', { name: /reschedule/i })).not.toBeInTheDocument()
