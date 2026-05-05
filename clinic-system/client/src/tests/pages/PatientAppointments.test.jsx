@@ -1,4 +1,5 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import PatientAppointments from '../../pages/PatientAppointments'
 
 const mockNavigate = jest.fn()
@@ -18,6 +19,36 @@ jest.mock('../../context/AuthContext', () => ({
 jest.mock('../../lib/getApiBase', () => () => 'http://localhost:5000')
 
 global.fetch = jest.fn()
+
+const activeAppointment = {
+  id: 'appointment-1',
+  patient_id: 'test-patient-id',
+  clinic_id: 'clinic-1',
+  slot_id: 'slot-1',
+  clinic_name: 'Ubuntu Clinic',
+  status: 'Confirmed',
+  slot_datetime: '2099-05-11T10:00:00Z',
+}
+
+async function openRescheduleConfirmation(user, slots = ['07:30', '07:45']) {
+  fetch
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ appointments: [activeAppointment] }),
+    })
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => slots,
+    })
+
+  render(<PatientAppointments />)
+
+  await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+  await user.click(await screen.findByRole('button', { name: '07:45' }))
+  await user.click(screen.getByRole('button', { name: /continue/i }))
+
+  return screen.getByRole('dialog', { name: /confirm reschedule/i })
+}
 
 describe('PatientAppointments', () => {
   beforeEach(() => {
@@ -44,14 +75,7 @@ describe('PatientAppointments', () => {
     fetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        appointments: [
-          {
-            id: 'appointment-1',
-            clinic_name: 'Ubuntu Clinic',
-            status: 'Confirmed',
-            slot_datetime: '2026-01-01T10:00:00Z',
-          },
-        ],
+        appointments: [activeAppointment],
       }),
     })
 
@@ -66,6 +90,338 @@ describe('PatientAppointments', () => {
     expect(screen.getByText('Date')).toBeInTheDocument()
     expect(screen.getAllByText('Time').length).toBeGreaterThan(0)
     expect(screen.getByText('Status')).toBeInTheDocument()
+  })
+
+  it('shows reschedule button for eligible appointments', async () => {
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ appointments: [activeAppointment] }),
+    })
+
+    render(<PatientAppointments />)
+
+    expect(await screen.findByRole('button', { name: /reschedule/i }))
+      .toBeInTheDocument()
+  })
+
+  it('hides reschedule button for final appointment statuses', async () => {
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        appointments: [
+          { ...activeAppointment, id: 'cancelled', status: 'Cancelled' },
+          { ...activeAppointment, id: 'completed', status: 'Completed' },
+          { ...activeAppointment, id: 'no-show', status: 'No-show' },
+        ],
+      }),
+    })
+
+    render(<PatientAppointments />)
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/ubuntu clinic/i).length).toBeGreaterThan(0)
+    })
+
+    expect(screen.queryByRole('button', { name: /reschedule/i }))
+      .not.toBeInTheDocument()
+  })
+
+  it('opens reschedule interface and fetches slots when date changes', async () => {
+    const user = userEvent.setup()
+
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ appointments: [activeAppointment] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ['07:30', '07:45'],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ['08:00', '08:15'],
+      })
+
+    render(<PatientAppointments />)
+
+    await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+
+    expect(screen.getByRole('dialog', { name: /reschedule appointment/i }))
+      .toBeInTheDocument()
+
+    const dateInput = screen.getByLabelText(/new date/i)
+    expect(dateInput).toBeInTheDocument()
+
+    await screen.findByRole('button', { name: '07:30' })
+
+    fireEvent.change(dateInput, { target: { value: '2099-05-12' } })
+
+    expect(await screen.findByRole('button', { name: '08:00' }))
+      .toBeInTheDocument()
+    expect(fetch).toHaveBeenLastCalledWith(
+      'http://localhost:5000/api/appointments/slots?clinic_id=clinic-1&date=2099-05-12',
+      { headers: { Accept: 'application/json' } }
+    )
+  })
+
+  it('shows slot loading state while fetching available slots', async () => {
+    const user = userEvent.setup()
+    let resolveSlots
+    const slotsPromise = new Promise((resolve) => {
+      resolveSlots = resolve
+    })
+
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ appointments: [activeAppointment] }),
+      })
+      .mockReturnValueOnce(slotsPromise)
+
+    render(<PatientAppointments />)
+
+    await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+
+    expect(await screen.findByText(/loading available slots/i))
+      .toBeInTheDocument()
+
+    resolveSlots({
+      ok: true,
+      json: async () => ['07:30'],
+    })
+
+    expect(await screen.findByRole('button', { name: '07:30' }))
+      .toBeInTheDocument()
+  })
+
+  it('shows slot error state when slot fetch fails', async () => {
+    const user = userEvent.setup()
+
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ appointments: [activeAppointment] }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({ error: 'Failed to load slots for test' }),
+      })
+
+    render(<PatientAppointments />)
+
+    await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+
+    expect(await screen.findByRole('alert'))
+      .toHaveTextContent('Failed to load slots for test')
+  })
+
+  it('shows empty state when no slots are available', async () => {
+    const user = userEvent.setup()
+
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ appointments: [activeAppointment] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      })
+
+    render(<PatientAppointments />)
+
+    await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+
+    expect(await screen.findByText(/no slots available for this date/i))
+      .toBeInTheDocument()
+  })
+
+  it('marks selected slot visually and enables continue', async () => {
+    const user = userEvent.setup()
+
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ appointments: [activeAppointment] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ['07:30', '07:45'],
+      })
+
+    render(<PatientAppointments />)
+
+    await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+
+    const continueButton = screen.getByRole('button', { name: /continue/i })
+    expect(continueButton).toBeDisabled()
+
+    const slotButton = await screen.findByRole('button', { name: '07:45' })
+    await user.click(slotButton)
+
+    expect(slotButton).toHaveAttribute('aria-pressed', 'true')
+    expect(slotButton).toHaveClass('q-slot-btn-selected')
+    expect(continueButton).not.toBeDisabled()
+  })
+
+  it('opens confirmation popup with old and new appointment details', async () => {
+    const user = userEvent.setup()
+
+    const confirmDialog = await openRescheduleConfirmation(user)
+
+    expect(confirmDialog).toBeInTheDocument()
+    expect(confirmDialog).toHaveTextContent('Ubuntu Clinic')
+    expect(confirmDialog).toHaveTextContent('Current date')
+    expect(confirmDialog).toHaveTextContent('Current time')
+    expect(confirmDialog).toHaveTextContent('New date')
+    expect(confirmDialog).toHaveTextContent('New time')
+    expect(confirmDialog).toHaveTextContent('07:45')
+    expect(confirmDialog).toHaveTextContent('Confirmed')
+  })
+
+  it('cancel in confirmation returns to slot selection without calling PATCH', async () => {
+    const user = userEvent.setup()
+
+    await openRescheduleConfirmation(user)
+    await user.click(screen.getByRole('button', { name: /back/i }))
+
+    expect(screen.queryByRole('dialog', { name: /confirm reschedule/i }))
+      .not.toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: /reschedule appointment/i }))
+      .toBeInTheDocument()
+    expect(fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('confirm calls PATCH with selected appointment id and body', async () => {
+    const user = userEvent.setup()
+
+    await openRescheduleConfirmation(user)
+
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        success: true,
+        message: 'Appointment rescheduled successfully',
+        appointment: {
+          ...activeAppointment,
+          slot_datetime: '2099-05-11T07:45:00Z',
+        },
+      }),
+    })
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ appointments: [] }),
+    })
+
+    await user.click(screen.getByRole('button', { name: /confirm reschedule/i }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        'http://localhost:5000/api/appointments/appointment-1/reschedule',
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            date: '2099-05-11',
+            time: '07:45',
+          }),
+        }
+      )
+    })
+  })
+
+  it('successful confirm refreshes appointments and closes reschedule modals', async () => {
+    const user = userEvent.setup()
+
+    await openRescheduleConfirmation(user)
+
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        success: true,
+        message: 'Appointment rescheduled successfully',
+        appointment: {
+          ...activeAppointment,
+          slot_datetime: '2099-05-11T07:45:00Z',
+        },
+      }),
+    })
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ appointments: [] }),
+    })
+
+    await user.click(screen.getByRole('button', { name: /confirm reschedule/i }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /confirm reschedule/i }))
+        .not.toBeInTheDocument()
+    })
+
+    expect(screen.queryByRole('dialog', { name: /reschedule appointment/i }))
+      .not.toBeInTheDocument()
+    expect(await screen.findByText('Appointment rescheduled successfully'))
+      .toBeInTheDocument()
+    expect(fetch).toHaveBeenLastCalledWith(
+      'http://localhost:5000/api/appointments/patient/test-patient-id',
+      { headers: { Accept: 'application/json' } }
+    )
+  })
+
+  it('backend error displays in confirmation modal and keeps selected details', async () => {
+    const user = userEvent.setup()
+
+    const confirmDialog = await openRescheduleConfirmation(user)
+
+    fetch.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: 'This slot is already booked' }),
+    })
+
+    await user.click(screen.getByRole('button', { name: /confirm reschedule/i }))
+
+    expect(await screen.findByRole('alert'))
+      .toHaveTextContent('This slot is already booked')
+    expect(confirmDialog).toBeInTheDocument()
+    expect(confirmDialog).toHaveTextContent('07:45')
+  })
+
+  it('confirm button is disabled while reschedule request is loading', async () => {
+    const user = userEvent.setup()
+    let resolveReschedule
+
+    await openRescheduleConfirmation(user)
+
+    fetch.mockReturnValueOnce(new Promise((resolve) => {
+      resolveReschedule = resolve
+    }))
+
+    await user.click(screen.getByRole('button', { name: /confirm reschedule/i }))
+
+    expect(screen.getByRole('button', { name: /rescheduling/i }))
+      .toBeDisabled()
+
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ appointments: [] }),
+    })
+    resolveReschedule({
+      ok: true,
+      json: async () => ({
+        success: true,
+        message: 'Appointment rescheduled successfully',
+        appointment: activeAppointment,
+      }),
+    })
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /confirm reschedule/i }))
+        .not.toBeInTheDocument()
+    })
   })
 
   it('shows an error message when appointments fail to load', async () => {

@@ -136,6 +136,8 @@ const styles = `
     border-top: 1px solid var(--uh-border);
     display: flex;
     justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
   }
 
   .q-empty-state {
@@ -299,6 +301,69 @@ const styles = `
     flex: 1;
   }
 
+  .q-modal-field {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+  .q-modal-label {
+    color: var(--uh-text);
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .q-modal-input {
+    width: 100%;
+    border: 1px solid var(--uh-border);
+    border-radius: 10px;
+    background: var(--uh-surface);
+    color: var(--uh-text);
+    font: inherit;
+    font-size: 14px;
+    padding: 11px 12px;
+  }
+  .q-modal-input:focus {
+    border-color: var(--uh-primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    outline: none;
+  }
+  .q-slot-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+  .q-slot-btn {
+    background: var(--uh-bg);
+    border: 1px solid var(--uh-border);
+    border-radius: 10px;
+    color: var(--uh-text);
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    min-height: 42px;
+    padding: 10px 8px;
+  }
+  .q-slot-btn:hover {
+    border-color: var(--uh-primary);
+    background: #EFF6FF;
+  }
+  .q-slot-btn-selected {
+    background: var(--uh-primary);
+    border-color: var(--uh-primary);
+    color: #fff;
+  }
+  .q-slot-empty {
+    background: var(--uh-bg);
+    border: 1px solid var(--uh-border);
+    border-radius: 12px;
+    color: var(--uh-muted);
+    font-size: 14px;
+    margin-bottom: 18px;
+    padding: 16px;
+    text-align: center;
+  }
+
   .q-refresh-hint {
     text-align: center;
     font-size: 12px;
@@ -312,6 +377,21 @@ const STATUS_DOT = {
   Waiting: 'waiting',
   Completed: 'served',
   Cancelled: 'skipped',
+}
+
+const FINAL_APPOINTMENT_STATUSES = ['Cancelled', 'Completed', 'No-show']
+
+function getTodayDateValue() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function getAppointmentDateValue(appointment) {
+  const slotDate = appointment?.slot_datetime?.slice(0, 10)
+  const today = getTodayDateValue()
+
+  if (!slotDate || slotDate < today) return today
+
+  return slotDate
 }
 
 export default function PatientAppointments() {
@@ -330,6 +410,19 @@ export default function PatientAppointments() {
   const [appointmentToCancel, setAppointmentToCancel] = useState(null)
   const [cancelLoading, setCancelLoading] = useState(false)
   const [cancelError, setCancelError] = useState(null)
+
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false)
+  const [appointmentToReschedule, setAppointmentToReschedule] = useState(null)
+  const [rescheduleDate, setRescheduleDate] = useState('')
+  const [rescheduleTime, setRescheduleTime] = useState('')
+  const [rescheduleSlots, setRescheduleSlots] = useState([])
+  const [rescheduleSlotsLoading, setRescheduleSlotsLoading] = useState(false)
+  const [rescheduleSlotsError, setRescheduleSlotsError] = useState('')
+  const [rescheduleSelectionError, setRescheduleSelectionError] = useState('')
+  const [showRescheduleConfirm, setShowRescheduleConfirm] = useState(false)
+  const [rescheduleLoading, setRescheduleLoading] = useState(false)
+  const [rescheduleSubmitError, setRescheduleSubmitError] = useState('')
+  const [rescheduleSuccess, setRescheduleSuccess] = useState('')
 
   const fetchAppointments = useCallback(async () => {
     try {
@@ -363,6 +456,50 @@ export default function PatientAppointments() {
     fetchAppointments()
   }, [fetchAppointments])
 
+  useEffect(() => {
+    if (!showRescheduleModal || !appointmentToReschedule || !rescheduleDate) {
+      setRescheduleSlots([])
+      setRescheduleSlotsError('')
+      return
+    }
+
+    async function fetchRescheduleSlots() {
+      setRescheduleSlotsLoading(true)
+      setRescheduleSlotsError('')
+
+      try {
+        const res = await fetch(
+          `${API_BASE}/api/appointments/slots?clinic_id=${appointmentToReschedule.clinic_id}&date=${rescheduleDate}`,
+          { headers: { Accept: 'application/json' } }
+        )
+
+        const data = await res.json().catch(() => [])
+
+        if (!res.ok) {
+          throw new Error(data?.error || 'Failed to load available slots.')
+        }
+
+        const rawSlots = Array.isArray(data) ? data : []
+        const availableFutureSlots = rawSlots.filter((slot) => {
+          const slotDateTime = new Date(`${rescheduleDate}T${slot}:00`)
+          return slotDateTime > new Date()
+        })
+
+        setRescheduleSlots(availableFutureSlots)
+        setRescheduleTime((currentTime) =>
+          availableFutureSlots.includes(currentTime) ? currentTime : ''
+        )
+      } catch (err) {
+        setRescheduleSlots([])
+        setRescheduleSlotsError(err.message || 'Failed to load available slots.')
+      } finally {
+        setRescheduleSlotsLoading(false)
+      }
+    }
+
+    fetchRescheduleSlots()
+  }, [API_BASE, appointmentToReschedule, rescheduleDate, showRescheduleModal])
+
   // ── Open cancel modal ──
   function openCancelModal(appointment) {
     setAppointmentToCancel(appointment)
@@ -375,6 +512,101 @@ export default function PatientAppointments() {
     setShowCancelModal(false)
     setAppointmentToCancel(null)
     setCancelError(null)
+  }
+
+  function openRescheduleModal(appointment) {
+    setAppointmentToReschedule(appointment)
+    setRescheduleDate(getAppointmentDateValue(appointment))
+    setRescheduleTime('')
+    setRescheduleSlots([])
+    setRescheduleSlotsError('')
+    setRescheduleSelectionError('')
+    setShowRescheduleConfirm(false)
+    setRescheduleSubmitError('')
+    setRescheduleSuccess('')
+    setShowRescheduleModal(true)
+  }
+
+  function resetRescheduleState() {
+    setShowRescheduleModal(false)
+    setShowRescheduleConfirm(false)
+    setAppointmentToReschedule(null)
+    setRescheduleDate('')
+    setRescheduleTime('')
+    setRescheduleSlots([])
+    setRescheduleSlotsError('')
+    setRescheduleSelectionError('')
+    setRescheduleSubmitError('')
+    setRescheduleLoading(false)
+  }
+
+  function dismissRescheduleModal() {
+    if (rescheduleLoading) return
+
+    resetRescheduleState()
+  }
+
+  function dismissRescheduleConfirm() {
+    if (rescheduleLoading) return
+
+    setShowRescheduleConfirm(false)
+    setRescheduleSubmitError('')
+  }
+
+  function handleRescheduleDateChange(event) {
+    setRescheduleDate(event.target.value)
+    setRescheduleTime('')
+    setRescheduleSelectionError('')
+    setShowRescheduleConfirm(false)
+    setRescheduleSubmitError('')
+  }
+
+  function handleRescheduleContinue() {
+    if (!rescheduleDate || !rescheduleTime) {
+      setRescheduleSelectionError('Choose a date and time to continue.')
+      return
+    }
+
+    setRescheduleSelectionError('')
+    setRescheduleSubmitError('')
+    setShowRescheduleConfirm(true)
+  }
+
+  async function handleConfirmReschedule() {
+    if (!appointmentToReschedule || !rescheduleDate || !rescheduleTime) return
+
+    setRescheduleLoading(true)
+    setRescheduleSubmitError('')
+
+    try {
+      const res = await fetch(`${API_BASE}/api/appointments/${appointmentToReschedule.id}/reschedule`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          date: rescheduleDate,
+          time: rescheduleTime,
+        }),
+      })
+
+      const data = await res.json().catch(() => null)
+
+      if (!res.ok) {
+        throw new Error(data?.error || 'Could not reschedule appointment.')
+      }
+
+      const message = data?.message || 'Appointment rescheduled successfully'
+
+      resetRescheduleState()
+      await fetchAppointments()
+      setRescheduleSuccess(message)
+    } catch (err) {
+      setRescheduleSubmitError(err.message || 'Could not reschedule appointment.')
+    } finally {
+      setRescheduleLoading(false)
+    }
   }
 
   // ── Confirm cancellation ──
@@ -427,6 +659,15 @@ export default function PatientAppointments() {
     })
   }
 
+  function formatDateValue(dateValue) {
+    if (!dateValue) return '--'
+    return formatDate(`${dateValue}T00:00:00`)
+  }
+
+  function formatSlotTime(timeValue) {
+    return timeValue || '--'
+  }
+
   return (
     <>
       <style>{styles}</style>
@@ -448,6 +689,13 @@ export default function PatientAppointments() {
           <p className="q-alert q-alert-error" role="alert">
             <span className="q-alert-icon">⚠</span>
             {fetchError}
+          </p>
+        )}
+
+        {!loadingAppointments && !fetchError && rescheduleSuccess && (
+          <p className="q-alert q-alert-success" role="status">
+            <span className="q-alert-icon">OK</span>
+            {rescheduleSuccess}
           </p>
         )}
 
@@ -515,8 +763,15 @@ export default function PatientAppointments() {
             </dl>
 
             {/* ── Cancel button ── */}
-            {appointment.status !== 'Cancelled' && appointment.status !== 'Completed' && (
+            {!FINAL_APPOINTMENT_STATUSES.includes(appointment.status) && (
               <footer className="q-card-footer">
+                <button
+                  type="button"
+                  className="q-btn q-btn-ghost"
+                  onClick={() => openRescheduleModal(appointment)}
+                >
+                  Reschedule
+                </button>
                 <button
                   type="button"
                   className="q-btn q-btn-danger"
@@ -530,7 +785,185 @@ export default function PatientAppointments() {
         ))}
       </main>
 
+      {showRescheduleModal && appointmentToReschedule && (
+        <aside
+          className="q-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reschedule-modal-title"
+          aria-describedby="reschedule-modal-desc"
+          onClick={(e) => { if (e.target === e.currentTarget) dismissRescheduleModal() }}
+        >
+          <article className="q-modal">
+            <div className="q-modal-icon" aria-hidden="true">R</div>
+
+            <h2 id="reschedule-modal-title">Reschedule appointment</h2>
+            <p className="q-modal-subtitle" id="reschedule-modal-desc">
+              Choose a new date and available time for {appointmentToReschedule.clinic_name || 'Clinic'}.
+            </p>
+
+            <div className="q-modal-details" aria-label="Current appointment">
+              <div className="q-modal-detail-row">
+                <span className="q-modal-detail-key">Current date</span>
+                <span className="q-modal-detail-val">{formatDate(appointmentToReschedule.slot_datetime)}</span>
+              </div>
+              <div className="q-modal-detail-row">
+                <span className="q-modal-detail-key">Current time</span>
+                <span className="q-modal-detail-val">{formatTime(appointmentToReschedule.slot_datetime)}</span>
+              </div>
+            </div>
+
+            <label className="q-modal-field" htmlFor="reschedule-date">
+              <span className="q-modal-label">New date</span>
+              <input
+                id="reschedule-date"
+                className="q-modal-input"
+                type="date"
+                value={rescheduleDate}
+                min={getTodayDateValue()}
+                onChange={handleRescheduleDateChange}
+              />
+            </label>
+
+            <div className="q-modal-field">
+              <span className="q-modal-label">Available times</span>
+
+              {!rescheduleDate ? (
+                <div className="q-slot-empty">Pick a date first.</div>
+              ) : rescheduleSlotsLoading ? (
+                <div className="q-slot-empty" aria-live="polite">Loading available slots...</div>
+              ) : rescheduleSlotsError ? (
+                <div className="q-slot-empty" role="alert">{rescheduleSlotsError}</div>
+              ) : rescheduleSlots.length === 0 ? (
+                <div className="q-slot-empty">No slots available for this date.</div>
+              ) : (
+                <div className="q-slot-grid" role="group" aria-label="Available reschedule times">
+                  {rescheduleSlots.map((slot) => (
+                    <button
+                      key={slot}
+                      type="button"
+                      className={`q-slot-btn ${rescheduleTime === slot ? 'q-slot-btn-selected' : ''}`}
+                      onClick={() => {
+                        setRescheduleTime(slot)
+                        setRescheduleSelectionError('')
+                      }}
+                      aria-pressed={rescheduleTime === slot}
+                    >
+                      {slot}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {rescheduleSelectionError && (
+              <p className="q-alert q-alert-error" role="alert" style={{ marginBottom: 16 }}>
+                <span className="q-alert-icon">!</span>
+                {rescheduleSelectionError}
+              </p>
+            )}
+
+            <footer className="q-modal-actions">
+              <button
+                type="button"
+                className="q-btn q-btn-ghost"
+                onClick={dismissRescheduleModal}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="q-btn q-btn-primary"
+                onClick={handleRescheduleContinue}
+                disabled={!rescheduleDate || !rescheduleTime}
+              >
+                Continue
+              </button>
+            </footer>
+          </article>
+        </aside>
+      )}
+
       {/* ── Cancel confirmation modal ── */}
+      {showRescheduleConfirm && appointmentToReschedule && (
+        <aside
+          className="q-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reschedule-confirm-title"
+          aria-describedby="reschedule-confirm-desc"
+          onClick={(e) => { if (e.target === e.currentTarget) dismissRescheduleConfirm() }}
+        >
+          <article className="q-modal">
+            <div className="q-modal-icon" aria-hidden="true">C</div>
+
+            <h2 id="reschedule-confirm-title">Confirm reschedule</h2>
+            <p className="q-modal-subtitle" id="reschedule-confirm-desc">
+              Review the updated appointment details before confirming.
+            </p>
+
+            <div className="q-modal-details" aria-label="Reschedule details">
+              <div className="q-modal-detail-row">
+                <span className="q-modal-detail-key">Clinic</span>
+                <span className="q-modal-detail-val">{appointmentToReschedule.clinic_name || 'Clinic'}</span>
+              </div>
+              <div className="q-modal-detail-row">
+                <span className="q-modal-detail-key">Current date</span>
+                <span className="q-modal-detail-val">{formatDate(appointmentToReschedule.slot_datetime)}</span>
+              </div>
+              <div className="q-modal-detail-row">
+                <span className="q-modal-detail-key">Current time</span>
+                <span className="q-modal-detail-val">{formatTime(appointmentToReschedule.slot_datetime)}</span>
+              </div>
+              <div className="q-modal-detail-row">
+                <span className="q-modal-detail-key">New date</span>
+                <span className="q-modal-detail-val">{formatDateValue(rescheduleDate)}</span>
+              </div>
+              <div className="q-modal-detail-row">
+                <span className="q-modal-detail-key">New time</span>
+                <span className="q-modal-detail-val">{formatSlotTime(rescheduleTime)}</span>
+              </div>
+              {appointmentToReschedule.service && (
+                <div className="q-modal-detail-row">
+                  <span className="q-modal-detail-key">Service</span>
+                  <span className="q-modal-detail-val">{appointmentToReschedule.service}</span>
+                </div>
+              )}
+              <div className="q-modal-detail-row">
+                <span className="q-modal-detail-key">Status</span>
+                <span className="q-modal-detail-val">{appointmentToReschedule.status || 'Confirmed'}</span>
+              </div>
+            </div>
+
+            {rescheduleSubmitError && (
+              <p className="q-alert q-alert-error" role="alert" style={{ marginBottom: 16 }}>
+                <span className="q-alert-icon">!</span>
+                {rescheduleSubmitError}
+              </p>
+            )}
+
+            <footer className="q-modal-actions">
+              <button
+                type="button"
+                className="q-btn q-btn-ghost"
+                onClick={dismissRescheduleConfirm}
+                disabled={rescheduleLoading}
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                className="q-btn q-btn-primary"
+                onClick={handleConfirmReschedule}
+                disabled={rescheduleLoading}
+              >
+                {rescheduleLoading ? 'Rescheduling...' : 'Confirm reschedule'}
+              </button>
+            </footer>
+          </article>
+        </aside>
+      )}
+
       {showCancelModal && appointmentToCancel && (
         <aside
           className="q-overlay"
