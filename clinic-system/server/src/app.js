@@ -2826,6 +2826,11 @@ app.patch('/api/appointments/:id/status', async (req, res) => {
     return res.status(500).json({ error: 'Failed to update appointment status' })
   }
 })
+const {
+  validateRescheduleRequest,
+  canUseRescheduleSlot,
+  buildRescheduleResponse,
+} = require('./appointmentRescheduleValidation')
 
 //PATCH /api/appointments/:id/reschedule
 app.patch('/api/appointments/:id/reschedule', async (req, res) => {
@@ -2839,23 +2844,19 @@ if (!idValidation.valid) {
   return res.status(idValidation.status).json({ error: idValidation.error })
 }
 
-    if (!date) {
-      return res.status(400).json({ error: 'date is required' })
-    }
+    const requestValidation = validateRescheduleRequest({
+  appointmentId: id,
+  date,
+  time,
+})
 
-    if (!time) {
-      return res.status(400).json({ error: 'time is required' })
-    }
+if (!requestValidation.valid) {
+  return res
+    .status(requestValidation.status)
+    .json({ error: requestValidation.error })
+}
 
-    if (!isValidDateFormat(date)) {
-      return res.status(400).json({ error: 'Invalid date format' })
-    }
-
-    const requestedTime = normalizeSlotTime(time)
-
-    if (!requestedTime) {
-      return res.status(400).json({ error: 'Invalid time format' })
-    }
+const requestedTime = requestValidation.normalizedTime
 
     const { data: appointment, error: appointmentError } = await supabase
       .from('appointments')
@@ -2929,15 +2930,16 @@ if (!rescheduleValidation.valid) {
 
     if (existingError) throw existingError
 
-    const bookedCount = Array.isArray(existingAppointments)
-      ? existingAppointments.length
-      : existingAppointments
-        ? 1
-        : 0
+    const slotCapacityValidation = canUseRescheduleSlot({
+  existingAppointments,
+  staffCount,
+})
 
-    if (bookedCount >= staffCount) {
-      return res.status(409).json({ error: 'This slot is already booked' })
-    }
+if (!slotCapacityValidation.valid) {
+  return res
+    .status(slotCapacityValidation.status)
+    .json({ error: slotCapacityValidation.error })
+}
 
     const { data, error } = await supabase
       .from('appointments')
@@ -2965,21 +2967,20 @@ if (!rescheduleValidation.valid) {
       })
     }
 
-    return res.json({
-      success: true,
-      message: 'Appointment rescheduled successfully',
-      appointment: {
-        ...data,
-        slot_datetime: newSlot.slot_datetime,
-      },
-      old_slot_id: oldSlotId,
-      new_slot_id: newSlot.id,
-    })
+    return res.json(
+  buildRescheduleResponse({
+    appointment,
+    updatedAppointment: data,
+    oldSlotId,
+    newSlot,
+  })
+)
   } catch (err) {
     console.error('Failed to reschedule appointment:', err)
     return res.status(500).json({ error: 'Failed to reschedule appointment' })
   }
 })
+
 //PATCH /api/appointments/:id/cancel
 app.patch('/api/appointments/:id/cancel', async (req, res) => {
   try {
