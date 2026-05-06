@@ -431,6 +431,31 @@ const styles = `
     color: var(--uh-muted);
     margin-top: 12px;
   }
+
+  /* ── Toast notification ── */
+  .q-toast {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #166534;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 13px 22px;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(17, 24, 39, 0.18);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 200;
+    white-space: nowrap;
+    animation: q-toast-in 0.2s ease;
+  }
+  @keyframes q-toast-in {
+    from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
 `
 
 const STATUS_DOT = {
@@ -501,6 +526,14 @@ export default function PatientAppointments() {
   const [appointmentToCancel, setAppointmentToCancel] = useState(null)
   const [cancelLoading, setCancelLoading] = useState(false)
   const [cancelError, setCancelError] = useState(null)
+
+  // ── Toast state ──
+  const [toast, setToast] = useState(null)
+
+  function showToast(message) {
+    setToast(message)
+    setTimeout(() => setToast(null), 3500)
+  }
 
   const [showRescheduleModal, setShowRescheduleModal] = useState(false)
   const [appointmentToReschedule, setAppointmentToReschedule] = useState(null)
@@ -727,9 +760,11 @@ export default function PatientAppointments() {
         throw new Error(data?.error || 'Could not cancel appointment.')
       }
 
+      // Remove cancelled appointment client-side — DB record is preserved
+      setAppointments((prev) => prev.filter((a) => a.id !== appointmentToCancel.id))
       setShowCancelModal(false)
       setAppointmentToCancel(null)
-      await fetchAppointments()
+      showToast('Appointment cancelled successfully')
     } catch (err) {
       setCancelError(err.message)
     } finally {
@@ -795,12 +830,12 @@ export default function PatientAppointments() {
           </p>
         )}
 
-        {!loadingAppointments && !fetchError && appointments.length === 0 && (
+        {!loadingAppointments && !fetchError && appointments.filter((a) => a.status !== 'Cancelled').length === 0 && (
           <article className="q-card">
             <section className="q-empty-state">
-              <p className="q-empty-icon" aria-hidden="true">📅</p>
+              <p className="q-empty-icon" aria-hidden="true">📋</p>
               <h2>No upcoming appointments</h2>
-              <p>Book an appointment at a clinic to see it listed here.</p>
+              <p>Browse available clinics and tap <strong>Book Appointment</strong> to get started.</p>
               <button
                 className="q-btn q-btn-primary"
                 onClick={() => navigate('/clinic')}
@@ -811,7 +846,9 @@ export default function PatientAppointments() {
           </article>
         )}
 
-        {!loadingAppointments && !fetchError && appointments.map((appointment) => (
+        {!loadingAppointments && !fetchError && appointments
+          .filter((a) => a.status !== 'Cancelled')
+          .map((appointment) => (
           <article className="q-card" key={appointment.id}>
             <header className="q-status-row">
               <span
@@ -880,6 +917,13 @@ export default function PatientAppointments() {
           </article>
         ))}
       </main>
+
+      {/* ── Success toast ── */}
+      {toast && (
+        <div className="q-toast" role="status" aria-live="polite">
+          ✓ {toast}
+        </div>
+      )}
 
       {showRescheduleModal && appointmentToReschedule && (
         <aside
