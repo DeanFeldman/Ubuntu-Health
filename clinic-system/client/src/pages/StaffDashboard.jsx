@@ -691,6 +691,8 @@ const BADGE_CLASS = {
   
 }
 
+const CLINIC_TIME_ZONE = 'Africa/Johannesburg'
+
 // The Toast component is a reusable component for displaying temporary notification messages to the user. 
 function Toast({ message, type, visible }) {
   return (
@@ -713,6 +715,35 @@ function formatTimeLabel(timeStr) {
   const hour = h % 12 || 12
 
   return `${hour}:${String(m).padStart(2, '0')} ${period}`
+}
+
+function getLocalDateTimeParts(dateString) {
+  if (!dateString) return { date: '', time: '' }
+
+  const date = new Date(dateString)
+  if (Number.isNaN(date.getTime())) {
+    return {
+      date: typeof dateString === 'string' ? dateString.slice(0, 10) : '',
+      time: typeof dateString === 'string' ? dateString.slice(11, 16) : '',
+    }
+  }
+
+  const parts = new Intl.DateTimeFormat('en-ZA', {
+    timeZone: CLINIC_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date)
+
+  const valueByType = Object.fromEntries(parts.map(part => [part.type, part.value]))
+
+  return {
+    date: `${valueByType.year}-${valueByType.month}-${valueByType.day}`,
+    time: `${valueByType.hour}:${valueByType.minute}`,
+  }
 }
 
 function getDisplayName(entry) {
@@ -1272,7 +1303,7 @@ const handleAppointmentStatusUpdate = async (appointment, status) => {
 // The openReschedulePopup function is called when the user wants to reschedule an appointment. 
 
 const openReschedulePopup = appointment => {
-  const slotDate = appointment.slot_datetime?.slice(0, 10) || appointmentDate
+  const slotDate = getLocalDateTimeParts(appointment.slot_datetime).date || appointmentDate
 
   setSelectedAppointment(appointment)
   setRescheduleDate(slotDate)
@@ -1329,10 +1360,15 @@ useEffect(() => {
       }
 
       const rawSlots = Array.isArray(data) ? data : []
+      const currentAppointmentSlot = getLocalDateTimeParts(selectedAppointment.slot_datetime)
 
       const availableFutureSlots = rawSlots.filter(slot => {
         const slotDateTime = new Date(`${rescheduleDate}T${slot}:00`)
-        return slotDateTime > new Date()
+        const isCurrentAppointmentSlot =
+          rescheduleDate === currentAppointmentSlot.date &&
+          slot === currentAppointmentSlot.time
+
+        return slotDateTime > new Date() && !isCurrentAppointmentSlot
       })
 
       setRescheduleSlots(availableFutureSlots)
