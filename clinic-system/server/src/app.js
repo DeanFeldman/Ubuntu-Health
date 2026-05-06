@@ -16,7 +16,10 @@ const {
   generateDailySlots,
   resolveClinicSchedule,
 } = require('./clinicSchedule')
-
+const {
+  validateRequiredUuid,
+  validateRequiredUuids,
+} = require('./commonValidation')
 app.use(cors())
 app.use(express.json())
 
@@ -31,29 +34,6 @@ if (!supabaseUrl || !supabaseKey) {
 const supabase = createClient(supabaseUrl, supabaseKey)
 configureQueueNotificationService(supabase)
 
-const APPOINTMENT_STATUSES = ['Confirmed', 'Waiting', 'Completed', 'Cancelled', 'No-show']
-const BOOKED_APPOINTMENT_STATUSES = ['Confirmed', 'Waiting']
-
-function isValidAppointmentStatus(status) {
-  return APPOINTMENT_STATUSES.includes(status)
-}
-
-function normalizeAppointmentStatus(status) {
-  if (!status) return 'Confirmed'
-
-  const normalized = String(status).trim()
-
-  const legacyStatusMap = {
-    Pending: 'Confirmed',
-    Rescheduled: 'Confirmed',
-    Complete: 'Completed',
-    'No-show': 'No-show',
-    NoShow: 'No-show',
-    No_Show: 'No-show',
-  }
-
-  return legacyStatusMap[normalized] || normalized
-}
 
 async function fetchActiveQueueSnapshot(clinicId) {
   const { data, error } = await supabase
@@ -207,21 +187,6 @@ async function fetchWaitingQueuePosition(clinicId, patientId) {
     patientsAhead: patientsAhead || 0,
   }
 }
-
-/*function getTimeFromAppointmentDatetime(slotDatetime) {
-  if (!slotDatetime) return null
-
-  if (typeof slotDatetime === 'string') {
-    const match = slotDatetime.match(/(\d{2}:\d{2})/)
-    if (match) return match[1]
-  }
-
-
-  const parsedDate = new Date(slotDatetime)
-  if (Number.isNaN(parsedDate.getTime())) return null
-
-  return `${String(parsedDate.getHours()).padStart(2, '0')}:${String(parsedDate.getMinutes()).padStart(2, '0')}`
-}*/
 function getTimeFromAppointmentDatetime(slotDatetime) {
   if (!slotDatetime) return null
 
@@ -240,7 +205,14 @@ function getTimeFromAppointmentDatetime(slotDatetime) {
   })
 }
 
-const { validateSlotRetrievalInput, sanitizeGeneratedSlots } = require('./appointmentSlotValidation')
+const {
+  isValidDateFormat,
+  normalizeSlotTime,
+  validateSlotRetrievalInput,
+  validateGeneratedSlots,
+  validateSelectedSlot,
+  removeFullyBookedSlots,
+} = require('./appointmentSlotValidation')
 
 async function fetchClinicBookingCapacity(clinicId) {
   try {
@@ -341,6 +313,44 @@ async function findOrCreateClinicSlot(clinicId, slotDatetimeIso) {
   return createdSlot
 }
 
+async function countActiveAppointmentsForSlot(clinicId, slotId) {
+  if (!slotId) return 0
+
+  const { count, error } = await supabase
+    .from('appointments')
+    .select('id', { count: 'exact', head: true })
+    .eq('clinic_id', clinicId)
+    .eq('slot_id', slotId)
+    .in('status', BOOKED_APPOINTMENT_STATUSES)
+
+  if (error) throw error
+
+  const parsedCount = Number(count)
+  return Number.isFinite(parsedCount) ? parsedCount : 0
+}
+
+async function updateSlotAvailability(slotId, isAvailable) {
+  if (!slotId) return
+
+  const { error } = await supabase
+    .from('slots')
+    .update({ is_available: isAvailable })
+    .eq('id', slotId)
+
+  if (error) throw error
+}
+
+async function refreshSlotAvailability({ clinicId, slotId, capacity }) {
+  if (!slotId) return
+
+  const activeCount = await countActiveAppointmentsForSlot(clinicId, slotId)
+  const safeCapacity = Number.isFinite(Number(capacity)) && Number(capacity) > 0
+    ? Number(capacity)
+    : 1
+
+  await updateSlotAvailability(slotId, activeCount < safeCapacity)
+}
+
 async function resequenceQueue(clinicId) {
   const { data: activeEntries, error: fetchError } = await supabase
     .from('queue_entries')
@@ -418,10 +428,10 @@ app.get('/api/clinics', async (req, res) => {
 app.get('/api/clinics/:id/queue-metrics', async (req, res) => {
   try {
     const { id } = req.params
+    const idValidation = validateRequiredUuid(id, 'clinic ID')
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(id)) {
-      return res.status(400).json({ error: 'Invalid clinic ID format' })
+    if (!idValidation.valid) {
+      return res.status(idValidation.status).json({ error: idValidation.error })
     }
 
     const metrics = await fetchClinicQueueMetrics(id)
@@ -445,9 +455,10 @@ app.get('/api/clinics/:id', async (req, res) => {
   try {
     const { id } = req.params
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(id)) {
-      return res.status(400).json({ error: 'Invalid clinic ID format' })
+    const idValidation = validateRequiredUuid(id, 'clinic ID')
+
+    if (!idValidation.valid) {
+      return res.status(idValidation.status).json({ error: idValidation.error })
     }
 
     const { data, error } = await supabase
@@ -471,10 +482,11 @@ app.get('/api/queue/:clinicId', async (req, res) => {
   try {
     const { clinicId } = req.params
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(clinicId)) {
-      return res.status(400).json({ error: 'Invalid clinic ID format' })
-    }
+    const idValidation = validateRequiredUuid(clinicId, 'clinic ID')
+
+if (!idValidation.valid) {
+  return res.status(idValidation.status).json({ error: idValidation.error })
+}
 
     const { data: queueData, error: queueError } = await supabase
       .from('queue_entries')
@@ -534,10 +546,12 @@ app.get('/api/queue/:clinicId/estimated-wait-time/:patientId', async (req, res) 
   try {
     const { clinicId, patientId } = req.params
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(clinicId) || !uuidRegex.test(patientId)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
+    const idValidation = validateRequiredUuids({ clinicId, patientId })
+
+if (!idValidation.valid) {
+  return res.status(400).json({ error: 'Invalid ID format' })
+}
+
 
     const queuePosition = await fetchWaitingQueuePosition(clinicId, patientId)
 
@@ -576,10 +590,11 @@ app.get('/api/queue/:clinicId/position/:patientId', async (req, res) => {
   try {
     const { clinicId, patientId } = req.params
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(clinicId) || !uuidRegex.test(patientId)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
+    const idValidation = validateRequiredUuids({ clinicId, patientId })
+
+if (!idValidation.valid) {
+  return res.status(400).json({ error: 'Invalid ID format' })
+}
 
     const queuePosition = await fetchWaitingQueuePosition(clinicId, patientId)
 
@@ -620,10 +635,11 @@ app.get('/api/queue/:clinicId/entry/:patientId', async (req, res) => {
   try {
     const { clinicId, patientId } = req.params
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(clinicId) || !uuidRegex.test(patientId)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
+    const idValidation = validateRequiredUuids({ clinicId, patientId })
+
+if (!idValidation.valid) {
+  return res.status(400).json({ error: 'Invalid ID format' })
+}
 
     const { data, error } = await supabase
       .from('queue_entries')
@@ -721,16 +737,13 @@ app.get('/api/role-requests', async (req, res) => {
   try {
     const { admin_id, status } = req.query
 
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const adminIdValidation = validateRequiredUuid(admin_id, 'admin_id')
 
-    if (!admin_id) {
-      return res.status(400).json({ error: 'admin_id is required' })
-    }
-
-    if (!uuidRegex.test(admin_id)) {
-      return res.status(400).json({ error: 'Invalid admin ID format' })
-    }
+if (!adminIdValidation.valid) {
+  return res.status(adminIdValidation.status).json({
+    error: !admin_id ? 'admin_id is required' : 'Invalid admin ID format',
+  })
+}
 
     const { data: adminUser, error: adminError } = await supabase
       .from('users')
@@ -783,11 +796,11 @@ app.get('/api/queue/:clinicId/status/:patientId', async (req, res) => {
   try {
     const { clinicId, patientId } = req.params
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(clinicId) || !uuidRegex.test(patientId)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
+    const idValidation = validateRequiredUuids({ clinicId, patientId })
 
+if (!idValidation.valid) {
+  return res.status(400).json({ error: 'Invalid ID format' })
+}
     const { data, error } = await supabase
       .from('queue_entries')
       .select('status, position, joined_at')
@@ -811,20 +824,21 @@ app.patch('/api/role-requests/:id/approve', async (req, res) => {
     const { id } = req.params
     const { admin_id } = req.body
 
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const requestIdValidation = validateRequiredUuid(id, 'request ID')
 
-    if (!uuidRegex.test(id)) {
-      return res.status(400).json({ error: 'Invalid request ID format' })
-    }
+if (!requestIdValidation.valid) {
+  return res
+    .status(requestIdValidation.status)
+    .json({ error: 'Invalid request ID format' })
+}
 
-    if (!admin_id) {
-      return res.status(400).json({ error: 'admin_id is required' })
-    }
+const adminIdValidation = validateRequiredUuid(admin_id, 'admin_id')
 
-    if (!uuidRegex.test(admin_id)) {
-      return res.status(400).json({ error: 'Invalid admin ID format' })
-    }
+if (!adminIdValidation.valid) {
+  return res.status(adminIdValidation.status).json({
+    error: !admin_id ? 'admin_id is required' : 'Invalid admin ID format',
+  })
+}
 
     const { data: adminUser, error: adminError } = await supabase
       .from('users')
@@ -909,20 +923,21 @@ app.patch('/api/role-requests/:id/reject', async (req, res) => {
     const { id } = req.params
     const { admin_id } = req.body
 
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const requestIdValidation = validateRequiredUuid(id, 'request ID')
 
-    if (!uuidRegex.test(id)) {
-      return res.status(400).json({ error: 'Invalid request ID format' })
-    }
+if (!requestIdValidation.valid) {
+  return res
+    .status(requestIdValidation.status)
+    .json({ error: 'Invalid request ID format' })
+}
 
-    if (!admin_id) {
-      return res.status(400).json({ error: 'admin_id is required' })
-    }
+const adminIdValidation = validateRequiredUuid(admin_id, 'admin_id')
 
-    if (!uuidRegex.test(admin_id)) {
-      return res.status(400).json({ error: 'Invalid admin ID format' })
-    }
+if (!adminIdValidation.valid) {
+  return res.status(adminIdValidation.status).json({
+    error: !admin_id ? 'admin_id is required' : 'Invalid admin ID format',
+  })
+}
 
     const { data: adminUser, error: adminError } = await supabase
       .from('users')
@@ -969,10 +984,11 @@ app.post('/api/queue/:clinicId/join', async (req, res) => {
     const { clinicId } = req.params
     const { patient_id, confirmed } = req.body
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(clinicId) || !uuidRegex.test(patient_id)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
+   const idValidation = validateRequiredUuids({ clinicId, patient_id })
+
+if (!idValidation.valid) {
+  return res.status(400).json({ error: 'Invalid ID format' })
+}
 
     const { data: clinic, error: clinicError } = await supabase
       .from('clinics')
@@ -1041,74 +1057,74 @@ app.post('/api/queue/:clinicId/join', async (req, res) => {
 
     const queueNotifications = await triggerQueueNotificationsForClinicSafely(clinicId, oldQueue)
 
-// US-29-1-1: Check for a same-day appointment at this clinic
-const today = new Date().toISOString().slice(0, 10)
+    // US-29-1-1: Check for a same-day appointment at this clinic
+    const today = new Date().toISOString().slice(0, 10)
 
-const { data: patientAppointments, error: apptError } = await supabase
-  .from('appointments')
-  .select('id, clinic_id, slot_id, status')
-  .eq('patient_id', patient_id)
-  .in('status', ['Confirmed', 'Waiting'])
+    const { data: patientAppointments, error: apptError } = await supabase
+      .from('appointments')
+      .select('id, clinic_id, slot_id, status')
+      .eq('patient_id', patient_id)
+      .in('status', ['Confirmed', 'Waiting'])
 
-if (apptError) throw apptError
+    if (apptError) throw apptError
 
-const slotIds = [...new Set((patientAppointments || []).map(a => a.slot_id).filter(Boolean))]
-let appointmentsWithDatetime = []
+    const slotIds = [...new Set((patientAppointments || []).map(a => a.slot_id).filter(Boolean))]
+    let appointmentsWithDatetime = []
 
-if (slotIds.length > 0) {
-  const { data: slots, error: slotsError } = await supabase
-    .from('slots')
-    .select('id, slot_datetime')
-    .in('id', slotIds)
+    if (slotIds.length > 0) {
+      const { data: slots, error: slotsError } = await supabase
+        .from('slots')
+        .select('id, slot_datetime')
+        .in('id', slotIds)
 
-  if (slotsError) throw slotsError
+      if (slotsError) throw slotsError
 
-  const slotsById = Object.fromEntries((slots || []).map(s => [s.id, s]))
+      const slotsById = Object.fromEntries((slots || []).map(s => [s.id, s]))
 
-  appointmentsWithDatetime = (patientAppointments || []).map(a => ({
-    ...a,
-    slot_datetime: slotsById[a.slot_id]?.slot_datetime || null,
-  }))
-}
-
-// US-29-1-1: Find matching same-day appointment at this clinic
-const matchedAppointment = findSameDayClinicAppointment(appointmentsWithDatetime, clinicId, today)
-
-// US-29-1-2: Update matched appointment status to Waiting
-let linkedAppointment = null
-if (matchedAppointment) {
-  const { data: updatedAppointment, error: updateApptError } = await supabase
-    .from('appointments')
-    .update({ status: 'Waiting' })
-    .eq('id', matchedAppointment.id)
-    .select('id, clinic_id, slot_id, slot_datetime, status')
-    .single()
-
-  if (updateApptError) {
-    console.error('Failed to update appointment status on queue join:', updateApptError)
-  } else {
-    linkedAppointment = {
-      ...updatedAppointment,
-      slot_datetime: matchedAppointment.slot_datetime,
+      appointmentsWithDatetime = (patientAppointments || []).map(a => ({
+        ...a,
+        slot_datetime: slotsById[a.slot_id]?.slot_datetime || null,
+      }))
     }
-  }
-}
 
-// US-29-2-1: Return appointment time in response if linked
-res.status(201).json({
-  entry: newEntry,
-  queue_notifications: queueNotifications,
-  linked_appointment: linkedAppointment
-    ? {
-        id: linkedAppointment.id,
-        status: linkedAppointment.status,
-        slot_datetime: linkedAppointment.slot_datetime,
-        appointment_time: linkedAppointment.slot_datetime
-          ? getTimeFromAppointmentDatetime(linkedAppointment.slot_datetime)
-          : null,
+    // US-29-1-1: Find matching same-day appointment at this clinic
+    const matchedAppointment = findSameDayClinicAppointment(appointmentsWithDatetime, clinicId, today)
+
+    // US-29-1-2: Update matched appointment status to Waiting
+    let linkedAppointment = null
+    if (matchedAppointment) {
+      const { data: updatedAppointment, error: updateApptError } = await supabase
+        .from('appointments')
+        .update({ status: 'Waiting' })
+        .eq('id', matchedAppointment.id)
+        .select('id, clinic_id, slot_id, status')
+        .single()
+
+      if (updateApptError) {
+        console.error('Failed to update appointment status on queue join:', updateApptError)
+      } else {
+        linkedAppointment = {
+          ...updatedAppointment,
+          slot_datetime: matchedAppointment.slot_datetime,
+        }
       }
-    : null,
-})
+    }
+
+    // US-29-2-1: Return appointment time in response if linked
+    res.status(201).json({
+      entry: newEntry,
+      queue_notifications: queueNotifications,
+      linked_appointment: linkedAppointment
+        ? {
+            id: linkedAppointment.id,
+            status: linkedAppointment.status,
+            slot_datetime: linkedAppointment.slot_datetime,
+            appointment_time: linkedAppointment.slot_datetime
+              ? getTimeFromAppointmentDatetime(linkedAppointment.slot_datetime)
+              : null,
+          }
+        : null,
+    })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to join queue' })
@@ -1123,10 +1139,11 @@ app.patch('/api/queue/:clinicId/entry/:entryId/status', async (req, res) => {
     const { clinicId, entryId } = req.params
     const { status } = req.body
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(clinicId) || !uuidRegex.test(entryId)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
+    const idValidation = validateRequiredUuids({ clinicId, entryId })
+
+if (!idValidation.valid) {
+  return res.status(400).json({ error: 'Invalid ID format' })
+}
 
     const validStatuses = ['Waiting', 'In Consultation', 'Complete', 'Called']
     if (!status || !validStatuses.includes(status)) {
@@ -1207,10 +1224,11 @@ app.delete('/api/queue/:clinicId/entry/:entryId', async (req, res) => {
   try {
     const { clinicId, entryId } = req.params
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(clinicId) || !uuidRegex.test(entryId)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
+    const idValidation = validateRequiredUuids({ clinicId, entryId })
+
+if (!idValidation.valid) {
+  return res.status(400).json({ error: 'Invalid ID format' })
+}
 
     const oldQueue = await tryFetchActiveQueueSnapshot(clinicId)
 
@@ -1256,14 +1274,23 @@ app.get('/api/queue-notifications/:patientId', async (req, res) => {
     const { patientId } = req.params
     const { queue_entry_id } = req.query
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(patientId)) {
-      return res.status(400).json({ error: 'Invalid patient ID format' })
-    }
+    const patientIdValidation = validateRequiredUuid(patientId, 'patient ID')
 
-    if (queue_entry_id && !uuidRegex.test(queue_entry_id)) {
-      return res.status(400).json({ error: 'Invalid queue entry ID format' })
-    }
+if (!patientIdValidation.valid) {
+  return res
+    .status(patientIdValidation.status)
+    .json({ error: patientIdValidation.error })
+}
+
+if (queue_entry_id) {
+  const queueEntryIdValidation = validateRequiredUuid(queue_entry_id, 'queue entry ID')
+
+  if (!queueEntryIdValidation.valid) {
+    return res
+      .status(queueEntryIdValidation.status)
+      .json({ error: queueEntryIdValidation.error })
+  }
+}
 
     let query = supabase
       .from('queue_notifications')
@@ -1297,14 +1324,13 @@ app.get('/api/clinic-requests', async (req, res) => {
 
     const { admin_id, status } = req.query
 
-    if (!admin_id) {
-      return res.status(400).json({ error: 'admin_id is required' })
-    }
+    const adminIdValidation = validateRequiredUuid(admin_id, 'admin_id')
 
-    const uuidRegex = /^[0-9a-f-]{36}$/i
-    if (!uuidRegex.test(admin_id)) {
-      return res.status(400).json({ error: 'Invalid admin ID format' })
-    }
+if (!adminIdValidation.valid) {
+  return res.status(adminIdValidation.status).json({
+    error: !admin_id ? 'admin_id is required' : 'Invalid admin ID format',
+  })
+}
 
     const { data: admin, error: adminError } = await supabase
       .from('users')
@@ -1354,14 +1380,13 @@ app.patch('/api/clinic-requests/:id/approve', async (req, res) => {
     const { id } = req.params
     const { admin_id } = req.body
 
-    if (!admin_id) {
-      return res.status(400).json({ error: 'admin_id is required' })
-    }
+    const idValidation = validateRequiredUuids({ id, admin_id })
 
-    const uuidRegex = /^[0-9a-f-]{36}$/i
-    if (!uuidRegex.test(id) || !uuidRegex.test(admin_id)) {
-      return res.status(400).json({ error: 'Invalid request or admin ID format' })
-    }
+if (!idValidation.valid) {
+  return res.status(400).json({
+    error: !admin_id ? 'admin_id is required' : 'Invalid request or admin ID format',
+  })
+}
 
     const { data: admin, error: adminError } = await supabase
       .from('users')
@@ -1435,14 +1460,13 @@ app.patch('/api/clinic-requests/:id/reject', async (req, res) => {
     const { id } = req.params
     const { admin_id } = req.body
 
-    if (!admin_id) {
-      return res.status(400).json({ error: 'admin_id is required' })
-    }
+    const idValidation = validateRequiredUuids({ id, admin_id })
 
-    const uuidRegex = /^[0-9a-f-]{36}$/i
-    if (!uuidRegex.test(id) || !uuidRegex.test(admin_id)) {
-      return res.status(400).json({ error: 'Invalid request or admin ID format' })
-    }
+if (!idValidation.valid) {
+  return res.status(400).json({
+    error: !admin_id ? 'admin_id is required' : 'Invalid request or admin ID format',
+  })
+}
 
     const { data: admin, error: adminError } = await supabase
       .from('users')
@@ -1513,9 +1537,11 @@ app.patch('/api/users/:userId/assign-clinic', async (req, res) => {
     const { userId } = req.params
     const { admin_id, clinic_id } = req.body
 
-    if (!isValidClinicUuid(userId) || !isValidClinicUuid(admin_id) || !isValidClinicUuid(clinic_id)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
+    const idValidation = validateRequiredUuids({ userId, admin_id, clinic_id })
+
+if (!idValidation.valid) {
+  return res.status(400).json({ error: 'Invalid ID format' })
+}
 
     const { data: admin, error: adminError } = await supabase
       .from('users')
@@ -1582,9 +1608,11 @@ app.patch('/api/users/:userId/unassign-clinic', async (req, res) => {
     const { userId } = req.params
     const { admin_id } = req.body
 
-    if (!isValidClinicUuid(userId) || !isValidClinicUuid(admin_id)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
+    const idValidation = validateRequiredUuids({ userId, admin_id })
+
+if (!idValidation.valid) {
+  return res.status(400).json({ error: 'Invalid ID format' })
+}
 
     const { data: admin, error: adminError } = await supabase
       .from('users')
@@ -1633,7 +1661,7 @@ app.patch('/api/users/:userId/unassign-clinic', async (req, res) => {
     res.status(500).json({ error: 'Failed to unassign staff from clinic' })
   }
 })
-
+//PATCH /api/clinics/:id
 app.patch('/api/clinics/:id', async (req, res) => {
   try {
     const { id } = req.params
@@ -1646,13 +1674,19 @@ app.patch('/api/clinics/:id', async (req, res) => {
       services,
     } = req.body
 
-    if (!isValidClinicUuid(id)) {
-      return res.status(400).json({ error: 'Invalid clinic ID format' })
-    }
+    const clinicIdValidation = validateRequiredUuid(id, 'clinic ID')
 
-    if (!admin_id || !isValidClinicUuid(admin_id)) {
-      return res.status(400).json({ error: 'Valid admin_id is required' })
-    }
+if (!clinicIdValidation.valid) {
+  return res
+    .status(clinicIdValidation.status)
+    .json({ error: clinicIdValidation.error })
+}
+
+const adminIdValidation = validateRequiredUuid(admin_id, 'admin_id')
+
+if (!adminIdValidation.valid) {
+  return res.status(400).json({ error: 'Valid admin_id is required' })
+}
 
     const { data: adminUser, error: adminError } = await supabase
       .from('users')
@@ -1727,10 +1761,11 @@ app.get('/api/queue/:clinicId/completed-count', async (req, res) => {
   try {
     const { clinicId } = req.params
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(clinicId)) {
-      return res.status(400).json({ error: 'Invalid clinic ID format' })
-    }
+    const idValidation = validateRequiredUuid(clinicId, 'clinic ID')
+
+if (!idValidation.valid) {
+  return res.status(idValidation.status).json({ error: idValidation.error })
+}
 
     const { count, error } = await supabase
       .from('queue_entries')
@@ -1797,16 +1832,17 @@ const manualPatients = (patients || [])
     res.status(500).json({ error: 'Failed to fetch users' })
   }
 })
-
+//POST /api/queue/:clinicId/add-patient
 app.post('/api/queue/:clinicId/add-patient', async (req, res) => {
   try {
     const { clinicId } = req.params
     const { patient_id } = req.body
 
-    const uuidRegex = /^[0-9a-f-]{36}$/i
-    if (!uuidRegex.test(clinicId) || !uuidRegex.test(patient_id)) {
-      return res.status(400).json({ error: 'Invalid ID format' })
-    }
+    const idValidation = validateRequiredUuids({ clinicId, patient_id })
+
+if (!idValidation.valid) {
+  return res.status(400).json({ error: 'Invalid ID format' })
+}
 
     // check patient not already in queue (same as join logic)
     const { data: activeQueues, error: activeError } = await supabase
@@ -1875,10 +1911,13 @@ const {
 app.get('/api/staff/:staffId/availability', async (req, res) => {
   try {
     const { staffId } = req.params
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(staffId)) {
-      return res.status(400).json({ error: 'Invalid staff ID format' })
-    }
+    const staffIdValidation = validateRequiredUuid(staffId, 'staff ID')
+
+if (!staffIdValidation.valid) {
+  return res
+    .status(staffIdValidation.status)
+    .json({ error: staffIdValidation.error })
+}
     const { data, error } = await supabase
       .from('staff_availability')
       .select('*')
@@ -2216,7 +2255,6 @@ if (authEmailExists) {
 const {
   validateAppointmentBookingInput,
   validateStaffSelfBookingAvailabilityRule,
-  validateAppointmentStatusUpdate,
 } = require('./appointmentBookingValidation')
 app.get('/api/appointments/slots', async (req, res) => {
   try {
@@ -2262,11 +2300,15 @@ app.get('/api/appointments/slots', async (req, res) => {
       startOfDay.toISOString(),
       startOfNextDay.toISOString()
     )
+    const availableSlots = removeFullyBookedSlots(dailySlots, bookedTimes)
 
-    //return res.json(dailySlots.filter((slot) => !bookedTimes.has(slot)))
-    const availableSlots = dailySlots.filter((slot) => !bookedTimes.has(slot))
+const slotValidation = validateGeneratedSlots(availableSlots, date)
 
-    return res.json(sanitizeGeneratedSlots(availableSlots, date))
+if (!slotValidation.valid) {
+  return res.status(slotValidation.status).json({ error: slotValidation.error })
+}
+
+return res.json(slotValidation.slots)
   } catch (err) {
     console.error(err)
     return res.status(500).json({ error: 'Failed to fetch appointment slots' })
@@ -2327,13 +2369,14 @@ app.post('/api/appointments', async (req, res) => {
       createdPatientId = patient_id
     }
 
-    const normalizedTime = getTimeFromAppointmentDatetime(time)
+    /*const normalizedTime = getTimeFromAppointmentDatetime(time)
     const slot_datetime = new Date(`${date}T${normalizedTime}:00`)
 
     if (Number.isNaN(slot_datetime.getTime())) {
       await rollbackCreatedPatient()
       return res.status(400).json({ error: 'Invalid date or time format' })
-    }
+    }*/
+   //const normalizedTime = normalizeSlotTime(time)
 
     const { data: clinic, error: clinicError } = await supabase
       .from('clinics')
@@ -2348,7 +2391,7 @@ app.post('/api/appointments', async (req, res) => {
       return res.status(404).json({ error: 'Clinic not found' })
     }
 
-    const schedule = resolveClinicSchedule(clinic)
+    /*const schedule = resolveClinicSchedule(clinic)
     const validSlots = generateDailySlots({
       date,
       operating_hours: schedule.operating_hours,
@@ -2360,7 +2403,30 @@ app.post('/api/appointments', async (req, res) => {
       return res.status(400).json({
         error: 'Selected time is outside clinic hours or does not match the appointment duration',
       })
-    }
+    }*/
+    const schedule = resolveClinicSchedule(clinic)
+
+const validSlots = generateDailySlots({
+  date,
+  operating_hours: schedule.operating_hours,
+  appointment_duration_minutes: schedule.appointment_duration_minutes,
+})
+
+const selectedSlotValidation = validateSelectedSlot({
+  date,
+  time,
+  validSlots,
+})
+
+if (!selectedSlotValidation.valid) {
+  await rollbackCreatedPatient()
+  return res
+    .status(selectedSlotValidation.status)
+    .json({ error: selectedSlotValidation.error })
+}
+
+const normalizedTime = selectedSlotValidation.normalizedTime
+const slot_datetime = selectedSlotValidation.slotDateTime
 
     if (patient_id === booked_by) {
       const { data: bookedByUser, error: bookedByUserError } = await supabase
@@ -2469,17 +2535,16 @@ app.post('/api/appointments', async (req, res) => {
     return res.status(500).json({ error: 'Failed to create appointment' })
   }
 })
-
+//GET /api/appointments/patient/:patientId
 app.get('/api/appointments/patient/:patientId', async (req, res) => {
   try {
     const { patientId } = req.params
 
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const idValidation = validateRequiredUuid(patientId, 'patient ID')
 
-    if (!uuidRegex.test(patientId)) {
-      return res.status(400).json({ error: 'Invalid patient ID format' })
-    }
+if (!idValidation.valid) {
+  return res.status(idValidation.status).json({ error: idValidation.error })
+}
 
     const { data: appointments, error: appointmentError } = await supabase
       .from('appointments')
@@ -2551,18 +2616,17 @@ app.get('/api/appointments/patient/:patientId', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch patient appointments' })
   }
 })
-
+//GET /api/appointments/clinic/:clinicId
 app.get('/api/appointments/clinic/:clinicId', async (req, res) => {
   try {
     const { clinicId } = req.params
     const { date } = req.query
 
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const idValidation = validateRequiredUuid(clinicId, 'clinic ID')
 
-    if (!uuidRegex.test(clinicId)) {
-      return res.status(400).json({ error: 'Invalid clinic ID format' })
-    }
+if (!idValidation.valid) {
+  return res.status(idValidation.status).json({ error: idValidation.error })
+}
 
     if (!date) {
       return res.status(400).json({ error: 'Date is required' })
@@ -2657,29 +2721,32 @@ app.get('/api/appointments/clinic/:clinicId', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch clinic appointments' })
   }
 })
+const {
+  BOOKED_APPOINTMENT_STATUSES,
+  normalizeAppointmentStatus,
+  canMarkAppointmentStatus,
+  canRescheduleAppointment,
+  canCancelAppointment,
+} = require('./appointmentStatusValidation')
 
+//PATCH /api/appointments/:id/status
+//PATCH /api/appointments/:id/status
 app.patch('/api/appointments/:id/status', async (req, res) => {
   try {
     const { id } = req.params
     const { status } = req.body
 
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const idValidation = validateRequiredUuid(id, 'appointment ID')
 
-    if (!uuidRegex.test(id)) {
-      return res.status(400).json({ error: 'Invalid appointment ID format' })
+    if (!idValidation.valid) {
+      return res.status(idValidation.status).json({ error: idValidation.error })
     }
 
     const normalizedStatus = normalizeAppointmentStatus(status)
 
-const statusValidation = validateAppointmentStatusUpdate({
-  appointment_id: id,
-  status: normalizedStatus,
-})
-
-if (!statusValidation.valid) {
-  return res.status(statusValidation.status).json({ error: statusValidation.error })
-}
+    if (!['Completed', 'No-show'].includes(normalizedStatus)) {
+      return res.status(400).json({ error: 'Invalid appointment status' })
+    }
 
     const { data: appointment, error: fetchError } = await supabase
       .from('appointments')
@@ -2693,10 +2760,15 @@ if (!statusValidation.valid) {
       return res.status(404).json({ error: 'Appointment not found' })
     }
 
-    if (['Cancelled', 'Completed', 'No-show'].includes(appointment.status)) {
-      return res.status(409).json({
-        error: `Appointment is already ${appointment.status}`,
-      })
+    const statusValidation = canMarkAppointmentStatus(
+      appointment.status,
+      normalizedStatus
+    )
+
+    if (!statusValidation.valid) {
+      return res
+        .status(statusValidation.status)
+        .json({ error: statusValidation.error })
     }
 
     const { data, error } = await supabase
@@ -2718,28 +2790,34 @@ if (!statusValidation.valid) {
   }
 })
 
-
+//PATCH /api/appointments/:id/reschedule
 app.patch('/api/appointments/:id/reschedule', async (req, res) => {
   try {
     const { id } = req.params
     const { date, time } = req.body
 
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const idValidation = validateRequiredUuid(id, 'appointment ID')
 
-    if (!uuidRegex.test(id)) {
-      return res.status(400).json({ error: 'Invalid appointment ID format' })
+if (!idValidation.valid) {
+  return res.status(idValidation.status).json({ error: idValidation.error })
+}
+
+    if (!date) {
+      return res.status(400).json({ error: 'date is required' })
     }
 
-    if (!date || !time) {
-      return res.status(400).json({ error: 'date and time are required' })
+    if (!time) {
+      return res.status(400).json({ error: 'time is required' })
     }
 
-    const normalizedTime = getTimeFromAppointmentDatetime(time)
-    const slotDatetime = new Date(`${date}T${normalizedTime}:00`)
+    if (!isValidDateFormat(date)) {
+      return res.status(400).json({ error: 'Invalid date format' })
+    }
 
-    if (!normalizedTime || Number.isNaN(slotDatetime.getTime())) {
-      return res.status(400).json({ error: 'Invalid date or time format' })
+    const requestedTime = normalizeSlotTime(time)
+
+    if (!requestedTime) {
+      return res.status(400).json({ error: 'Invalid time format' })
     }
 
     const { data: appointment, error: appointmentError } = await supabase
@@ -2754,11 +2832,13 @@ app.patch('/api/appointments/:id/reschedule', async (req, res) => {
       return res.status(404).json({ error: 'Appointment not found' })
     }
 
-    if (['Cancelled', 'Completed', 'No-show'].includes(appointment.status)) {
-      return res.status(409).json({
-        error: `Cannot reschedule an appointment that is ${appointment.status}`,
-      })
-    }
+    const rescheduleValidation = canRescheduleAppointment(appointment.status)
+
+if (!rescheduleValidation.valid) {
+  return res
+    .status(rescheduleValidation.status)
+    .json({ error: rescheduleValidation.error })
+}
 
     const { data: clinic, error: clinicError } = await supabase
       .from('clinics')
@@ -2780,11 +2860,20 @@ app.patch('/api/appointments/:id/reschedule', async (req, res) => {
       appointment_duration_minutes: schedule.appointment_duration_minutes,
     })
 
-    if (!validSlots.includes(normalizedTime)) {
-      return res.status(400).json({
-        error: 'Selected time is outside clinic hours or does not match the appointment duration',
-      })
+    const selectedSlotValidation = validateSelectedSlot({
+      date,
+      time: requestedTime,
+      validSlots,
+    })
+
+    if (!selectedSlotValidation.valid) {
+      return res
+        .status(selectedSlotValidation.status)
+        .json({ error: selectedSlotValidation.error })
     }
+
+    const oldSlotId = appointment.slot_id
+    const slotDatetime = selectedSlotValidation.slotDateTime
 
     const newSlot = await findOrCreateClinicSlot(
       appointment.clinic_id,
@@ -2825,27 +2914,45 @@ app.patch('/api/appointments/:id/reschedule', async (req, res) => {
 
     if (error) throw error
 
+    await refreshSlotAvailability({
+      clinicId: appointment.clinic_id,
+      slotId: oldSlotId,
+      capacity: staffCount,
+    })
+
+    if (newSlot.id !== oldSlotId) {
+      await refreshSlotAvailability({
+        clinicId: appointment.clinic_id,
+        slotId: newSlot.id,
+        capacity: staffCount,
+      })
+    }
+
     return res.json({
+      success: true,
       message: 'Appointment rescheduled successfully',
-      appointment: data,
+      appointment: {
+        ...data,
+        slot_datetime: newSlot.slot_datetime,
+      },
+      old_slot_id: oldSlotId,
+      new_slot_id: newSlot.id,
     })
   } catch (err) {
     console.error('Failed to reschedule appointment:', err)
     return res.status(500).json({ error: 'Failed to reschedule appointment' })
   }
 })
-
-
+//PATCH /api/appointments/:id/cancel
 app.patch('/api/appointments/:id/cancel', async (req, res) => {
   try {
     const { id } = req.params
 
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const idValidation = validateRequiredUuid(id, 'appointment ID')
 
-    if (!uuidRegex.test(id)) {
-      return res.status(400).json({ error: 'Invalid appointment ID format' })
-    }
+if (!idValidation.valid) {
+  return res.status(idValidation.status).json({ error: idValidation.error })
+}
 
     const { data: appointment, error: fetchError } = await supabase
       .from('appointments')
@@ -2859,15 +2966,13 @@ app.patch('/api/appointments/:id/cancel', async (req, res) => {
       return res.status(404).json({ error: 'Appointment not found' })
     }
 
-    if (appointment.status === 'Cancelled') {
-      return res.status(409).json({ error: 'Appointment is already cancelled' })
-    }
+    const cancelValidation = canCancelAppointment(appointment.status)
 
-    if (['Completed', 'No-show'].includes(appointment.status)) {
-      return res.status(409).json({
-        error: `Cannot cancel an appointment that is ${appointment.status}`,
-      })
-    }
+if (!cancelValidation.valid) {
+  return res
+    .status(cancelValidation.status)
+    .json({ error: cancelValidation.error })
+}
 
     const { data, error } = await supabase
       .from('appointments')
