@@ -232,6 +232,40 @@ function validateStaffSelfBookingAvailabilityRule({
   }
 }
 
+const ALLOWED_STATUS_VALUES = ['Completed', 'No-show', 'Cancelled']
+
+function validateAppointmentStatusUpdate({ appointment_id, status }) {
+  if (!appointment_id || !status) {
+    return {
+      valid: false,
+      status: 400,
+      error: 'appointment_id and status are required',
+    }
+  }
+
+  if (!isValidUuid(appointment_id)) {
+    return {
+      valid: false,
+      status: 400,
+      error: 'Invalid appointment_id format',
+    }
+  }
+
+  if (!ALLOWED_STATUS_VALUES.includes(status)) {
+    return {
+      valid: false,
+      status: 400,
+      error: `Invalid status. Allowed values: ${ALLOWED_STATUS_VALUES.join(', ')}`,
+    }
+  }
+
+  return {
+    valid: true,
+    status: 200,
+    error: null,
+  }
+}
+
 module.exports = {
   isValidUuid,
   hasRequiredAppointmentFields,
@@ -247,4 +281,5 @@ module.exports = {
   isBookingAtOwnClinic,
   getAvailableStaffAtTime,
   validateStaffSelfBookingAvailabilityRule,
+  validateAppointmentStatusUpdate,
 }
