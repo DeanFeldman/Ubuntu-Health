@@ -67,6 +67,8 @@ function setupFetchMock({
   queueError = 'Failed to load queue.',
   appointmentsOk = true,
   appointmentsError = 'Failed to load appointments.',
+  appointmentStatusOk = true,
+  appointmentStatusError = 'Could not update appointment status.',
   slots = ['09:00', '09:15'],
   slotsOk = true,
   slotsError = 'Failed to load slots.',
@@ -76,8 +78,6 @@ function setupFetchMock({
   joinError = 'Failed to add patient to queue',
   createPatientOk = true,
   createPatientError = 'Failed to create patient.',
-    appointmentStatusOk = true,
-  appointmentStatusError = 'Could not update appointment status.',
 } = {}) {
   global.fetch = jest.fn((url, options = {}) => {
     const urlString = String(url)
@@ -96,7 +96,8 @@ function setupFetchMock({
         json: async () => ({ users }),
       })
     }
-        if (
+
+    if (
       urlString.includes('/api/appointments/') &&
       urlString.includes('/status') &&
       method === 'PATCH'
@@ -133,7 +134,11 @@ function setupFetchMock({
       })
     }
 
-    if (urlString.includes('/api/appointments/') && urlString.includes('/reschedule') && method === 'PATCH') {
+    if (
+      urlString.includes('/api/appointments/') &&
+      urlString.includes('/reschedule') &&
+      method === 'PATCH'
+    ) {
       return Promise.resolve({
         ok: rescheduleOk,
         json: async () =>
@@ -477,22 +482,59 @@ describe('StaffDashboard', () => {
     expect(await screen.findByText('Appointments failed to load.')).toBeInTheDocument()
   })
 
-  test('staff reschedule fetches slots and does not refetch when selecting a time', async () => {
-    const user = userEvent.setup()
+  describe('staff reschedule flow', () => {
+    test('opens popup with current appointment details', async () => {
+      const user = userEvent.setup()
 
-    setupFetchMock({
-      appointments: [activeAppointment],
-      slots: ['09:00', '09:15'],
+      setupFetchMock({
+        appointments: [activeAppointment],
+        slots: ['09:00', '09:15'],
+      })
+
+      renderDashboard()
+      await openSection(/appointments/i)
+
+      expect(await screen.findByText('Jane Appointment')).toBeInTheDocument()
+      expect(screen.getByText('jane.appointment@example.com')).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: /reschedule/i }))
+
+      const dialog = await screen.findByRole('dialog', {
+        name: /reschedule appointment/i,
+      })
+
+      expect(dialog).toBeInTheDocument()
+      expect(dialog).toHaveTextContent('Choose a new date and time for Jane Appointment.')
+      expect(screen.getByLabelText(/new date/i)).toHaveValue('2099-05-11')
+      expect(await screen.findByRole('button', { name: '9:15 AM' })).toBeInTheDocument()
     })
 
-    renderDashboard()
-    await openSection(/appointments/i)
+    test('fetches slots and does not refetch when selecting a time', async () => {
+      const user = userEvent.setup()
 
-    await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+      setupFetchMock({
+        appointments: [activeAppointment],
+        slots: ['09:00', '09:15'],
+      })
 
-    const slotButton = await screen.findByRole('button', { name: '9:15 AM' })
+      renderDashboard()
+      await openSection(/appointments/i)
 
-    await waitFor(() => {
+      await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+
+      const slotButton = await screen.findByRole('button', { name: '9:15 AM' })
+
+      await waitFor(() => {
+        expect(
+          global.fetch.mock.calls.filter(([url]) =>
+            String(url).includes('/api/appointments/slots')
+          )
+        ).toHaveLength(1)
+      })
+
+      await user.click(slotButton)
+
+      expect(slotButton).toHaveAttribute('aria-pressed', 'true')
       expect(
         global.fetch.mock.calls.filter(([url]) =>
           String(url).includes('/api/appointments/slots')
@@ -500,142 +542,126 @@ describe('StaffDashboard', () => {
       ).toHaveLength(1)
     })
 
-    await user.click(slotButton)
+    test('hides the current appointment time on the current appointment date', async () => {
+      const user = userEvent.setup()
 
-    expect(slotButton).toHaveAttribute('aria-pressed', 'true')
-    expect(
-      global.fetch.mock.calls.filter(([url]) =>
-        String(url).includes('/api/appointments/slots')
-      )
-    ).toHaveLength(1)
-  })
+      setupFetchMock({
+        appointments: [activeAppointment],
+        slots: ['12:00', '12:15'],
+      })
 
-  test('staff reschedule hides the current appointment time on the current appointment date', async () => {
-    const user = userEvent.setup()
+      renderDashboard()
+      await openSection(/appointments/i)
 
-    setupFetchMock({
-      appointments: [activeAppointment],
-      slots: ['12:00', '12:15'],
+      await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+
+      expect(await screen.findByRole('button', { name: '12:15 PM' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: '12:00 PM' })).not.toBeInTheDocument()
     })
 
-    renderDashboard()
-    await openSection(/appointments/i)
+    test('displays the same clock time on a different date', async () => {
+      const user = userEvent.setup()
 
-    await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+      setupFetchMock({
+        appointments: [activeAppointment],
+        slots: ['12:00', '12:15'],
+      })
 
-    expect(await screen.findByRole('button', { name: '12:15 PM' }))
-      .toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '12:00 PM' }))
-      .not.toBeInTheDocument()
-  })
+      renderDashboard()
+      await openSection(/appointments/i)
 
-  test('staff reschedule displays the same clock time on a different date', async () => {
-    const user = userEvent.setup()
+      await user.click(await screen.findByRole('button', { name: /reschedule/i }))
 
-    setupFetchMock({
-      appointments: [activeAppointment],
-      slots: ['12:00', '12:15'],
+      expect(await screen.findByRole('button', { name: '12:15 PM' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: '12:00 PM' })).not.toBeInTheDocument()
+
+      fireEvent.change(screen.getByLabelText(/new date/i), {
+        target: { value: '2099-05-12' },
+      })
+
+      expect(await screen.findByRole('button', { name: '12:00 PM' })).toBeInTheDocument()
     })
 
-    renderDashboard()
-    await openSection(/appointments/i)
+    test('clears selected time when date changes', async () => {
+      const user = userEvent.setup()
 
-    await user.click(await screen.findByRole('button', { name: /reschedule/i }))
-    expect(await screen.findByRole('button', { name: '12:15 PM' }))
-      .toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '12:00 PM' }))
-      .not.toBeInTheDocument()
+      setupFetchMock({
+        appointments: [activeAppointment],
+        slots: ['09:00', '09:15'],
+      })
 
-    fireEvent.change(screen.getByLabelText(/new date/i), {
-      target: { value: '2099-05-12' },
+      renderDashboard()
+      await openSection(/appointments/i)
+
+      await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+
+      const slotButton = await screen.findByRole('button', { name: '9:15 AM' })
+      await user.click(slotButton)
+
+      expect(slotButton).toHaveAttribute('aria-pressed', 'true')
+
+      fireEvent.change(screen.getByLabelText(/new date/i), {
+        target: { value: '2099-05-12' },
+      })
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /confirm reschedule/i })).toBeDisabled()
+      })
     })
 
-    expect(await screen.findByRole('button', { name: '12:00 PM' }))
-      .toBeInTheDocument()
-  })
+    test('sends PATCH and refreshes appointments on success', async () => {
+      const user = userEvent.setup()
 
-  test('staff reschedule clears selected time when date changes', async () => {
-    const user = userEvent.setup()
+      setupFetchMock({
+        appointments: [activeAppointment],
+        slots: ['09:00', '09:15'],
+      })
 
-    setupFetchMock({
-      appointments: [activeAppointment],
-      slots: ['09:00', '09:15'],
+      renderDashboard()
+      await openSection(/appointments/i)
+
+      await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+      await user.click(await screen.findByRole('button', { name: '9:15 AM' }))
+      await user.click(screen.getByRole('button', { name: /confirm reschedule/i }))
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          'http://localhost:8080/api/appointments/appointment-1/reschedule',
+          expect.objectContaining({
+            method: 'PATCH',
+            body: JSON.stringify({
+              date: '2099-05-11',
+              time: '09:15',
+            }),
+          })
+        )
+      })
+
+      expect(await screen.findByText('Appointment rescheduled successfully')).toBeInTheDocument()
+      expect(screen.queryByRole('dialog', { name: /reschedule appointment/i }))
+        .not.toBeInTheDocument()
     })
 
-    renderDashboard()
-    await openSection(/appointments/i)
+    test('displays backend errors in the modal', async () => {
+      const user = userEvent.setup()
 
-    await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+      setupFetchMock({
+        appointments: [activeAppointment],
+        slots: ['09:00'],
+        rescheduleOk: false,
+        rescheduleError: 'This slot is already booked',
+      })
 
-    const slotButton = await screen.findByRole('button', { name: '9:15 AM' })
-    await user.click(slotButton)
-    expect(slotButton).toHaveAttribute('aria-pressed', 'true')
+      renderDashboard()
+      await openSection(/appointments/i)
 
-    fireEvent.change(screen.getByLabelText(/new date/i), {
-      target: { value: '2099-05-12' },
+      await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+      await user.click(await screen.findByRole('button', { name: '9:00 AM' }))
+      await user.click(screen.getByRole('button', { name: /confirm reschedule/i }))
+
+      expect(await screen.findByText(/This slot is already booked/)).toBeInTheDocument()
+      expect(screen.getByRole('dialog', { name: /reschedule appointment/i })).toBeInTheDocument()
     })
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /confirm reschedule/i }))
-        .toBeDisabled()
-    })
-  })
-
-  test('staff reschedule sends PATCH and refreshes appointments on success', async () => {
-    const user = userEvent.setup()
-
-    setupFetchMock({
-      appointments: [activeAppointment],
-      slots: ['09:00', '09:15'],
-    })
-
-    renderDashboard()
-    await openSection(/appointments/i)
-
-    await user.click(await screen.findByRole('button', { name: /reschedule/i }))
-    await user.click(await screen.findByRole('button', { name: '9:15 AM' }))
-    await user.click(screen.getByRole('button', { name: /confirm reschedule/i }))
-
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        'http://localhost:8080/api/appointments/appointment-1/reschedule',
-        expect.objectContaining({
-          method: 'PATCH',
-          body: JSON.stringify({
-            date: '2099-05-11',
-            time: '09:15',
-          }),
-        })
-      )
-    })
-
-    expect(await screen.findByText('Appointment rescheduled successfully'))
-      .toBeInTheDocument()
-    expect(screen.queryByRole('dialog', { name: /reschedule appointment/i }))
-      .not.toBeInTheDocument()
-  })
-
-  test('staff reschedule displays backend errors in the modal', async () => {
-    const user = userEvent.setup()
-
-    setupFetchMock({
-      appointments: [activeAppointment],
-      slots: ['09:00'],
-      rescheduleOk: false,
-      rescheduleError: 'This slot is already booked',
-    })
-
-    renderDashboard()
-    await openSection(/appointments/i)
-
-    await user.click(await screen.findByRole('button', { name: /reschedule/i }))
-    await user.click(await screen.findByRole('button', { name: '9:00 AM' }))
-    await user.click(screen.getByRole('button', { name: /confirm reschedule/i }))
-
-    expect(await screen.findByText(/This slot is already booked/))
-      .toBeInTheDocument()
-    expect(screen.getByRole('dialog', { name: /reschedule appointment/i }))
-      .toBeInTheDocument()
   })
 
   test('navigates to booking page when adding appointment', async () => {
@@ -679,13 +705,11 @@ describe('StaffDashboard', () => {
     renderDashboard()
     await openSection(/availability/i)
 
-    expect(
-      await screen.findByRole('heading', { name: 'Availability' })
-    ).toBeInTheDocument()
-    
+    expect(await screen.findByRole('heading', { name: 'Availability' })).toBeInTheDocument()
     expect(screen.getByText(/set the days and times/i)).toBeInTheDocument()
   })
-    test('updates staff appointment view when marking appointment as Completed', async () => {
+
+  test('updates staff appointment view when marking appointment as Completed', async () => {
     const user = userEvent.setup()
 
     setupFetchMock({
@@ -756,6 +780,4 @@ describe('StaffDashboard', () => {
     expect(screen.queryByRole('button', { name: /^no-show$/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^reschedule$/i })).not.toBeInTheDocument()
   })
-
 })
-

@@ -164,6 +164,93 @@ describe('PatientAppointments', () => {
       { headers: { Accept: 'application/json' } }
     )
   })
+    it('displays current appointment details in the reschedule interface', async () => {
+    const user = userEvent.setup()
+
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ appointments: [activeAppointment] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ['07:30', '07:45'],
+      })
+
+    render(<PatientAppointments />)
+
+    await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+
+    const rescheduleDialog = await screen.findByRole('dialog', {
+      name: /reschedule appointment/i,
+    })
+
+    expect(rescheduleDialog).toHaveTextContent('Choose a new date and available time')
+    expect(rescheduleDialog).toHaveTextContent('Ubuntu Clinic')
+    expect(rescheduleDialog).toHaveTextContent('Current date')
+    expect(rescheduleDialog).toHaveTextContent('Current time')
+    expect(screen.getByLabelText(/new date/i)).toHaveValue('2099-05-11')
+  })
+
+  it('does not show the current appointment slot as an available reschedule option', async () => {
+  const user = userEvent.setup()
+
+  fetch
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ appointments: [activeAppointment] }),
+    })
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ['12:00', '12:15'],
+    })
+
+  render(<PatientAppointments />)
+
+  await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+
+  expect(await screen.findByRole('button', { name: '12:15' }))
+    .toBeInTheDocument()
+
+  expect(screen.queryByRole('button', { name: '12:00' }))
+    .not.toBeInTheDocument()
+})
+  it('clears selected slot and disables continue when reschedule date changes', async () => {
+    const user = userEvent.setup()
+
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ appointments: [activeAppointment] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ['07:30', '07:45'],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ['08:00', '08:15'],
+      })
+
+    render(<PatientAppointments />)
+
+    await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+
+    const slotButton = await screen.findByRole('button', { name: '07:45' })
+    await user.click(slotButton)
+
+    expect(slotButton).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /continue/i })).not.toBeDisabled()
+
+    fireEvent.change(screen.getByLabelText(/new date/i), {
+      target: { value: '2099-05-12' },
+    })
+
+    expect(await screen.findByRole('button', { name: '08:00' }))
+      .toBeInTheDocument()
+
+    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled()
+  })
 
   it('shows slot loading state while fetching available slots', async () => {
     const user = userEvent.setup()
