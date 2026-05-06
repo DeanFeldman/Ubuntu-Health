@@ -20,7 +20,8 @@
     "@supabase/supabase-js": "^2.101.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.0",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "resend": "^6.12.2"
   },
   "devDependencies": {
     "jest": "^30.3.0",
