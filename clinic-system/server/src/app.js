@@ -962,7 +962,7 @@ app.patch('/api/role-requests/:id/reject', async (req, res) => {
 })
 
 // POST /api/queue/:clinicId/join — patient joins the virtual queue
-const { validateQueueJoin } = require('./queueValidation')
+const { validateQueueJoin, findSameDayClinicAppointment } = require('./queueValidation')
 
 app.post('/api/queue/:clinicId/join', async (req, res) => {
   try {
@@ -1041,7 +1041,74 @@ app.post('/api/queue/:clinicId/join', async (req, res) => {
 
     const queueNotifications = await triggerQueueNotificationsForClinicSafely(clinicId, oldQueue)
 
-    res.status(201).json({ entry: newEntry, queue_notifications: queueNotifications })
+// US-29-1-1: Check for a same-day appointment at this clinic
+const today = new Date().toISOString().slice(0, 10)
+
+const { data: patientAppointments, error: apptError } = await supabase
+  .from('appointments')
+  .select('id, clinic_id, slot_id, status')
+  .eq('patient_id', patient_id)
+  .in('status', ['Confirmed', 'Waiting'])
+
+if (apptError) throw apptError
+
+const slotIds = [...new Set((patientAppointments || []).map(a => a.slot_id).filter(Boolean))]
+let appointmentsWithDatetime = []
+
+if (slotIds.length > 0) {
+  const { data: slots, error: slotsError } = await supabase
+    .from('slots')
+    .select('id, slot_datetime')
+    .in('id', slotIds)
+
+  if (slotsError) throw slotsError
+
+  const slotsById = Object.fromEntries((slots || []).map(s => [s.id, s]))
+
+  appointmentsWithDatetime = (patientAppointments || []).map(a => ({
+    ...a,
+    slot_datetime: slotsById[a.slot_id]?.slot_datetime || null,
+  }))
+}
+
+// US-29-1-1: Find matching same-day appointment at this clinic
+const matchedAppointment = findSameDayClinicAppointment(appointmentsWithDatetime, clinicId, today)
+
+// US-29-1-2: Update matched appointment status to Waiting
+let linkedAppointment = null
+if (matchedAppointment) {
+  const { data: updatedAppointment, error: updateApptError } = await supabase
+    .from('appointments')
+    .update({ status: 'Waiting' })
+    .eq('id', matchedAppointment.id)
+    .select('id, clinic_id, slot_id, slot_datetime, status')
+    .single()
+
+  if (updateApptError) {
+    console.error('Failed to update appointment status on queue join:', updateApptError)
+  } else {
+    linkedAppointment = {
+      ...updatedAppointment,
+      slot_datetime: matchedAppointment.slot_datetime,
+    }
+  }
+}
+
+// US-29-2-1: Return appointment time in response if linked
+res.status(201).json({
+  entry: newEntry,
+  queue_notifications: queueNotifications,
+  linked_appointment: linkedAppointment
+    ? {
+        id: linkedAppointment.id,
+        status: linkedAppointment.status,
+        slot_datetime: linkedAppointment.slot_datetime,
+        appointment_time: linkedAppointment.slot_datetime
+          ? getTimeFromAppointmentDatetime(linkedAppointment.slot_datetime)
+          : null,
+      }
+    : null,
+})
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to join queue' })
@@ -2149,6 +2216,7 @@ if (authEmailExists) {
 const {
   validateAppointmentBookingInput,
   validateStaffSelfBookingAvailabilityRule,
+  validateAppointmentStatusUpdate,
 } = require('./appointmentBookingValidation')
 app.get('/api/appointments/slots', async (req, res) => {
   try {
@@ -2604,9 +2672,14 @@ app.patch('/api/appointments/:id/status', async (req, res) => {
 
     const normalizedStatus = normalizeAppointmentStatus(status)
 
-    if (!['Completed', 'No-show'].includes(normalizedStatus)) {
-      return res.status(400).json({ error: 'Invalid appointment status' })
-    }
+const statusValidation = validateAppointmentStatusUpdate({
+  appointment_id: id,
+  status: normalizedStatus,
+})
+
+if (!statusValidation.valid) {
+  return res.status(statusValidation.status).json({ error: statusValidation.error })
+}
 
     const { data: appointment, error: fetchError } = await supabase
       .from('appointments')

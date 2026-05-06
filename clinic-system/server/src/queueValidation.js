@@ -34,10 +34,22 @@ function isValidStatusTransition(currentStatus, nextStatus) {
 
   return validTransitions[currentStatus]?.includes(nextStatus) || false
 }
+// Finds a same-day appointment at the same clinic for a patient joining the queue.
+// Returns the matching appointment or null if none found.
+function findSameDayClinicAppointment(appointments = [], clinicId, today) {
+  return (
+    appointments.find(appointment => {
+      if (appointment.clinic_id !== clinicId) return false
+      if (!appointment.slot_datetime) return false
+      return appointment.slot_datetime.slice(0, 10) === today
+    }) || null
+  )
+}
 
 module.exports = {
   isJoinConfirmed,
   canJoinQueue,
   validateQueueJoin,
   isValidStatusTransition,
+  findSameDayClinicAppointment,
 }
