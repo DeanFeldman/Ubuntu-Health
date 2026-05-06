@@ -76,6 +76,8 @@ function setupFetchMock({
   joinError = 'Failed to add patient to queue',
   createPatientOk = true,
   createPatientError = 'Failed to create patient.',
+    appointmentStatusOk = true,
+  appointmentStatusError = 'Could not update appointment status.',
 } = {}) {
   global.fetch = jest.fn((url, options = {}) => {
     const urlString = String(url)
@@ -92,6 +94,27 @@ function setupFetchMock({
       return Promise.resolve({
         ok: true,
         json: async () => ({ users }),
+      })
+    }
+        if (
+      urlString.includes('/api/appointments/') &&
+      urlString.includes('/status') &&
+      method === 'PATCH'
+    ) {
+      const body = JSON.parse(options.body)
+
+      return Promise.resolve({
+        ok: appointmentStatusOk,
+        json: async () =>
+          appointmentStatusOk
+            ? {
+                message: `Appointment marked as ${body.status}.`,
+                appointment: {
+                  ...activeAppointment,
+                  status: body.status,
+                },
+              }
+            : { error: appointmentStatusError },
       })
     }
 
@@ -615,10 +638,6 @@ describe('StaffDashboard', () => {
       .toBeInTheDocument()
   })
 
-  expect(screen.queryByRole('button', { name: /reschedule/i })).not.toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: /cancel/i })).not.toBeInTheDocument()
-})
-
   test('navigates to booking page when adding appointment', async () => {
     const user = userEvent.setup()
 
@@ -666,6 +685,77 @@ describe('StaffDashboard', () => {
     
     expect(screen.getByText(/set the days and times/i)).toBeInTheDocument()
   })
+    test('updates staff appointment view when marking appointment as Completed', async () => {
+    const user = userEvent.setup()
 
+    setupFetchMock({
+      appointments: [activeAppointment],
+    })
 
+    renderDashboard()
+    await openSection(/appointments/i)
+
+    expect(await screen.findByText('Jane Appointment')).toBeInTheDocument()
+    expect(screen.getAllByText('Confirmed').length).toBeGreaterThan(0)
+
+    await user.click(screen.getByRole('button', { name: /^completed$/i }))
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:8080/api/appointments/appointment-1/status',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'Completed' }),
+        })
+      )
+    })
+
+    expect(await screen.findByText('Appointment marked as Completed.')).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Completed').length).toBeGreaterThan(0)
+    })
+
+    expect(screen.queryByRole('button', { name: /^completed$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^no-show$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^reschedule$/i })).not.toBeInTheDocument()
+  })
+
+  test('updates staff appointment view when marking appointment as No-show', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock({
+      appointments: [activeAppointment],
+    })
+
+    renderDashboard()
+    await openSection(/appointments/i)
+
+    expect(await screen.findByText('Jane Appointment')).toBeInTheDocument()
+    expect(screen.getAllByText('Confirmed').length).toBeGreaterThan(0)
+
+    await user.click(screen.getByRole('button', { name: /^no-show$/i }))
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:8080/api/appointments/appointment-1/status',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'No-show' }),
+        })
+      )
+    })
+
+    expect(await screen.findByText('Appointment marked as No-show.')).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(screen.getAllByText('No-show').length).toBeGreaterThan(0)
+    })
+
+    expect(screen.queryByRole('button', { name: /^completed$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^no-show$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^reschedule$/i })).not.toBeInTheDocument()
+  })
+
+})
 
