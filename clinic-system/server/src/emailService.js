@@ -1,6 +1,12 @@
 const { Resend } = require('resend')
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+function getResendClient() {
+  const resend = getResendClient()
+if (!resend) {
+  console.warn('sendAppointmentConfirmationEmail: RESEND_API_KEY not set, skipping')
+  return { sent: false, reason: 'no_api_key' }
+}
+}
 
 function buildAppointmentConfirmationEmail({ patientName, clinicName, date, time }) {
   const displayName = patientName || 'Patient'
