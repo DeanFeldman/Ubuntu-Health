@@ -805,7 +805,7 @@ export default function PatientAppointments() {
 
       <main className="q-page">
         <header className="q-page-header">
-          <h1>My Appointments</h1>
+          <h1>My Future Appointments</h1>
           <p>View your upcoming bookings and appointment statuses.</p>
         </header>
 
