@@ -487,6 +487,50 @@ describe('StaffDashboard', () => {
     ).toHaveLength(1)
   })
 
+  test('staff reschedule hides the current appointment time on the current appointment date', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock({
+      appointments: [activeAppointment],
+      slots: ['12:00', '12:15'],
+    })
+
+    renderDashboard()
+    await openSection(/appointments/i)
+
+    await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+
+    expect(await screen.findByRole('button', { name: '12:15 PM' }))
+      .toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '12:00 PM' }))
+      .not.toBeInTheDocument()
+  })
+
+  test('staff reschedule displays the same clock time on a different date', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock({
+      appointments: [activeAppointment],
+      slots: ['12:00', '12:15'],
+    })
+
+    renderDashboard()
+    await openSection(/appointments/i)
+
+    await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+    expect(await screen.findByRole('button', { name: '12:15 PM' }))
+      .toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '12:00 PM' }))
+      .not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText(/new date/i), {
+      target: { value: '2099-05-12' },
+    })
+
+    expect(await screen.findByRole('button', { name: '12:00 PM' }))
+      .toBeInTheDocument()
+  })
+
   test('staff reschedule clears selected time when date changes', async () => {
     const user = userEvent.setup()
 

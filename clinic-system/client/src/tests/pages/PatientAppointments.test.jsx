@@ -265,6 +265,129 @@ describe('PatientAppointments', () => {
     expect(continueButton).not.toBeDisabled()
   })
 
+  it('does not render the current appointment time as a selectable reschedule slot on the current date', async () => {
+    const user = userEvent.setup()
+
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ appointments: [activeAppointment] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ['12:00', '12:15'],
+      })
+
+    render(<PatientAppointments />)
+
+    await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+
+    expect(await screen.findByRole('button', { name: '12:15' }))
+      .toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '12:00' }))
+      .not.toBeInTheDocument()
+  })
+
+  it('allows the same clock time on a different reschedule date', async () => {
+    const user = userEvent.setup()
+
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ appointments: [activeAppointment] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ['12:00', '12:15'],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ['12:00'],
+      })
+
+    render(<PatientAppointments />)
+
+    await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+    expect(await screen.findByRole('button', { name: '12:15' }))
+      .toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '12:00' }))
+      .not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText(/new date/i), {
+      target: { value: '2099-05-12' },
+    })
+
+    expect(await screen.findByRole('button', { name: '12:00' }))
+      .toBeInTheDocument()
+  })
+
+  it('clears a stale selected time when the reschedule date changes', async () => {
+    const user = userEvent.setup()
+
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ appointments: [activeAppointment] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ['07:45'],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ['07:45'],
+      })
+
+    render(<PatientAppointments />)
+
+    await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+
+    const slotButton = await screen.findByRole('button', { name: '07:45' })
+    await user.click(slotButton)
+    expect(slotButton).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.change(screen.getByLabelText(/new date/i), {
+      target: { value: '2099-05-12' },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '07:45' }))
+        .toHaveAttribute('aria-pressed', 'false')
+    })
+    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled()
+  })
+
+  it('keeps reschedule actions rendered when many slots are returned', async () => {
+    const user = userEvent.setup()
+    const manySlots = Array.from({ length: 40 }, (_, index) => {
+      const hour = 7 + Math.floor(index / 4)
+      const minute = (index % 4) * 15
+      return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+    })
+
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ appointments: [activeAppointment] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => manySlots,
+      })
+
+    render(<PatientAppointments />)
+
+    await user.click(await screen.findByRole('button', { name: /reschedule/i }))
+
+    const dialog = screen.getByRole('dialog', { name: /reschedule appointment/i })
+    expect(await screen.findByRole('button', { name: '07:00' }))
+      .toBeInTheDocument()
+    expect(dialog.querySelector('.q-modal-reschedule')).toBeInTheDocument()
+    expect(dialog.querySelector('.q-modal-scroll')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^cancel$/i })).toBeInTheDocument()
+  })
+
   it('opens confirmation popup with old and new appointment details', async () => {
     const user = userEvent.setup()
 
