@@ -3,7 +3,7 @@ const cors = require('cors')
 const path = require('path')
 const { createClient } = require('@supabase/supabase-js')
 require('dotenv').config()
-
+const { sendAppointmentConfirmationEmail } = require('./emailService')
 const app = express()
 const DEFAULT_ESTIMATED_WAIT_APPOINTMENT_DURATION = 15
 const ESTIMATED_WAIT_FALLBACK_MESSAGE = 'Estimated wait time may be inaccurate'
@@ -2523,10 +2523,47 @@ const slot_datetime = selectedSlotValidation.slotDateTime
 
     if (error) throw error
 
-    return res.status(201).json({
-      message: 'Appointment booked successfully',
-      appointment: data,
-    })
+    // US-28-1/2/3/4: Send confirmation email after successful booking
+const patientEmail = data.patient_email || null
+
+// Fetch patient email and name if not on appointment record
+let emailAddress = null
+let patientName = null
+
+const { data: patientUser } = await supabase
+  .from('users')
+  .select('email, full_name')
+  .eq('id', patient_id)
+  .maybeSingle()
+
+if (patientUser) {
+  emailAddress = patientUser.email
+  patientName = patientUser.full_name
+} else {
+  const { data: patientRecord } = await supabase
+    .from('patients')
+    .select('email, full_name')
+    .eq('id', patient_id)
+    .maybeSingle()
+
+  emailAddress = patientRecord?.email || null
+  patientName = patientRecord?.full_name || null
+}
+
+// Fire and forget — email failure must not affect booking response
+sendAppointmentConfirmationEmail({
+  to: emailAddress,
+  patientName,
+  clinicName: clinic.name,
+  date,
+  time: normalizedTime || time,
+}).catch(err => console.error('Email send failed silently:', err))
+
+return res.status(201).json({
+  message: 'Appointment booked successfully',
+  appointment: data,
+})
+
   } catch (err) {
     console.error(err)
 
