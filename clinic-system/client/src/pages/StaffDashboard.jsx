@@ -8,10 +8,10 @@ import { useNavigate } from 'react-router-dom'
 // The styles variable contains all the CSS styles for the StaffDashboard component, defined as a template literal string.
 const styles = `
   .sd-page {
-    max-width: 1100px;
+    max-width: 1400px;
     margin: 0 auto;
+    padding: 0 24px;
   }
-
   .sd-heading {
     font-size: 1.25rem;
     font-weight: 700;
@@ -113,6 +113,34 @@ const styles = `
     border-collapse: collapse;
     font-size: 14px;
   }
+    .sd-table th:nth-child(1),
+.sd-table td:nth-child(1) {
+  width: 80px;
+}
+
+.sd-table th:nth-child(2),
+.sd-table td:nth-child(2) {
+  min-width: 150px;
+}
+
+.sd-table th:nth-child(3),
+.sd-table td:nth-child(3) {
+  min-width: 260px;
+}
+
+.sd-table th:nth-child(4),
+.sd-table td:nth-child(4) {
+  width: 130px;
+}
+
+.sd-table th:nth-child(5),
+.sd-table td:nth-child(5) {
+  min-width: 380px;
+}
+
+.sd-actions {
+  flex-wrap: nowrap;
+}
 
   .sd-table th {
     text-align: left;
@@ -809,12 +837,68 @@ export default function StaffDashboard() {
 
   const [activeSection, setActiveSection] = useState('queue')
 
+
+  const [showCancelAppointmentPopup, setShowCancelAppointmentPopup] = useState(false)
+  const [appointmentToCancel, setAppointmentToCancel] = useState(null)
+  const [cancelAppointmentLoading, setCancelAppointmentLoading] = useState(false)
+  const [cancelAppointmentError, setCancelAppointmentError] = useState('')
+
+
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type, visible: true })
     setTimeout(() => {
       setToast(current => ({ ...current, visible: false }))
     }, 3000)
   }, [])
+
+  const openCancelAppointmentPopup = appointment => {
+  setAppointmentToCancel(appointment)
+  setCancelAppointmentError('')
+  setShowCancelAppointmentPopup(true)
+}
+
+const closeCancelAppointmentPopup = () => {
+  if (cancelAppointmentLoading) return
+
+  setShowCancelAppointmentPopup(false)
+  setAppointmentToCancel(null)
+  setCancelAppointmentError('')
+}
+
+const handleConfirmCancelAppointment = async () => {
+  if (!appointmentToCancel) return
+
+  setCancelAppointmentLoading(true)
+  setCancelAppointmentError('')
+
+  try {
+    const res = await fetch(`${API_BASE}/api/appointments/${appointmentToCancel.id}/cancel`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+    })
+
+    const data = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Could not cancel appointment.')
+    }
+
+    setAppointments(current =>
+      current.filter(appointment => appointment.id !== appointmentToCancel.id)
+    )
+
+    setShowCancelAppointmentPopup(false)
+    setAppointmentToCancel(null)
+    showToast(data.message || 'Appointment cancelled successfully.', 'success')
+  } catch (err) {
+    setCancelAppointmentError(err.message || 'Could not cancel appointment.')
+  } finally {
+    setCancelAppointmentLoading(false)
+  }
+}
 
   
   // The validateAvailabilityRow function checks the validity of an availability entry for a specific day, 
@@ -2031,6 +2115,18 @@ return (
                                       </button>
                                     </li>
 
+                                        <li>
+                                          <button
+                                              type="button"
+                                              className="sd-act-btn sd-act-btn--danger"
+                                              onClick={() => openCancelAppointmentPopup(appointment)}
+                                              disabled={cancelAppointmentLoading && appointmentToCancel?.id === appointment.id}
+                                            >
+                                              {cancelAppointmentLoading && appointmentToCancel?.id === appointment.id
+                                                ? 'Cancelling…'
+                                                : 'Cancel'}
+                                            </button>
+                                          </li>
                                     <li>
                                       <button
                                         type="button"
@@ -2343,6 +2439,68 @@ return (
         </div>
       </div>
     )}
+
+    {showCancelAppointmentPopup && appointmentToCancel && (
+  <div
+    className="sd-overlay"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="cancel-appointment-title"
+    onClick={e => {
+      if (e.target === e.currentTarget) closeCancelAppointmentPopup()
+    }}
+  >
+    <div className="sd-dialog">
+      <div className="sd-dialog-icon">🗓️</div>
+
+      <h2 className="sd-dialog-title" id="cancel-appointment-title">
+        Cancel appointment?
+      </h2>
+
+      <p className="sd-dialog-subtitle">
+        This action cannot be undone. Please confirm you want to cancel this appointment.
+      </p>
+
+      <section className="sd-slot-empty" style={{ textAlign: 'left' }}>
+        <p>
+          <strong>Patient:</strong> {getAppointmentPatientName(appointmentToCancel)}
+        </p>
+        <p>
+          <strong>Date:</strong> {getLocalDateTimeParts(appointmentToCancel.slot_datetime).date}
+        </p>
+        <p>
+          <strong>Time:</strong> {formatAppointmentTime(appointmentToCancel)}
+        </p>
+      </section>
+
+      {cancelAppointmentError && (
+        <div className="sd-dialog-submit-error" role="alert">
+          ⚠ {cancelAppointmentError}
+        </div>
+      )}
+
+      <div className="sd-dialog-actions">
+        <button
+          type="button"
+          className="sd-act-btn"
+          onClick={closeCancelAppointmentPopup}
+          disabled={cancelAppointmentLoading}
+        >
+          Keep appointment
+        </button>
+
+        <button
+          type="button"
+          className="sd-act-btn sd-act-btn--danger"
+          onClick={handleConfirmCancelAppointment}
+          disabled={cancelAppointmentLoading}
+        >
+          {cancelAppointmentLoading ? 'Cancelling…' : 'Yes, cancel'}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
   </>
 )
 
