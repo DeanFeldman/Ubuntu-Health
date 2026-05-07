@@ -1,11 +1,15 @@
-const { Resend } = require('resend')
+const nodemailer = require('nodemailer')
 
-function getResendClient() {
-  const resend = getResendClient()
-if (!resend) {
-  console.warn('sendAppointmentConfirmationEmail: RESEND_API_KEY not set, skipping')
-  return { sent: false, reason: 'no_api_key' }
-}
+function getTransporter() {
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) return null
+
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.GMAIL_USER,
+      pass: process.env.GMAIL_APP_PASSWORD,
+    },
+  })
 }
 
 function buildAppointmentConfirmationEmail({ patientName, clinicName, date, time }) {
@@ -39,9 +43,10 @@ async function sendAppointmentConfirmationEmail({ to, patientName, clinicName, d
     return { sent: false, reason: 'no_email' }
   }
 
-  if (!process.env.RESEND_API_KEY) {
-    console.warn('sendAppointmentConfirmationEmail: RESEND_API_KEY not set, skipping')
-    return { sent: false, reason: 'no_api_key' }
+  const transporter = getTransporter()
+  if (!transporter) {
+    console.warn('sendAppointmentConfirmationEmail: GMAIL_USER or GMAIL_APP_PASSWORD not set, skipping')
+    return { sent: false, reason: 'no_credentials' }
   }
 
   const { subject, text } = buildAppointmentConfirmationEmail({
@@ -52,20 +57,15 @@ async function sendAppointmentConfirmationEmail({ to, patientName, clinicName, d
   })
 
   try {
-    const { data, error } = await resend.emails.send({
-      from: 'Ubuntu Health <no-reply@ubuntuhealth.co.za>',
+    const info = await transporter.sendMail({
+      from: `Ubuntu Health <${process.env.GMAIL_USER}>`,
       to,
       subject,
       text,
     })
 
-    if (error) {
-      console.error('Failed to send confirmation email:', error)
-      return { sent: false, reason: 'resend_error', error }
-    }
-
-    console.log('Confirmation email sent:', data?.id)
-    return { sent: true, id: data?.id }
+    console.log('Confirmation email sent:', info.messageId)
+    return { sent: true, id: info.messageId }
   } catch (err) {
     console.error('Failed to send confirmation email:', err)
     return { sent: false, reason: 'exception', error: err }
