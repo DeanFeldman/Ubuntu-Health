@@ -328,6 +328,8 @@ const handleBookAppointment = (clinic) => {
     state: {
       clinic,
       bookingMode: 'patient',
+      fromPage: 'Clinics',
+      fromPath: '/clinic',
     },
   })
 }
