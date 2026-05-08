@@ -78,6 +78,8 @@ function setupFetchMock({
   joinError = 'Failed to add patient to queue',
   createPatientOk = true,
   createPatientError = 'Failed to create patient.',
+  cancelOk = true,
+  cancelError = 'Could not cancel appointment.',
 } = {}) {
   global.fetch = jest.fn((url, options = {}) => {
     const urlString = String(url)
@@ -220,6 +222,25 @@ function setupFetchMock({
       return Promise.resolve({
         ok: queueOk,
         json: async () => (queueOk ? { queue } : { error: queueError }),
+      })
+    }
+        if (
+      urlString.includes('/api/appointments/') &&
+      urlString.includes('/cancel') &&
+      method === 'PATCH'
+    ) {
+      return Promise.resolve({
+        ok: cancelOk,
+        json: async () =>
+          cancelOk
+            ? {
+                message: 'Appointment cancelled successfully',
+                appointment: {
+                  ...activeAppointment,
+                  status: 'Cancelled',
+                },
+              }
+            : { error: cancelError },
       })
     }
 
@@ -780,4 +801,108 @@ describe('StaffDashboard', () => {
     expect(screen.queryByRole('button', { name: /^no-show$/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^reschedule$/i })).not.toBeInTheDocument()
   })
+  describe('staff cancel flow', () => {
+  test('opens cancel popup with current appointment details', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock({
+      appointments: [activeAppointment],
+    })
+
+    renderDashboard()
+    await openSection(/appointments/i)
+
+    expect(await screen.findByText('Jane Appointment')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^cancel$/i }))
+
+    const dialog = await screen.findByRole('dialog', {
+      name: /cancel appointment/i,
+    })
+
+    expect(dialog).toBeInTheDocument()
+    expect(dialog).toHaveTextContent('Cancel appointment?')
+    expect(dialog).toHaveTextContent('Jane Appointment')
+    expect(dialog).toHaveTextContent('Date:')
+    expect(dialog).toHaveTextContent('Time:')
+  })
+
+  test('dismisses staff cancel popup without calling cancel endpoint', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock({
+      appointments: [activeAppointment],
+    })
+
+    renderDashboard()
+    await openSection(/appointments/i)
+
+    await user.click(await screen.findByRole('button', { name: /^cancel$/i }))
+    await user.click(screen.getByRole('button', { name: /keep appointment/i }))
+
+    expect(screen.queryByRole('dialog', { name: /cancel appointment/i }))
+      .not.toBeInTheDocument()
+
+    expect(
+      global.fetch.mock.calls.some(([url]) =>
+        String(url).includes('/api/appointments/appointment-1/cancel')
+      )
+    ).toBe(false)
+  })
+
+  test('staff cancel confirm sends PATCH and removes appointment from view', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock({
+      appointments: [activeAppointment],
+    })
+
+    renderDashboard()
+    await openSection(/appointments/i)
+
+    await user.click(await screen.findByRole('button', { name: /^cancel$/i }))
+    await user.click(screen.getByRole('button', { name: /yes, cancel/i }))
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:8080/api/appointments/appointment-1/cancel',
+        expect.objectContaining({
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+        })
+      )
+    })
+
+    expect(await screen.findByText('Appointment cancelled successfully'))
+      .toBeInTheDocument()
+
+    expect(screen.queryByText('Jane Appointment')).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: /cancel appointment/i }))
+      .not.toBeInTheDocument()
+  })
+
+  test('staff cancel displays backend error and keeps popup open', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock({
+      appointments: [activeAppointment],
+      cancelOk: false,
+      cancelError: 'Cannot cancel an appointment that is Completed',
+    })
+
+    renderDashboard()
+    await openSection(/appointments/i)
+
+    await user.click(await screen.findByRole('button', { name: /^cancel$/i }))
+    await user.click(screen.getByRole('button', { name: /yes, cancel/i }))
+
+    expect(await screen.findByText(/cannot cancel an appointment that is completed/i)).toBeInTheDocument()
+    
+    expect(screen.getByRole('dialog', { name: /cancel appointment/i }))
+      .toBeInTheDocument()
+  })
+})
 })
