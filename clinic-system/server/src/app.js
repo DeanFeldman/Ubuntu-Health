@@ -2765,8 +2765,12 @@ const {
   canRescheduleAppointment,
   canCancelAppointment,
 } = require('./appointmentStatusValidation')
+const {
+  validateCancelRequest,
+  validateAppointmentCanBeCancelled,
+  buildCancelResponse,
+} = require('./appointmentCancelValidation')
 
-//PATCH /api/appointments/:id/status
 //PATCH /api/appointments/:id/status
 app.patch('/api/appointments/:id/status', async (req, res) => {
   try {
@@ -2986,31 +2990,31 @@ app.patch('/api/appointments/:id/cancel', async (req, res) => {
   try {
     const { id } = req.params
 
-    const idValidation = validateRequiredUuid(id, 'appointment ID')
+    const requestValidation = validateCancelRequest({
+      appointmentId: id,
+    })
 
-if (!idValidation.valid) {
-  return res.status(idValidation.status).json({ error: idValidation.error })
-}
+    if (!requestValidation.valid) {
+      return res
+        .status(requestValidation.status)
+        .json({ error: requestValidation.error })
+    }
 
     const { data: appointment, error: fetchError } = await supabase
       .from('appointments')
-      .select('id, status')
+      .select('id, clinic_id, slot_id, status')
       .eq('id', id)
       .maybeSingle()
 
     if (fetchError) throw fetchError
 
-    if (!appointment) {
-      return res.status(404).json({ error: 'Appointment not found' })
+    const cancelValidation = validateAppointmentCanBeCancelled(appointment)
+
+    if (!cancelValidation.valid) {
+      return res
+        .status(cancelValidation.status)
+        .json({ error: cancelValidation.error })
     }
-
-    const cancelValidation = canCancelAppointment(appointment.status)
-
-if (!cancelValidation.valid) {
-  return res
-    .status(cancelValidation.status)
-    .json({ error: cancelValidation.error })
-}
 
     const { data, error } = await supabase
       .from('appointments')
@@ -3021,10 +3025,19 @@ if (!cancelValidation.valid) {
 
     if (error) throw error
 
-    return res.json({
-      message: 'Appointment cancelled successfully',
-      appointment: data,
+    const staffCount = await fetchClinicBookingCapacity(appointment.clinic_id)
+
+    await refreshSlotAvailability({
+      clinicId: appointment.clinic_id,
+      slotId: appointment.slot_id,
+      capacity: staffCount,
     })
+
+    return res.json(
+      buildCancelResponse({
+        appointment: data,
+      })
+    )
   } catch (err) {
     console.error('Failed to cancel appointment:', err)
     return res.status(500).json({ error: 'Failed to cancel appointment' })

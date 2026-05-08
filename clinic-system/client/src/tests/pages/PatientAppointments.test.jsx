@@ -49,6 +49,18 @@ async function openRescheduleConfirmation(user, slots = ['07:30', '07:45']) {
 
   return screen.getByRole('dialog', { name: /confirm reschedule/i })
 }
+async function openCancelConfirmation(user) {
+  fetch.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({ appointments: [activeAppointment] }),
+  })
+
+  render(<PatientAppointments />)
+
+  await user.click(await screen.findByRole('button', { name: /cancel appointment/i }))
+
+  return screen.getByRole('dialog', { name: /cancel appointment/i })
+}
 
 describe('PatientAppointments', () => {
   beforeEach(() => {
@@ -525,4 +537,85 @@ describe('PatientAppointments', () => {
       )
     })
   })
+  it('opens patient cancel confirmation popup with appointment details', async () => {
+  const user = userEvent.setup()
+
+  const dialog = await openCancelConfirmation(user)
+
+  expect(dialog).toBeInTheDocument()
+  expect(dialog).toHaveTextContent('Cancel appointment?')
+  expect(dialog).toHaveTextContent('Ubuntu Clinic')
+  expect(dialog).toHaveTextContent('Date')
+  expect(dialog).toHaveTextContent('Time')
+})
+
+it('dismisses patient cancel popup without calling cancel endpoint', async () => {
+  const user = userEvent.setup()
+
+  await openCancelConfirmation(user)
+  await user.click(screen.getByRole('button', { name: /keep appointment/i }))
+
+  expect(screen.queryByRole('dialog', { name: /cancel appointment/i }))
+    .not.toBeInTheDocument()
+
+  expect(fetch).toHaveBeenCalledTimes(1)
+})
+
+it('patient cancel confirm sends PATCH and removes appointment from view', async () => {
+  const user = userEvent.setup()
+
+  await openCancelConfirmation(user)
+
+  fetch.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({
+      message: 'Appointment cancelled successfully',
+      appointment: {
+        ...activeAppointment,
+        status: 'Cancelled',
+      },
+    }),
+  })
+
+  await user.click(screen.getByRole('button', { name: /yes, cancel/i }))
+
+  await waitFor(() => {
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:5000/api/appointments/appointment-1/cancel',
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+      }
+    )
+  })
+
+  expect(await screen.findByText(/appointment cancelled successfully/i))
+    .toBeInTheDocument()
+
+  expect(screen.queryByText('Ubuntu Clinic')).not.toBeInTheDocument()
+  expect(screen.queryByRole('dialog', { name: /cancel appointment/i }))
+    .not.toBeInTheDocument()
+})
+
+it('patient cancel displays backend error and keeps popup open', async () => {
+  const user = userEvent.setup()
+
+  const dialog = await openCancelConfirmation(user)
+
+  fetch.mockResolvedValueOnce({
+    ok: false,
+    json: async () => ({ error: 'Cannot cancel an appointment that is Completed' }),
+  })
+
+  await user.click(screen.getByRole('button', { name: /yes, cancel/i }))
+
+  expect(await screen.findByRole('alert'))
+    .toHaveTextContent('Cannot cancel an appointment that is Completed')
+
+  expect(dialog).toBeInTheDocument()
+  expect(dialog).toHaveTextContent('Ubuntu Clinic')
+})
 })

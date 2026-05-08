@@ -1984,6 +1984,66 @@ test('stores appointment using slot_id without extra appointment columns', async
         status: 'Cancelled',
       })
     })
+          test('releases appointment slot when cancellation succeeds', async () => {
+  scenario.maybeSingle.appointments = [
+    {
+      data: {
+        id: validAppointmentId,
+        clinic_id: validClinicId,
+        slot_id: validSlotId,
+        status: 'Confirmed',
+      },
+      error: null,
+    },
+  ]
+
+  scenario.single.appointments = [
+    {
+      data: {
+        id: validAppointmentId,
+        clinic_id: validClinicId,
+        slot_id: validSlotId,
+        status: 'Cancelled',
+      },
+      error: null,
+    },
+  ]
+
+  scenario.thenable.users = [
+    {
+      count: 1,
+      error: null,
+    },
+  ]
+
+  scenario.thenable.appointments = [
+    {
+      count: 0,
+      error: null,
+    },
+  ]
+
+  scenario.thenable.slots = [
+    {
+      data: null,
+      error: null,
+    },
+  ]
+
+  const res = await request(app).patch(
+    `/api/appointments/${validAppointmentId}/cancel`
+  )
+
+  expect(res.statusCode).toBe(200)
+
+  const slotUpdateBuilder = createdBuilders.find(
+    builder => builder.table === 'slots' && builder.update.mock.calls.length
+  )
+
+  expect(slotUpdateBuilder.update).toHaveBeenCalledWith({
+    is_available: true,
+  })
+})
 
     test('returns 500 when appointment lookup fails', async () => {
       scenario.maybeSingle.appointments = [
