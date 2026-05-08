@@ -3002,7 +3002,7 @@ app.patch('/api/appointments/:id/cancel', async (req, res) => {
 
     const { data: appointment, error: fetchError } = await supabase
       .from('appointments')
-      .select('id, status')
+      .select('id, clinic_id, slot_id, status')
       .eq('id', id)
       .maybeSingle()
 
@@ -3024,6 +3024,14 @@ app.patch('/api/appointments/:id/cancel', async (req, res) => {
       .single()
 
     if (error) throw error
+
+    const staffCount = await fetchClinicBookingCapacity(appointment.clinic_id)
+
+    await refreshSlotAvailability({
+      clinicId: appointment.clinic_id,
+      slotId: appointment.slot_id,
+      capacity: staffCount,
+    })
 
     return res.json(
       buildCancelResponse({
