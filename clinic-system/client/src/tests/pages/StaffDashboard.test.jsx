@@ -700,6 +700,8 @@ describe('StaffDashboard', () => {
         state: {
           clinic: { id: 'clinic-1', name: 'Hillbrow Clinic' },
           bookingMode: 'staff',
+          fromPage: 'Staff',
+          fromPath: '/staff',
         },
       })
     })
