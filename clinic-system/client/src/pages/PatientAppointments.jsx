@@ -825,7 +825,7 @@ export default function PatientAppointments() {
 
         {!loadingAppointments && !fetchError && rescheduleSuccess && (
           <p className="q-alert q-alert-success" role="status">
-            <span className="q-alert-icon">OK</span>
+            <span className="q-alert-icon">✓</span>
             {rescheduleSuccess}
           </p>
         )}

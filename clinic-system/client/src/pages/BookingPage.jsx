@@ -500,6 +500,9 @@ export default function BookingPage() {
   const [bookedDetails, setBookedDetails] = useState(null)
   const [toast, setToast] = useState({ message: '', type: '', visible: false })
 
+  const fromPage = location.state?.fromPage || (isStaff ? 'Staff' : 'Clinics')
+  const fromPath = location.state?.fromPath || (isStaff ? '/staff' : '/clinic')
+
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type, visible: true })
     window.clearTimeout(showToast.timeoutId)
@@ -755,10 +758,7 @@ export default function BookingPage() {
 
   // ── Back navigation ──
   function handleBack() {
-    if (isStaff) {
-      navigate('/clinic')
-    } 
-    navigate('/clinic')
+    navigate(fromPath)
   }
 
   // ── Redirect if no clinic context ──
@@ -798,7 +798,7 @@ export default function BookingPage() {
             </p>
             <div className="bp-actions" style={{ justifyContent: 'center' }}>
               <button className="bp-btn bp-btn-secondary" onClick={handleBack}>
-                ← Back to {isStaff ? 'Staff' : 'Clinics'}
+                ← Back to {fromPage}
               </button>
             </div>
           </div>

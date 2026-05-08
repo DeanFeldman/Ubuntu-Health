@@ -140,15 +140,18 @@ expect(within(card).getByText('Vaccination')).toBeInTheDocument()
       await screen.findByRole('button', { name: /Book appointment at Test Clinic/i })
     )
 
-    expect(mockNavigate).toHaveBeenCalledWith('/booking', {
-      state: {
-        clinic: expect.objectContaining({
-          id: 'clinic-1',
-          name: 'Test Clinic',
-        }),
-        bookingMode: 'patient',
-      },
-    })
+expect(mockNavigate).toHaveBeenCalledWith('/booking', {
+  state: {
+    clinic: expect.objectContaining({
+      id: 'clinic-1',
+      name: 'Test Clinic',
+    }),
+    bookingMode: 'patient',
+    fromPage: 'Clinics',
+    fromPath: '/clinic',
+  },
+})
+
   })
 
   test('filters clinics by search text', async () => {
