@@ -2791,7 +2791,7 @@ app.patch('/api/appointments/:id/status', async (req, res) => {
 
     const { data: appointment, error: fetchError } = await supabase
       .from('appointments')
-      .select('id, status')
+      .select('id, status, slot_id')
       .eq('id', id)
       .maybeSingle()
 
@@ -2801,9 +2801,24 @@ app.patch('/api/appointments/:id/status', async (req, res) => {
       return res.status(404).json({ error: 'Appointment not found' })
     }
 
+    let appointmentDateTime = null
+
+    if (appointment.slot_id) {
+      const { data: slot, error: slotError } = await supabase
+        .from('slots')
+        .select('slot_datetime')
+        .eq('id', appointment.slot_id)
+        .maybeSingle()
+
+      if (slotError) throw slotError
+
+      appointmentDateTime = slot?.slot_datetime || null
+    }
+
     const statusValidation = canMarkAppointmentStatus(
       appointment.status,
-      normalizedStatus
+      normalizedStatus,
+      appointmentDateTime
     )
 
     if (!statusValidation.valid) {

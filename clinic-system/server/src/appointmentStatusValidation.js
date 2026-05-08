@@ -33,7 +33,7 @@ function isFinalAppointmentStatus(status) {
   return ['Cancelled', 'Completed', 'No-show'].includes(status)
 }
 
-function canMarkAppointmentStatus(currentStatus, nextStatus) {
+function canMarkAppointmentStatus(currentStatus, nextStatus, appointmentDateTime = null) {
   const normalizedStatus = normalizeAppointmentStatus(nextStatus)
 
   if (!['Completed', 'No-show'].includes(normalizedStatus)) {
@@ -49,6 +49,18 @@ function canMarkAppointmentStatus(currentStatus, nextStatus) {
       valid: false,
       status: 409,
       error: `Appointment is already ${currentStatus}`,
+    }
+  }
+
+  if (normalizedStatus === 'No-show' && appointmentDateTime) {
+    const appointmentTime = new Date(appointmentDateTime)
+
+    if (!Number.isNaN(appointmentTime.getTime()) && appointmentTime > new Date()) {
+      return {
+        valid: false,
+        status: 409,
+        error: 'Cannot mark a future appointment as No-show',
+      }
     }
   }
 

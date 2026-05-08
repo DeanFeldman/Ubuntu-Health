@@ -130,6 +130,39 @@ describe('appointmentStatusValidation', () => {
         error: 'Appointment is already No-show',
       })
     })
+    test('rejects marking a future appointment as No-show', () => {
+  const futureDate = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+
+  expect(
+    canMarkAppointmentStatus('Confirmed', 'No-show', futureDate)
+  ).toEqual({
+    valid: false,
+    status: 409,
+    error: 'Cannot mark a future appointment as No-show',
+  })
+})
+
+test('allows marking a past appointment as No-show', () => {
+  const pastDate = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+
+  expect(
+    canMarkAppointmentStatus('Confirmed', 'No-show', pastDate)
+  ).toEqual({
+    valid: true,
+    normalizedStatus: 'No-show',
+  })
+})
+
+test('allows marking future appointment as Completed', () => {
+  const futureDate = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+
+  expect(
+    canMarkAppointmentStatus('Confirmed', 'Completed', futureDate)
+  ).toEqual({
+    valid: true,
+    normalizedStatus: 'Completed',
+  })
+})
   })
 
   describe('canRescheduleAppointment', () => {
