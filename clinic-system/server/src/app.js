@@ -564,16 +564,69 @@ if (!idValidation.valid) {
 
       usersById = Object.fromEntries((users || []).map(user => [user.id, user]))
     }
+   const today = new Date().toISOString().slice(0, 10)
 
-    const queueWithNames = (queueData || []).map(entry => ({
-      ...entry,
-      patient: usersById[entry.patient_id]
-        ? {
-            full_name: usersById[entry.patient_id].full_name,
-            email: usersById[entry.patient_id].email || null,
-          }
-        : null,
-    }))
+const appointmentPatientIds = patientIds
+
+let appointmentsWithDatetime = []
+
+if (appointmentPatientIds.length > 0) {
+  const { data: appointments, error: appointmentsError } = await supabase
+    .from('appointments')
+    .select('id, patient_id, clinic_id, slot_id, status')
+    .eq('clinic_id', clinicId)
+    .in('patient_id', appointmentPatientIds)
+    .in('status', ['Confirmed', 'Waiting'])
+
+  if (appointmentsError) throw appointmentsError
+
+  const slotIds = [
+    ...new Set((appointments || []).map(appointment => appointment.slot_id).filter(Boolean)),
+  ]
+
+  let slots = []
+
+  if (slotIds.length > 0) {
+    const { data: slotRows, error: slotsError } = await supabase
+      .from('slots')
+      .select('id, slot_datetime')
+      .in('id', slotIds)
+
+    if (slotsError) throw slotsError
+
+    slots = slotRows || []
+  }
+
+  appointmentsWithDatetime = attachSlotDatetimesToAppointments(
+    appointments || [],
+    slots
+  )
+}
+
+const appointmentTimeByPatientId = Object.fromEntries(
+  (appointmentPatientIds || []).map(patientId => {
+    const matchedAppointment = findSameDayClinicAppointment(
+      appointmentsWithDatetime.filter(appointment => appointment.patient_id === patientId),
+      clinicId,
+      today
+    )
+
+    const linkedAppointment = buildLinkedAppointmentResponse(matchedAppointment)
+
+    return [patientId, linkedAppointment?.appointment_time || null]
+  })
+)
+
+const queueWithNames = (queueData || []).map(entry => ({
+  ...entry,
+  patient: usersById[entry.patient_id]
+    ? {
+        full_name: usersById[entry.patient_id].full_name,
+        email: usersById[entry.patient_id].email || null,
+      }
+    : null,
+  appointment_time: appointmentTimeByPatientId[entry.patient_id] || null,
+}))
 
     res.json({
       debug: 'manual-name-join-live',
@@ -1022,7 +1075,7 @@ if (!adminIdValidation.valid) {
 })
 
 // POST /api/queue/:clinicId/join — patient joins the virtual queue
-const { validateQueueJoin, findSameDayClinicAppointment } = require('./queueValidation')
+const { validateQueueJoin, findSameDayClinicAppointment, attachSlotDatetimesToAppointments, buildLinkedAppointmentResponse } = require('./queueValidation')
 
 app.post('/api/queue/:clinicId/join', async (req, res) => {
   try {
@@ -1113,24 +1166,25 @@ if (!idValidation.valid) {
 
     if (apptError) throw apptError
 
-    const slotIds = [...new Set((patientAppointments || []).map(a => a.slot_id).filter(Boolean))]
-    let appointmentsWithDatetime = []
+    const slotIds = [
+  ...new Set((patientAppointments || []).map(a => a.slot_id).filter(Boolean)),
+]
 
-    if (slotIds.length > 0) {
-      const { data: slots, error: slotsError } = await supabase
-        .from('slots')
-        .select('id, slot_datetime')
-        .in('id', slotIds)
+let appointmentsWithDatetime = []
 
-      if (slotsError) throw slotsError
+if (slotIds.length > 0) {
+  const { data: slots, error: slotsError } = await supabase
+    .from('slots')
+    .select('id, slot_datetime')
+    .in('id', slotIds)
 
-      const slotsById = Object.fromEntries((slots || []).map(s => [s.id, s]))
+  if (slotsError) throw slotsError
 
-      appointmentsWithDatetime = (patientAppointments || []).map(a => ({
-        ...a,
-        slot_datetime: slotsById[a.slot_id]?.slot_datetime || null,
-      }))
-    }
+  appointmentsWithDatetime = attachSlotDatetimesToAppointments(
+    patientAppointments,
+    slots
+  )
+}
 
     // US-29-1-1: Find matching same-day appointment at this clinic
     const matchedAppointment = findSameDayClinicAppointment(appointmentsWithDatetime, clinicId, today)
@@ -1159,16 +1213,7 @@ if (!idValidation.valid) {
     res.status(201).json({
       entry: newEntry,
       queue_notifications: queueNotifications,
-      linked_appointment: linkedAppointment
-        ? {
-            id: linkedAppointment.id,
-            status: linkedAppointment.status,
-            slot_datetime: linkedAppointment.slot_datetime,
-            appointment_time: linkedAppointment.slot_datetime
-              ? getTimeFromAppointmentDatetime(linkedAppointment.slot_datetime)
-              : null,
-          }
-        : null,
+   linked_appointment: buildLinkedAppointmentResponse(linkedAppointment),
     })
   } catch (err) {
     console.error(err)

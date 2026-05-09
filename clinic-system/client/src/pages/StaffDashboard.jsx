@@ -125,17 +125,22 @@ const styles = `
 
 .sd-table th:nth-child(3),
 .sd-table td:nth-child(3) {
-  min-width: 260px;
+  min-width: 200px;
 }
 
 .sd-table th:nth-child(4),
 .sd-table td:nth-child(4) {
-  width: 130px;
+  width: 120px;
 }
 
 .sd-table th:nth-child(5),
 .sd-table td:nth-child(5) {
-  min-width: 380px;
+  width: 130px;
+}
+
+.sd-table th:nth-child(6),
+.sd-table td:nth-child(6) {
+  min-width: 320px;
 }
 
 .sd-actions {
@@ -627,6 +632,25 @@ const styles = `
   .sd-act-btn--primary:disabled { opacity: 0.5; cursor: not-allowed; }
   .sd-badge--confirmed { background: #DBEAFE; color: #1E40AF; }
   .sd-badge--cancelled { background: #FEE2E2; color: #991B1B; }
+
+  .sd-appt-time {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #1D4ED8;
+    background: #EFF6FF;
+    border: 1px solid #BFDBFE;
+    border-radius: 6px;
+    padding: 3px 8px;
+    white-space: nowrap;
+  }
+
+  .sd-appt-time-none {
+    font-size: 12px;
+    color: var(--uh-muted);
+  }
 `
 
 
@@ -1979,6 +2003,7 @@ return (
                           <th className="sd-pos">#</th>
                           <th>Patient</th>
                           <th>Patient Email</th>
+                          <th>Appt. Time</th>
                           <th>Status</th>
                           <th>Actions</th>
                         </tr>
@@ -1999,6 +2024,20 @@ return (
 
                             <td>{getDisplayName(entry)}</td>
                             <td>{entry.patient?.email}</td>
+
+                            <td>
+                              {(() => {
+                                const appt = appointments.find(
+                                  a => a.patient_id === entry.patient_id &&
+                                  !['Cancelled', 'Completed', 'No-show'].includes(a.status)
+                                )
+                                return appt ? (
+                                  <span className="sd-appt-time">🕐 {formatAppointmentTime(appt)}</span>
+                                ) : (
+                                  <span className="sd-appt-time-none">Walk-in</span>
+                                )
+                              })()}
+                            </td>
 
                             <td>
                               <span className={`sd-badge ${BADGE_CLASS[entry.status] ?? ''}`}>
