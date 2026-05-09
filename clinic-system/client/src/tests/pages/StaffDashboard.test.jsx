@@ -21,6 +21,9 @@ const mockNavigate = jest.fn()
 const defaultClinic = {
   id: 'clinic-1',
   name: 'Hillbrow Clinic',
+  facility_type: 'Clinic',
+  municipality: 'Region F',
+  district: 'Johannesburg',
   operating_hours: {
     monday: { open: '08:00', close: '17:00' },
     tuesday: { open: '08:00', close: '17:00' },
@@ -83,6 +86,15 @@ function setupFetchMock({
   autoNoShowsOk = true,
   autoNoShowsUpdatedCount = 0,
   autoNoShowsError = 'Failed to auto-mark no-shows.',
+  queueStatusOk = true,
+  queueStatusError = 'Could not update status.',
+  removeQueueOk = true,
+  removeQueueError = 'Could not remove patient.',
+  availabilityRows = [],
+  availabilityOk = true,
+  availabilityError = 'Failed to load availability.',
+  availabilitySaveOk = true,
+  availabilitySaveError = 'Failed to save availability.',
 } = {}) {
   global.fetch = jest.fn((url, options = {}) => {
     const urlString = String(url)
@@ -112,6 +124,47 @@ function setupFetchMock({
       return Promise.resolve({
         ok: true,
         json: async () => ({ completedCount }),
+      })
+    }
+
+    if (
+      urlString.includes('/api/queue/') &&
+      urlString.includes('/status') &&
+      method === 'PATCH'
+    ) {
+      const body = JSON.parse(options.body)
+
+      return Promise.resolve({
+        ok: queueStatusOk,
+        json: async () =>
+          queueStatusOk
+            ? {
+                entry: {
+                  id: 'entry-1',
+                  patient_id: 'patient-1',
+                  status: body.status,
+                  position: 1,
+                  patient: {
+                    full_name: 'Jane Doe',
+                    email: 'jane@example.com',
+                  },
+                },
+              }
+            : { error: queueStatusError },
+      })
+    }
+
+    if (
+      urlString.includes('/api/queue/') &&
+      urlString.includes('/entry/') &&
+      method === 'DELETE'
+    ) {
+      return Promise.resolve({
+        ok: removeQueueOk,
+        json: async () =>
+          removeQueueOk
+            ? { message: 'Patient removed from queue' }
+            : { error: removeQueueError },
       })
     }
 
@@ -193,22 +246,27 @@ function setupFetchMock({
 
     if (urlString.includes('/availability') && method === 'GET') {
       return Promise.resolve({
-        ok: true,
-        json: async () => ({ availability: [] }),
+        ok: availabilityOk,
+        json: async () =>
+          availabilityOk
+            ? { availability: availabilityRows }
+            : { error: availabilityError },
       })
     }
 
     if (urlString.includes('/availability') && method === 'POST') {
       return Promise.resolve({
-        ok: true,
-        json: async () => ({}),
+        ok: availabilitySaveOk,
+        json: async () =>
+          availabilitySaveOk ? {} : { error: availabilitySaveError },
       })
     }
 
     if (urlString.includes('/availability') && method === 'PATCH') {
       return Promise.resolve({
-        ok: true,
-        json: async () => ({}),
+        ok: availabilitySaveOk,
+        json: async () =>
+          availabilitySaveOk ? {} : { error: availabilitySaveError },
       })
     }
 
@@ -304,6 +362,17 @@ describe('StaffDashboard', () => {
     expect(
       await screen.findByText('No clinic is linked to this staff account.')
     ).toBeInTheDocument()
+  })
+
+  test('shows assigned clinic details in clinic section', async () => {
+    setupFetchMock()
+
+    renderDashboard()
+    await openSection(/clinic/i)
+
+    expect(await screen.findByText('Assigned clinic')).toBeInTheDocument()
+    expect(screen.getByText('Hillbrow Clinic')).toBeInTheDocument()
+    expect(screen.getByText(/Clinic • Region F • Johannesburg/i)).toBeInTheDocument()
   })
 
   test('shows queue error state when queue fetch fails', async () => {
@@ -425,101 +494,254 @@ describe('StaffDashboard', () => {
     expect(screen.getAllByText('Waiting').length).toBeGreaterThan(0)
     expect(screen.getByText('2')).toBeInTheDocument()
   })
+
   test('displays appointment time for queued patient with matching appointment', async () => {
-  setupFetchMock({
-    queue: [
-      {
-        id: 'entry-1',
-        patient_id: 'patient-1',
-        status: 'Waiting',
-        position: 1,
-        patient: {
-          full_name: 'Jane Doe',
-          email: 'jane@example.com',
+    setupFetchMock({
+      queue: [
+        {
+          id: 'entry-1',
+          patient_id: 'patient-1',
+          status: 'Waiting',
+          position: 1,
+          patient: {
+            full_name: 'Jane Doe',
+            email: 'jane@example.com',
+          },
         },
-      },
-    ],
-    appointments: [
-      {
-        ...activeAppointment,
-        patient_id: 'patient-1',
-        slot_datetime: '2099-05-11T10:00:00Z',
-        status: 'Confirmed',
-      },
-    ],
+      ],
+      appointments: [
+        {
+          ...activeAppointment,
+          patient_id: 'patient-1',
+          slot_datetime: '2099-05-11T10:00:00Z',
+          status: 'Confirmed',
+        },
+      ],
+    })
+
+    renderDashboard()
+
+    expect(await screen.findByText('Jane Doe')).toBeInTheDocument()
+    expect(screen.getByText('Appt. Time')).toBeInTheDocument()
+    expect(await screen.findByText(/10:00/)).toBeInTheDocument()
+    expect(screen.queryByText('Walk-in')).not.toBeInTheDocument()
   })
 
-  renderDashboard()
-
-  expect(await screen.findByText('Jane Doe')).toBeInTheDocument()
-  expect(screen.getByText('Appt. Time')).toBeInTheDocument()
-
-  expect(await screen.findByText(/10:00/)).toBeInTheDocument()
-  expect(screen.queryByText('Walk-in')).not.toBeInTheDocument()
-})
-
-test('displays Walk-in when queued patient has no matching appointment', async () => {
-  setupFetchMock({
-    queue: [
-      {
-        id: 'entry-1',
-        patient_id: 'walk-in-patient',
-        status: 'Waiting',
-        position: 1,
-        patient: {
-          full_name: 'Walk In Patient',
-          email: 'walkin@example.com',
+  test('displays Walk-in when queued patient has no matching appointment', async () => {
+    setupFetchMock({
+      queue: [
+        {
+          id: 'entry-1',
+          patient_id: 'walk-in-patient',
+          status: 'Waiting',
+          position: 1,
+          patient: {
+            full_name: 'Walk In Patient',
+            email: 'walkin@example.com',
+          },
         },
-      },
-    ],
-    appointments: [
-      {
-        ...activeAppointment,
-        patient_id: 'different-patient',
-        slot_datetime: '2099-05-11T10:00:00Z',
-        status: 'Confirmed',
-      },
-    ],
+      ],
+      appointments: [
+        {
+          ...activeAppointment,
+          patient_id: 'different-patient',
+          slot_datetime: '2099-05-11T10:00:00Z',
+          status: 'Confirmed',
+        },
+      ],
+    })
+
+    renderDashboard()
+
+    expect(await screen.findByText('Walk In Patient')).toBeInTheDocument()
+    expect(screen.getByText('Appt. Time')).toBeInTheDocument()
+    expect(screen.getByText('Walk-in')).toBeInTheDocument()
+    expect(screen.queryByText(/10:00/)).not.toBeInTheDocument()
   })
 
-  renderDashboard()
-
-  expect(await screen.findByText('Walk In Patient')).toBeInTheDocument()
-  expect(screen.getByText('Appt. Time')).toBeInTheDocument()
-  expect(screen.getByText('Walk-in')).toBeInTheDocument()
-  expect(screen.queryByText(/10:00/)).not.toBeInTheDocument()
-})
-
-test('displays Walk-in when matching appointment is finalised', async () => {
-  setupFetchMock({
-    queue: [
-      {
-        id: 'entry-1',
-        patient_id: 'patient-1',
-        status: 'Waiting',
-        position: 1,
-        patient: {
-          full_name: 'Jane Doe',
-          email: 'jane@example.com',
+  test('displays Walk-in when matching appointment is finalised', async () => {
+    setupFetchMock({
+      queue: [
+        {
+          id: 'entry-1',
+          patient_id: 'patient-1',
+          status: 'Waiting',
+          position: 1,
+          patient: {
+            full_name: 'Jane Doe',
+            email: 'jane@example.com',
+          },
         },
-      },
-    ],
-    appointments: [
-      {
-        ...activeAppointment,
-        patient_id: 'patient-1',
-        slot_datetime: '2099-05-11T10:00:00Z',
-        status: 'No-show',
-      },
-    ],
+      ],
+      appointments: [
+        {
+          ...activeAppointment,
+          patient_id: 'patient-1',
+          slot_datetime: '2099-05-11T10:00:00Z',
+          status: 'No-show',
+        },
+      ],
+    })
+
+    renderDashboard()
+
+    expect(await screen.findByText('Jane Doe')).toBeInTheDocument()
+    expect(screen.getByText('Walk-in')).toBeInTheDocument()
+    expect(screen.queryByText(/10:00/)).not.toBeInTheDocument()
   })
 
-  renderDashboard()
+  test('moves queue patient to next status', async () => {
+    const user = userEvent.setup()
 
-  expect(await screen.findByText('Jane Doe')).toBeInTheDocument()
-  expect(screen.getByText('Walk-in')).toBeInTheDocument()
-  expect(screen.queryByText(/10:00/)).not.toBeInTheDocument()
-})
+    setupFetchMock({
+      queue: [
+        {
+          id: 'entry-1',
+          patient_id: 'patient-1',
+          status: 'Waiting',
+          position: 1,
+          patient: {
+            full_name: 'Jane Doe',
+            email: 'jane@example.com',
+          },
+        },
+      ],
+    })
+
+    renderDashboard()
+
+    expect(await screen.findByText('Jane Doe')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /next status/i }))
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:8080/api/queue/clinic-1/entry/entry-1/status',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'In Consultation' }),
+        })
+      )
+    })
+
+    expect(await screen.findByText('Jane Doe marked as In Consultation.')).toBeInTheDocument()
+  })
+
+  test('shows queue status update error when backend rejects next status', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock({
+      queueStatusOk: false,
+      queueStatusError: 'Invalid queue transition',
+      queue: [
+        {
+          id: 'entry-1',
+          patient_id: 'patient-1',
+          status: 'Waiting',
+          position: 1,
+          patient: {
+            full_name: 'Jane Doe',
+            email: 'jane@example.com',
+          },
+        },
+      ],
+    })
+
+    renderDashboard()
+
+    expect(await screen.findByText('Jane Doe')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /next status/i }))
+
+    expect(await screen.findByText('Invalid queue transition')).toBeInTheDocument()
+  })
+
+  test('removes patient from queue', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock({
+      queue: [
+        {
+          id: 'entry-1',
+          patient_id: 'patient-1',
+          status: 'Waiting',
+          position: 1,
+          patient: {
+            full_name: 'Jane Doe',
+            email: 'jane@example.com',
+          },
+        },
+      ],
+    })
+
+    renderDashboard()
+
+    expect(await screen.findByText('Jane Doe')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^remove$/i }))
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:8080/api/queue/clinic-1/entry/entry-1',
+        expect.objectContaining({
+          method: 'DELETE',
+        })
+      )
+    })
+
+    expect(await screen.findByText('Jane Doe removed from the queue.')).toBeInTheDocument()
+  })
+
+  test('shows remove queue error when backend rejects removal', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock({
+      removeQueueOk: false,
+      removeQueueError: 'Cannot remove patient now',
+      queue: [
+        {
+          id: 'entry-1',
+          patient_id: 'patient-1',
+          status: 'Waiting',
+          position: 1,
+          patient: {
+            full_name: 'Jane Doe',
+            email: 'jane@example.com',
+          },
+        },
+      ],
+    })
+
+    renderDashboard()
+
+    expect(await screen.findByText('Jane Doe')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^remove$/i }))
+
+    expect(await screen.findByText('Cannot remove patient now')).toBeInTheDocument()
+  })
+
+  test('does not show next status button for complete queue entry', async () => {
+    setupFetchMock({
+      queue: [
+        {
+          id: 'entry-1',
+          patient_id: 'patient-1',
+          status: 'Complete',
+          position: 1,
+          patient: {
+            full_name: 'Jane Doe',
+            email: 'jane@example.com',
+          },
+        },
+      ],
+    })
+
+    renderDashboard()
+
+    expect(await screen.findByText('Jane Doe')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /next status/i })).not.toBeInTheDocument()
+  })
 
   test('adds selected patient to queue', async () => {
     const user = userEvent.setup()
@@ -922,6 +1144,111 @@ test('displays Walk-in when matching appointment is finalised', async () => {
     expect(screen.getByText(/set the days and times/i)).toBeInTheDocument()
   })
 
+  test('loads existing availability rows', async () => {
+    setupFetchMock({
+      availabilityRows: [
+        {
+          id: 'availability-1',
+          day_of_week: 0,
+          start_time: '09:00:00',
+          end_time: '15:00:00',
+          is_available: true,
+        },
+      ],
+    })
+
+    renderDashboard()
+    await openSection(/availability/i)
+
+    expect(await screen.findByLabelText(/monday start time/i)).toHaveValue('09:00')
+    expect(screen.getByLabelText(/monday end time/i)).toHaveValue('15:00')
+  })
+
+  test('shows availability validation error when start time is after end time', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock()
+
+    renderDashboard()
+    await openSection(/availability/i)
+
+    const mondayStart = await screen.findByLabelText(/monday start time/i)
+    const mondayEnd = screen.getByLabelText(/monday end time/i)
+
+    await user.clear(mondayStart)
+    await user.type(mondayStart, '17:00')
+
+    await user.clear(mondayEnd)
+    await user.type(mondayEnd, '08:00')
+
+    await user.click(screen.getByRole('button', { name: /save availability/i }))
+
+    expect(await screen.findByText('Start time must be before end time.')).toBeInTheDocument()
+    expect(await screen.findByText('Please fix availability errors first.')).toBeInTheDocument()
+  })
+
+  test('saves availability successfully', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock({
+      availabilityRows: [
+        {
+          id: 'availability-1',
+          day_of_week: 0,
+          start_time: '09:00:00',
+          end_time: '15:00:00',
+          is_available: true,
+        },
+      ],
+    })
+
+    renderDashboard()
+    await openSection(/availability/i)
+
+    await user.click(await screen.findByRole('button', { name: /save availability/i }))
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:8080/api/staff/staff-1/availability/availability-1',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({
+            start_time: '09:00',
+            end_time: '15:00',
+            is_available: true,
+          }),
+        })
+      )
+    })
+
+    expect(await screen.findByText('Availability saved successfully.')).toBeInTheDocument()
+  })
+
+  test('shows availability save error when backend rejects save', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock({
+      availabilitySaveOk: false,
+      availabilitySaveError: 'Availability overlaps another schedule',
+      availabilityRows: [
+        {
+          id: 'availability-1',
+          day_of_week: 0,
+          start_time: '09:00:00',
+          end_time: '15:00:00',
+          is_available: true,
+        },
+      ],
+    })
+
+    renderDashboard()
+    await openSection(/availability/i)
+
+    await user.click(await screen.findByRole('button', { name: /save availability/i }))
+
+    expect(await screen.findByText('Availability overlaps another schedule')).toBeInTheDocument()
+  })
+
   test('updates staff appointment view when marking appointment as Completed', async () => {
     const user = userEvent.setup()
 
@@ -1074,12 +1401,12 @@ test('displays Walk-in when matching appointment is finalised', async () => {
 
       expect(screen.getByText('Jane Appointment')).toBeInTheDocument()
 
-await waitFor(() => {
-  expect(screen.getAllByText('Cancelled').length).toBeGreaterThan(0)
-})
+      await waitFor(() => {
+        expect(screen.getAllByText('Cancelled').length).toBeGreaterThan(0)
+      })
 
-expect(screen.queryByRole('dialog', { name: /cancel appointment/i }))
-  .not.toBeInTheDocument()
+      expect(screen.queryByRole('dialog', { name: /cancel appointment/i }))
+        .not.toBeInTheDocument()
     })
 
     test('staff cancel displays backend error and keeps popup open', async () => {
@@ -1097,7 +1424,9 @@ expect(screen.queryByRole('dialog', { name: /cancel appointment/i }))
       await user.click(await screen.findByRole('button', { name: /^cancel$/i }))
       await user.click(screen.getByRole('button', { name: /yes, cancel/i }))
 
-      expect(await screen.findByText(/cannot cancel an appointment that is completed/i)).toBeInTheDocument()
+      expect(
+        await screen.findByText(/cannot cancel an appointment that is completed/i)
+      ).toBeInTheDocument()
 
       expect(screen.getByRole('dialog', { name: /cancel appointment/i }))
         .toBeInTheDocument()
