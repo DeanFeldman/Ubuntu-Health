@@ -90,6 +90,10 @@ jest.mock('../../src/queueNotificationService', () => ({
   checkAndTriggerNotifications: jest.fn(() => []),
 }))
 
+jest.mock('../../src/emailService', () => ({
+  sendAppointmentConfirmationEmail: jest.fn(() => Promise.resolve({ sent: true })),
+}))
+
 const validClinicId = '00000000-0000-0000-0000-000000000001'
 const validPatientId = '00000000-0000-0000-0000-000000000002'
 const validAppointmentId = '00000000-0000-0000-0000-000000000010'
@@ -99,7 +103,7 @@ const invalidId = 'invalid-id'
 
 const FUTURE_MONDAY = '2099-05-11'
 const FUTURE_SATURDAY = '2099-05-16'
-
+let sendAppointmentConfirmationEmail
 beforeEach(() => {
   jest.resetModules()
   createdBuilders = []
@@ -118,6 +122,11 @@ beforeEach(() => {
   }
 
   app = require('../../src/app')
+
+sendAppointmentConfirmationEmail =
+  require('../../src/emailService').sendAppointmentConfirmationEmail
+
+sendAppointmentConfirmationEmail.mockClear()
 })
 
 describe('Appointment route tests', () => {
@@ -839,6 +848,193 @@ test('stores appointment using slot_id without extra appointment columns', async
       expect(res.statusCode).toBe(500)
       expect(res.body).toEqual({ error: 'Failed to create appointment' })
     })
+test('triggers confirmation email after successful booking', async () => {
+  scenario.maybeSingle.clinics = [
+    {
+      data: {
+        id: validClinicId,
+        name: 'Ubuntu Clinic',
+        operating_hours: null,
+        appointment_duration_minutes: null,
+      },
+      error: null,
+    },
+  ]
+
+  scenario.maybeSingle.slots = [
+    {
+      data: {
+        id: validSlotId,
+        slot_datetime: `${FUTURE_MONDAY}T07:45:00.000Z`,
+      },
+      error: null,
+    },
+  ]
+
+  scenario.thenable.users = [
+    {
+      count: 2,
+      error: null,
+    },
+  ]
+
+  scenario.thenable.appointments = [
+    {
+      data: [],
+      error: null,
+    },
+  ]
+
+  scenario.single.appointments = [
+    {
+      data: {
+        id: validAppointmentId,
+        clinic_id: validClinicId,
+        patient_id: validPatientId,
+        slot_id: validSlotId,
+        status: 'Confirmed',
+      },
+      error: null,
+    },
+  ]
+
+  scenario.maybeSingle.users = [
+    {
+      data: {
+        id: validPatientId,
+        role: 'Patient',
+        clinic_id: null,
+      },
+      error: null,
+    },
+    {
+      data: {
+        email: 'patient@example.com',
+        full_name: 'Jane Patient',
+      },
+      error: null,
+    },
+  ]
+
+  const response = await request(app)
+    .post('/api/appointments')
+    .send({
+      clinic_id: validClinicId,
+      patient_id: validPatientId,
+      date: FUTURE_MONDAY,
+      time: '07:45',
+      booked_by: validPatientId,
+    })
+
+  expect(response.statusCode).toBe(201)
+
+  expect(sendAppointmentConfirmationEmail).toHaveBeenCalledTimes(1)
+
+  expect(sendAppointmentConfirmationEmail).toHaveBeenCalledWith({
+    to: 'patient@example.com',
+    patientName: 'Jane Patient',
+    clinicName: 'Ubuntu Clinic',
+    date: FUTURE_MONDAY,
+    time: '07:45',
+  })
+})
+test('still creates appointment when confirmation email fails', async () => {
+  sendAppointmentConfirmationEmail.mockRejectedValueOnce(
+    new Error('SMTP failed')
+  )
+
+  scenario.maybeSingle.clinics = [
+    {
+      data: {
+        id: validClinicId,
+        name: 'Ubuntu Clinic',
+        operating_hours: null,
+        appointment_duration_minutes: null,
+      },
+      error: null,
+    },
+  ]
+
+  scenario.maybeSingle.slots = [
+    {
+      data: {
+        id: validSlotId,
+        slot_datetime: `${FUTURE_MONDAY}T07:45:00.000Z`,
+      },
+      error: null,
+    },
+  ]
+
+  scenario.thenable.users = [
+    {
+      count: 2,
+      error: null,
+    },
+  ]
+
+  scenario.thenable.appointments = [
+    {
+      data: [],
+      error: null,
+    },
+  ]
+
+  scenario.single.appointments = [
+    {
+      data: {
+        id: validAppointmentId,
+        clinic_id: validClinicId,
+        patient_id: validPatientId,
+        slot_id: validSlotId,
+        status: 'Confirmed',
+      },
+      error: null,
+    },
+  ]
+
+  scenario.maybeSingle.users = [
+    {
+      data: {
+        id: validPatientId,
+        role: 'Patient',
+        clinic_id: null,
+      },
+      error: null,
+    },
+    {
+      data: {
+        email: 'patient@example.com',
+        full_name: 'Jane Patient',
+      },
+      error: null,
+    },
+  ]
+
+  const response = await request(app)
+    .post('/api/appointments')
+    .send({
+      clinic_id: validClinicId,
+      patient_id: validPatientId,
+      date: FUTURE_MONDAY,
+      time: '07:45',
+      booked_by: validPatientId,
+    })
+
+  expect(response.statusCode).toBe(201)
+
+  expect(response.body).toEqual({
+    message: 'Appointment booked successfully',
+    appointment: {
+      id: validAppointmentId,
+      clinic_id: validClinicId,
+      patient_id: validPatientId,
+      slot_id: validSlotId,
+      status: 'Confirmed',
+    },
+  })
+
+  expect(sendAppointmentConfirmationEmail).toHaveBeenCalledTimes(1)
+})
   })
 
   describe('GET /api/appointments/patient/:patientId', () => {
