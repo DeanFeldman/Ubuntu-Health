@@ -425,6 +425,101 @@ describe('StaffDashboard', () => {
     expect(screen.getAllByText('Waiting').length).toBeGreaterThan(0)
     expect(screen.getByText('2')).toBeInTheDocument()
   })
+  test('displays appointment time for queued patient with matching appointment', async () => {
+  setupFetchMock({
+    queue: [
+      {
+        id: 'entry-1',
+        patient_id: 'patient-1',
+        status: 'Waiting',
+        position: 1,
+        patient: {
+          full_name: 'Jane Doe',
+          email: 'jane@example.com',
+        },
+      },
+    ],
+    appointments: [
+      {
+        ...activeAppointment,
+        patient_id: 'patient-1',
+        slot_datetime: '2099-05-11T10:00:00Z',
+        status: 'Confirmed',
+      },
+    ],
+  })
+
+  renderDashboard()
+
+  expect(await screen.findByText('Jane Doe')).toBeInTheDocument()
+  expect(screen.getByText('Appt. Time')).toBeInTheDocument()
+
+  expect(await screen.findByText(/10:00/)).toBeInTheDocument()
+  expect(screen.queryByText('Walk-in')).not.toBeInTheDocument()
+})
+
+test('displays Walk-in when queued patient has no matching appointment', async () => {
+  setupFetchMock({
+    queue: [
+      {
+        id: 'entry-1',
+        patient_id: 'walk-in-patient',
+        status: 'Waiting',
+        position: 1,
+        patient: {
+          full_name: 'Walk In Patient',
+          email: 'walkin@example.com',
+        },
+      },
+    ],
+    appointments: [
+      {
+        ...activeAppointment,
+        patient_id: 'different-patient',
+        slot_datetime: '2099-05-11T10:00:00Z',
+        status: 'Confirmed',
+      },
+    ],
+  })
+
+  renderDashboard()
+
+  expect(await screen.findByText('Walk In Patient')).toBeInTheDocument()
+  expect(screen.getByText('Appt. Time')).toBeInTheDocument()
+  expect(screen.getByText('Walk-in')).toBeInTheDocument()
+  expect(screen.queryByText(/10:00/)).not.toBeInTheDocument()
+})
+
+test('displays Walk-in when matching appointment is finalised', async () => {
+  setupFetchMock({
+    queue: [
+      {
+        id: 'entry-1',
+        patient_id: 'patient-1',
+        status: 'Waiting',
+        position: 1,
+        patient: {
+          full_name: 'Jane Doe',
+          email: 'jane@example.com',
+        },
+      },
+    ],
+    appointments: [
+      {
+        ...activeAppointment,
+        patient_id: 'patient-1',
+        slot_datetime: '2099-05-11T10:00:00Z',
+        status: 'No-show',
+      },
+    ],
+  })
+
+  renderDashboard()
+
+  expect(await screen.findByText('Jane Doe')).toBeInTheDocument()
+  expect(screen.getByText('Walk-in')).toBeInTheDocument()
+  expect(screen.queryByText(/10:00/)).not.toBeInTheDocument()
+})
 
   test('adds selected patient to queue', async () => {
     const user = userEvent.setup()
