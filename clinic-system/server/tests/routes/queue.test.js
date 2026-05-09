@@ -1653,6 +1653,135 @@ describe('clinic queue list', () => {
       })
     )
   })
+  test('GET /api/queue/:clinicId includes same-day appointment time for queued patients', async () => {
+  const today = new Date().toISOString().slice(0, 10)
+
+  scenario.thenable.queue_entries = [
+    {
+      data: [
+        {
+          id: validQueueEntryId,
+          clinic_id: validClinicId,
+          patient_id: validPatientId,
+          position: 1,
+          status: 'Waiting',
+          joined_at: '2026-04-20T10:00:00.000Z',
+          called_at: null,
+          completed_at: null,
+        },
+      ],
+      error: null,
+    },
+  ]
+
+  scenario.thenable.users = [
+    {
+      data: [
+        {
+          id: validPatientId,
+          full_name: 'Test Patient',
+          email: 'patient@example.com',
+        },
+      ],
+      error: null,
+    },
+  ]
+
+  scenario.thenable.appointments = [
+    {
+      data: [
+        {
+          id: validAppointmentId,
+          patient_id: validPatientId,
+          clinic_id: validClinicId,
+          slot_id: validSlotId,
+          status: 'Waiting',
+        },
+      ],
+      error: null,
+    },
+  ]
+
+  scenario.thenable.slots = [
+    {
+      data: [
+        {
+          id: validSlotId,
+          slot_datetime: `${today}T07:45:00.000Z`,
+        },
+      ],
+      error: null,
+    },
+  ]
+
+  const res = await request(app).get(`/api/queue/${validClinicId}`)
+
+  expect(res.statusCode).toBe(200)
+  expect(res.body.queue).toHaveLength(1)
+  expect(res.body.queue[0]).toEqual(
+    expect.objectContaining({
+      id: validQueueEntryId,
+      patient_id: validPatientId,
+      position: 1,
+      status: 'Waiting',
+      appointment_time: '09:45',
+    })
+  )
+})
+
+test('GET /api/queue/:clinicId returns null appointment time for walk-in queued patients', async () => {
+  scenario.thenable.queue_entries = [
+    {
+      data: [
+        {
+          id: validQueueEntryId,
+          clinic_id: validClinicId,
+          patient_id: validPatientId,
+          position: 1,
+          status: 'Waiting',
+          joined_at: '2026-04-20T10:00:00.000Z',
+          called_at: null,
+          completed_at: null,
+        },
+      ],
+      error: null,
+    },
+  ]
+
+  scenario.thenable.users = [
+    {
+      data: [
+        {
+          id: validPatientId,
+          full_name: 'Walk In Patient',
+          email: 'walkin@example.com',
+        },
+      ],
+      error: null,
+    },
+  ]
+
+  scenario.thenable.appointments = [
+    {
+      data: [],
+      error: null,
+    },
+  ]
+
+  const res = await request(app).get(`/api/queue/${validClinicId}`)
+
+  expect(res.statusCode).toBe(200)
+  expect(res.body.queue).toHaveLength(1)
+  expect(res.body.queue[0]).toEqual(
+    expect.objectContaining({
+      id: validQueueEntryId,
+      patient_id: validPatientId,
+      position: 1,
+      status: 'Waiting',
+      appointment_time: null,
+    })
+  )
+})
 
   test('GET /api/queue/:clinicId returns empty queue when no active entries exist', async () => {
     scenario.thenable.queue_entries = [

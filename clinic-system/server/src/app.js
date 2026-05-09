@@ -560,16 +560,69 @@ if (!idValidation.valid) {
 
       usersById = Object.fromEntries((users || []).map(user => [user.id, user]))
     }
+   const today = new Date().toISOString().slice(0, 10)
 
-    const queueWithNames = (queueData || []).map(entry => ({
-      ...entry,
-      patient: usersById[entry.patient_id]
-        ? {
-            full_name: usersById[entry.patient_id].full_name,
-            email: usersById[entry.patient_id].email || null,
-          }
-        : null,
-    }))
+const appointmentPatientIds = patientIds
+
+let appointmentsWithDatetime = []
+
+if (appointmentPatientIds.length > 0) {
+  const { data: appointments, error: appointmentsError } = await supabase
+    .from('appointments')
+    .select('id, patient_id, clinic_id, slot_id, status')
+    .eq('clinic_id', clinicId)
+    .in('patient_id', appointmentPatientIds)
+    .in('status', ['Confirmed', 'Waiting'])
+
+  if (appointmentsError) throw appointmentsError
+
+  const slotIds = [
+    ...new Set((appointments || []).map(appointment => appointment.slot_id).filter(Boolean)),
+  ]
+
+  let slots = []
+
+  if (slotIds.length > 0) {
+    const { data: slotRows, error: slotsError } = await supabase
+      .from('slots')
+      .select('id, slot_datetime')
+      .in('id', slotIds)
+
+    if (slotsError) throw slotsError
+
+    slots = slotRows || []
+  }
+
+  appointmentsWithDatetime = attachSlotDatetimesToAppointments(
+    appointments || [],
+    slots
+  )
+}
+
+const appointmentTimeByPatientId = Object.fromEntries(
+  (appointmentPatientIds || []).map(patientId => {
+    const matchedAppointment = findSameDayClinicAppointment(
+      appointmentsWithDatetime.filter(appointment => appointment.patient_id === patientId),
+      clinicId,
+      today
+    )
+
+    const linkedAppointment = buildLinkedAppointmentResponse(matchedAppointment)
+
+    return [patientId, linkedAppointment?.appointment_time || null]
+  })
+)
+
+const queueWithNames = (queueData || []).map(entry => ({
+  ...entry,
+  patient: usersById[entry.patient_id]
+    ? {
+        full_name: usersById[entry.patient_id].full_name,
+        email: usersById[entry.patient_id].email || null,
+      }
+    : null,
+  appointment_time: appointmentTimeByPatientId[entry.patient_id] || null,
+}))
 
     res.json({
       debug: 'manual-name-join-live',
