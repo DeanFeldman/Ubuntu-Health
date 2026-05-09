@@ -36,6 +36,8 @@ function getClinicCloseTimeForDate(clinic, slotDatetime) {
 
   if (Number.isNaN(closeDateTime.getTime())) return null
 
+  // Dean's auto no-show rule:
+  // an appointment becomes eligible for No-show after clinic close + 2 hours.
   closeDateTime.setHours(closeDateTime.getHours() + 2)
 
   return closeDateTime
@@ -47,7 +49,7 @@ function findMissedAppointmentIds({
   clinicsById = {},
   clinic = null,
   now = new Date(),
-}) {
+} = {}) {
   return (appointments || [])
     .filter((appointment) => {
       const slotDatetime = slotsById[appointment.slot_id]?.slot_datetime
