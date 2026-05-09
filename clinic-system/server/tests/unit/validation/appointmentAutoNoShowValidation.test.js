@@ -121,6 +121,11 @@ describe('appointmentAutoNoShowValidation', () => {
 
   describe('findMissedAppointmentIds', () => {
     test('returns appointment IDs where current time is after clinic close grace period', () => {
+      const autoNoShowTime = getClinicCloseTimeForDate(
+        mondayClinic,
+        '2099-05-11T09:00:00.000Z'
+      )
+
       const result = findMissedAppointmentIds({
         appointments: [
           {
@@ -145,13 +150,18 @@ describe('appointmentAutoNoShowValidation', () => {
         clinicsById: {
           'clinic-1': mondayClinic,
         },
-        now: new Date('2099-05-11T17:00:00.000Z'),
+        now: new Date(autoNoShowTime.getTime() + 1),
       })
 
       expect(result).toEqual(['appointment-1', 'appointment-2'])
     })
 
     test('does not return appointments before clinic close grace period', () => {
+      const autoNoShowTime = getClinicCloseTimeForDate(
+        mondayClinic,
+        '2099-05-11T09:00:00.000Z'
+      )
+
       const result = findMissedAppointmentIds({
         appointments: [
           {
@@ -168,13 +178,18 @@ describe('appointmentAutoNoShowValidation', () => {
         clinicsById: {
           'clinic-1': mondayClinic,
         },
-        now: new Date('2099-05-11T16:59:59.000Z'),
+        now: new Date(autoNoShowTime.getTime() - 1),
       })
 
       expect(result).toEqual([])
     })
 
     test('uses single clinic argument when provided', () => {
+      const autoNoShowTime = getClinicCloseTimeForDate(
+        mondayClinic,
+        '2099-05-11T09:00:00.000Z'
+      )
+
       const result = findMissedAppointmentIds({
         appointments: [
           {
@@ -189,13 +204,18 @@ describe('appointmentAutoNoShowValidation', () => {
           },
         },
         clinic: mondayClinic,
-        now: new Date('2099-05-11T17:00:00.000Z'),
+        now: new Date(autoNoShowTime.getTime() + 1),
       })
 
       expect(result).toEqual(['appointment-1'])
     })
 
     test('skips appointments without slot datetime or clinic', () => {
+      const autoNoShowTime = getClinicCloseTimeForDate(
+        mondayClinic,
+        '2099-05-11T09:00:00.000Z'
+      )
+
       const result = findMissedAppointmentIds({
         appointments: [
           {
@@ -217,13 +237,18 @@ describe('appointmentAutoNoShowValidation', () => {
         clinicsById: {
           'clinic-1': mondayClinic,
         },
-        now: new Date('2099-05-11T17:00:00.000Z'),
+        now: new Date(autoNoShowTime.getTime() + 1),
       })
 
       expect(result).toEqual([])
     })
 
     test('skips appointments when no auto no-show time can be calculated', () => {
+      const autoNoShowTime = getClinicCloseTimeForDate(
+        mondayClinic,
+        '2099-05-11T09:00:00.000Z'
+      )
+
       const result = findMissedAppointmentIds({
         appointments: [
           {
@@ -246,7 +271,7 @@ describe('appointmentAutoNoShowValidation', () => {
             },
           },
         },
-        now: new Date('2099-05-11T17:00:00.000Z'),
+        now: new Date(autoNoShowTime.getTime() + 1),
       })
 
       expect(result).toEqual([])
