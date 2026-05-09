@@ -312,7 +312,7 @@ async function findOrCreateClinicSlot(clinicId, slotDatetimeIso) {
 
   return createdSlot
 }
-
+/*
 function getClinicCloseTimeForDate(clinic, slotDatetime) {
   if (!clinic || !slotDatetime) return null
 
@@ -352,7 +352,11 @@ function getClinicCloseTimeForDate(clinic, slotDatetime) {
   closeDateTime.setHours(closeDateTime.getHours() + 2)
 
   return closeDateTime
-}
+}*/
+const {
+  findMissedAppointmentIds,
+  buildAutoNoShowResponse,
+} = require('./appointmentAutoNoShowValidation')
 
 async function countActiveAppointmentsForSlot(clinicId, slotId) {
   if (!slotId) return 0
@@ -3167,28 +3171,16 @@ app.patch('/api/appointments/auto-no-shows/user/:patientId', async (req, res) =>
 
     const clinicsById = Object.fromEntries((clinics || []).map(clinic => [clinic.id, clinic]))
 
-    const missedAppointmentIds = appointments
-      .filter(appointment => {
-        const slotDatetime = slotsById[appointment.slot_id]?.slot_datetime
-        const clinic = clinicsById[appointment.clinic_id]
+    const missedAppointmentIds = findMissedAppointmentIds({
+  appointments,
+  slotsById,
+  clinicsById,
+  now,
+})
 
-        if (!slotDatetime || !clinic) return false
-
-        const autoNoShowTime = getClinicCloseTimeForDate(clinic, slotDatetime)
-
-        if (!autoNoShowTime) return false
-
-        return now >= autoNoShowTime
-      })
-      .map(appointment => appointment.id)
-
-    if (missedAppointmentIds.length === 0) {
-      return res.json({
-        message: 'No missed appointments found',
-        updatedCount: 0,
-        appointments: [],
-      })
-    }
+if (missedAppointmentIds.length === 0) {
+  return res.json(buildAutoNoShowResponse())
+}
 
     const { data, error } = await supabase
       .from('appointments')
@@ -3198,11 +3190,7 @@ app.patch('/api/appointments/auto-no-shows/user/:patientId', async (req, res) =>
 
     if (error) throw error
 
-    return res.json({
-      message: `${data.length} appointment(s) marked as No-show`,
-      updatedCount: data.length,
-      appointments: data,
-    })
+   return res.json(buildAutoNoShowResponse(data))
   } catch (err) {
     console.error('Failed to auto-mark patient no-shows:', err)
     return res.status(500).json({ error: 'Failed to auto-mark no-shows' })
@@ -3268,27 +3256,16 @@ app.patch('/api/appointments/auto-no-shows/:clinicId', async (req, res) => {
 
     const slotsById = Object.fromEntries((slots || []).map(slot => [slot.id, slot]))
 
-    const missedAppointmentIds = appointments
-      .filter(appointment => {
-        const slotDatetime = slotsById[appointment.slot_id]?.slot_datetime
+    const missedAppointmentIds = findMissedAppointmentIds({
+  appointments,
+  slotsById,
+  clinic,
+  now,
+})
 
-        if (!slotDatetime) return false
-
-        const autoNoShowTime = getClinicCloseTimeForDate(clinic, slotDatetime)
-
-        if (!autoNoShowTime) return false
-
-        return now >= autoNoShowTime
-      })
-      .map(appointment => appointment.id)
-
-    if (missedAppointmentIds.length === 0) {
-      return res.json({
-        message: 'No missed appointments found',
-        updatedCount: 0,
-        appointments: [],
-      })
-    }
+if (missedAppointmentIds.length === 0) {
+  return res.json(buildAutoNoShowResponse())
+}
 
     const { data, error } = await supabase
       .from('appointments')
@@ -3298,11 +3275,7 @@ app.patch('/api/appointments/auto-no-shows/:clinicId', async (req, res) => {
 
     if (error) throw error
 
-    return res.json({
-      message: `${data.length} appointment(s) marked as No-show`,
-      updatedCount: data.length,
-      appointments: data,
-    })
+    return res.json(buildAutoNoShowResponse(data))
   } catch (err) {
     console.error('Failed to auto-mark no-shows:', err)
     return res.status(500).json({ error: 'Failed to auto-mark no-shows' })
