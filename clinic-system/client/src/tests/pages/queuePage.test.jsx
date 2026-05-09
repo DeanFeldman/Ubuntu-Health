@@ -701,4 +701,154 @@ test('confirm join shows generic backend error for unexpected failure', async ()
     (await screen.findAllByText('Queue insert failed')).length
   ).toBeGreaterThan(0)
 })
+
+test('fetches clinic name when queue entry and pending clinic do not include clinic name', async () => {
+  setHistoryClinic({
+    id: 'clinic-123',
+    municipality: 'Cape Town',
+    district: 'Metro',
+  })
+
+  mockQueueFetchResponse({
+    queue: [
+      {
+        id: 'entry-1',
+        clinic_id: 'clinic-123',
+        patient_id: 'patient-123',
+        position: 1,
+        status: 'Waiting',
+        joined_at: '2026-04-16T10:00:00.000Z',
+      },
+    ],
+  })
+
+  mockWaitTimeFetchResponse({
+    estimatedWaitTime: 10,
+  })
+
+  fetch.mockResolvedValueOnce({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      clinic: {
+        id: 'clinic-123',
+        name: 'Fetched Clinic Name',
+      },
+    }),
+  })
+
+  render(<QueuePage />)
+
+  expect(await screen.findByText('Fetched Clinic Name')).toBeInTheDocument()
+
+  expect(fetch).toHaveBeenCalledWith(
+    'http://localhost:8080/api/clinics/clinic-123',
+    expect.objectContaining({
+      headers: { Accept: 'application/json' },
+    })
+  )
+})
+
+test('continues when estimated wait request throws', async () => {
+  mockQueueFetchResponse({
+    queue: [
+      {
+        id: 'entry-1',
+        clinic_id: 'clinic-123',
+        patient_id: 'patient-123',
+        clinic_name: 'Test Clinic',
+        position: 1,
+        status: 'Waiting',
+        joined_at: '2026-04-16T10:00:00.000Z',
+      },
+    ],
+  })
+
+  fetch.mockRejectedValueOnce(new Error('wait service down'))
+
+  render(<QueuePage />)
+
+  expect(await screen.findByText('Track your live queue position.')).toBeInTheDocument()
+  expect(screen.queryByText('Estimated wait')).not.toBeInTheDocument()
+})
+
+test('confirm join shows missing clinic or user error', async () => {
+  const user = userEvent.setup()
+
+  useAuth.mockReturnValue({
+    user: null,
+  })
+
+  mockQueueFetchResponse({
+    ok: false,
+    status: 404,
+    error: 'No active queue entry found for this patient',
+  })
+
+  render(<QueuePage />)
+
+  await user.click(await screen.findByRole('button', { name: 'Confirm' }))
+
+  expect(
+    (await screen.findAllByText('Missing clinic or user ID')).length
+  ).toBeGreaterThan(0)
+})
+
+test('confirm join shows generic error when join request fails unexpectedly', async () => {
+  const user = userEvent.setup()
+
+  mockQueueFetchResponse({
+    ok: false,
+    status: 404,
+    error: 'No active queue entry found for this patient',
+  })
+
+  fetch.mockResolvedValueOnce({
+    ok: false,
+    status: 500,
+    json: async () => ({
+      error: 'Database insert failed',
+    }),
+  })
+
+  render(<QueuePage />)
+
+  await user.click(await screen.findByRole('button', { name: 'Confirm' }))
+
+  expect(
+    (await screen.findAllByText('Database insert failed')).length
+  ).toBeGreaterThan(0)
+})
+
+test('leave queue shows error when selected clinic id is missing', async () => {
+  const user = userEvent.setup()
+
+  mockQueueFetchResponse({
+    queue: [
+      {
+        id: 'entry-1',
+        clinic_id: 'clinic-123',
+        patient_id: 'patient-123',
+        clinic_name: 'Test Clinic',
+        position: 1,
+        status: 'Waiting',
+        joined_at: '2026-04-16T10:00:00.000Z',
+      },
+    ],
+  })
+
+  mockWaitTimeFetchResponse({
+    estimatedWaitTime: 0,
+  })
+
+  render(<QueuePage />)
+
+  localStorage.removeItem('selectedClinicId')
+
+  await user.click(await screen.findByRole('button', { name: /leave queue/i }))
+
+  expect(
+    (await screen.findAllByText('Could not find your queue entry.')).length
+  ).toBeGreaterThan(0)
+})
 })
