@@ -95,6 +95,14 @@ function setupFetchMock({
   availabilityError = 'Failed to load availability.',
   availabilitySaveOk = true,
   availabilitySaveError = 'Failed to save availability.',
+  clinicDetailsOk = true,
+  clinicDetailsError = 'Failed to load clinic details.',
+  clinicsOk = true,
+  clinicsError = 'Failed to load clinic.',
+  usersOk = true,
+  usersError = 'Failed to load patients.',
+  completedCountOk = true,
+  completedCountError = 'Failed to load completed count.',
 } = {}) {
   global.fetch = jest.fn((url, options = {}) => {
     const urlString = String(url)
@@ -122,8 +130,11 @@ function setupFetchMock({
 
     if (urlString.includes('/completed-count')) {
       return Promise.resolve({
-        ok: true,
-        json: async () => ({ completedCount }),
+        ok: completedCountOk,
+        json: async () =>
+          completedCountOk
+            ? { completedCount }
+            : { error: completedCountError },
       })
     }
 
@@ -170,8 +181,8 @@ function setupFetchMock({
 
     if (urlString.includes('/api/users')) {
       return Promise.resolve({
-        ok: true,
-        json: async () => ({ users }),
+        ok: usersOk,
+        json: async () => (usersOk ? { users } : { error: usersError }),
       })
     }
 
@@ -232,15 +243,18 @@ function setupFetchMock({
 
     if (urlString.includes('/api/clinics/clinic-1') && method === 'GET') {
       return Promise.resolve({
-        ok: true,
-        json: async () => ({ clinic: clinicDetails }),
+        ok: clinicDetailsOk,
+        json: async () =>
+          clinicDetailsOk
+            ? { clinic: clinicDetails }
+            : { error: clinicDetailsError },
       })
     }
 
     if (urlString.endsWith('/api/clinics') && method === 'GET') {
       return Promise.resolve({
-        ok: true,
-        json: async () => ({ clinics }),
+        ok: clinicsOk,
+        json: async () => (clinicsOk ? { clinics } : { error: clinicsError }),
       })
     }
 
@@ -375,6 +389,17 @@ describe('StaffDashboard', () => {
     expect(screen.getByText(/Clinic • Region F • Johannesburg/i)).toBeInTheDocument()
   })
 
+  test('shows clinic details fetch error as toast', async () => {
+    setupFetchMock({
+      clinicDetailsOk: false,
+      clinicDetailsError: 'Clinic details are unavailable.',
+    })
+
+    renderDashboard()
+
+    expect(await screen.findByText('Clinic details are unavailable.')).toBeInTheDocument()
+  })
+
   test('shows queue error state when queue fetch fails', async () => {
     setupFetchMock({
       queueOk: false,
@@ -466,6 +491,66 @@ describe('StaffDashboard', () => {
       expect(console.error).toHaveBeenCalledWith(
         'Failed to auto-mark no-shows:',
         'Auto no-show failed.'
+      )
+    })
+  })
+
+  test('logs completed count fetch failure without blocking queue', async () => {
+    setupFetchMock({
+      completedCountOk: false,
+      completedCountError: 'Completed count failed.',
+      queue: [
+        {
+          id: 'entry-1',
+          patient_id: 'patient-1',
+          status: 'Waiting',
+          position: 1,
+          patient: {
+            full_name: 'Jane Doe',
+            email: 'jane@example.com',
+          },
+        },
+      ],
+    })
+
+    renderDashboard()
+
+    expect(await screen.findByText('Jane Doe')).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(console.error).toHaveBeenCalledWith(
+        'Failed to fetch completed count:',
+        'Completed count failed.'
+      )
+    })
+  })
+
+  test('logs patient fetch failure without blocking dashboard', async () => {
+    setupFetchMock({
+      usersOk: false,
+      usersError: 'Patients failed to load.',
+      queue: [
+        {
+          id: 'entry-1',
+          patient_id: 'patient-1',
+          status: 'Waiting',
+          position: 1,
+          patient: {
+            full_name: 'Jane Doe',
+            email: 'jane@example.com',
+          },
+        },
+      ],
+    })
+
+    renderDashboard()
+
+    expect(await screen.findByText('Jane Doe')).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(console.error).toHaveBeenCalledWith(
+        'Failed to fetch patients:',
+        'Patients failed to load.'
       )
     })
   })
@@ -835,6 +920,22 @@ describe('StaffDashboard', () => {
     expect(screen.getByLabelText(/email address/i)).toBeInTheDocument()
   })
 
+  test('closes add patient popup when clicking overlay', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock()
+    renderDashboard()
+
+    await user.click(screen.getByRole('button', { name: /\+ add new patient/i }))
+
+    const dialog = await screen.findByRole('dialog', { name: /add new patient/i })
+
+    fireEvent.click(dialog)
+
+    expect(screen.queryByRole('dialog', { name: /add new patient/i }))
+      .not.toBeInTheDocument()
+  })
+
   test('shows validation errors when adding new patient with empty fields', async () => {
     const user = userEvent.setup()
 
@@ -890,6 +991,25 @@ describe('StaffDashboard', () => {
     })
 
     expect(await screen.findByText('New Patient added as a new patient.')).toBeInTheDocument()
+  })
+
+  test('shows backend error when creating new patient fails', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock({
+      createPatientOk: false,
+      createPatientError: 'Email already exists.',
+    })
+
+    renderDashboard()
+
+    await user.click(screen.getByRole('button', { name: /\+ add new patient/i }))
+
+    await user.type(await screen.findByLabelText(/full name/i), 'New Patient')
+    await user.type(screen.getByLabelText(/email address/i), 'new@example.com')
+    await user.click(screen.getByRole('button', { name: /^add patient$/i }))
+
+    expect(await screen.findByText(/Email already exists/i)).toBeInTheDocument()
   })
 
   test('renders appointment date selector and empty appointments state', async () => {
@@ -1017,6 +1137,25 @@ describe('StaffDashboard', () => {
       expect(await screen.findByRole('button', { name: '12:00 PM' })).toBeInTheDocument()
     })
 
+    test('shows reschedule slot loading error in modal', async () => {
+      const user = userEvent.setup()
+
+      setupFetchMock({
+        appointments: [activeAppointment],
+        slotsOk: false,
+        slotsError: 'Reschedule slots failed.',
+      })
+
+      renderDashboard()
+      await openSection(/appointments/i)
+
+      expect(await screen.findByText('Jane Appointment')).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: /reschedule/i }))
+
+      expect(await screen.findByText('Reschedule slots failed.')).toBeInTheDocument()
+    })
+
     test('clears selected time when date changes', async () => {
       const user = userEvent.setup()
 
@@ -1134,6 +1273,40 @@ describe('StaffDashboard', () => {
     expect(await screen.findByText('Assigned clinic not found.')).toBeInTheDocument()
   })
 
+  test('shows booking error when clinic list request fails', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock({
+      clinicsOk: false,
+      clinicsError: 'Clinic list failed.',
+    })
+
+    renderDashboard()
+
+    await user.click(await screen.findByRole('button', { name: /appointments/i }))
+    await user.click(await screen.findByRole('button', { name: /add appointment/i }))
+
+    expect(await screen.findByText('Clinic list failed.')).toBeInTheDocument()
+  })
+
+  test('shows booking error when staff has no linked clinic', async () => {
+    const user = userEvent.setup()
+
+    setupFetchMock()
+
+    renderDashboard({
+      user: { id: 'staff-1', clinic_id: null },
+      clinicId: null,
+    })
+
+    await user.click(await screen.findByRole('button', { name: /appointments/i }))
+    await user.click(await screen.findByRole('button', { name: /add appointment/i }))
+
+    expect(
+      await screen.findByText('No clinic is linked to this staff account.')
+    ).toBeInTheDocument()
+  })
+
   test('shows availability section', async () => {
     setupFetchMock()
 
@@ -1142,6 +1315,18 @@ describe('StaffDashboard', () => {
 
     expect(await screen.findByRole('heading', { name: 'Availability' })).toBeInTheDocument()
     expect(screen.getByText(/set the days and times/i)).toBeInTheDocument()
+  })
+
+  test('shows availability load error as toast', async () => {
+    setupFetchMock({
+      availabilityOk: false,
+      availabilityError: 'Availability failed to load.',
+    })
+
+    renderDashboard()
+    await openSection(/availability/i)
+
+    expect(await screen.findByText('Availability failed to load.')).toBeInTheDocument()
   })
 
   test('loads existing availability rows', async () => {
@@ -1162,6 +1347,27 @@ describe('StaffDashboard', () => {
 
     expect(await screen.findByLabelText(/monday start time/i)).toHaveValue('09:00')
     expect(screen.getByLabelText(/monday end time/i)).toHaveValue('15:00')
+  })
+
+  test('uses alternate clinic hours format for availability defaults', async () => {
+    setupFetchMock({
+      clinicDetails: {
+        id: 'clinic-1',
+        name: 'Hillbrow Clinic',
+        hours: {
+          MONDAY: {
+            start_time: '10:00:00',
+            end_time: '14:00:00',
+          },
+        },
+      },
+    })
+
+    renderDashboard()
+    await openSection(/availability/i)
+
+    expect(await screen.findByLabelText(/monday start time/i)).toHaveValue('10:00')
+    expect(screen.getByLabelText(/monday end time/i)).toHaveValue('14:00')
   })
 
   test('shows availability validation error when start time is after end time', async () => {
