@@ -313,6 +313,47 @@ async function findOrCreateClinicSlot(clinicId, slotDatetimeIso) {
   return createdSlot
 }
 
+function getClinicCloseTimeForDate(clinic, slotDatetime) {
+  if (!clinic || !slotDatetime) return null
+
+  const date = new Date(slotDatetime)
+
+  if (Number.isNaN(date.getTime())) return null
+
+  const dayName = date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    timeZone: 'Africa/Johannesburg',
+  }).toLowerCase()
+
+  const schedule = resolveClinicSchedule(clinic)
+  const operatingHours = schedule.operating_hours || {}
+
+  const dayHours =
+    operatingHours[dayName] ||
+    operatingHours[dayName.slice(0, 3)] ||
+    null
+
+  if (!dayHours) return null
+
+  const close =
+    dayHours.close ||
+    dayHours.end ||
+    dayHours.end_time ||
+    dayHours.closing_time ||
+    null
+
+  if (!close) return null
+
+  const slotDate = slotDatetime.slice(0, 10)
+  const closeDateTime = new Date(`${slotDate}T${String(close).slice(0, 5)}:00`)
+
+  if (Number.isNaN(closeDateTime.getTime())) return null
+
+  closeDateTime.setHours(closeDateTime.getHours() + 2)
+
+  return closeDateTime
+}
+
 async function countActiveAppointmentsForSlot(clinicId, slotId) {
   if (!slotId) return 0
 
@@ -2665,9 +2706,9 @@ if (!idValidation.valid) {
   return res.status(idValidation.status).json({ error: idValidation.error })
 }
 
-    if (!date) {
-      return res.status(400).json({ error: 'Date is required' })
-    }
+    // if (!date) {
+    //   return res.status(400).json({ error: 'Date is required' })
+    // }
 
     const { data: appointments, error: appointmentError } = await supabase
       .from('appointments')
@@ -2748,6 +2789,10 @@ if (!idValidation.valid) {
       })
       .filter(appointment => {
         if (!appointment.slot_datetime) return false
+   
+        if (!date) {
+          return true
+        }
         return appointment.slot_datetime.slice(0, 10) === date
       })
       .sort((a, b) => new Date(a.slot_datetime) - new Date(b.slot_datetime))
@@ -3058,6 +3103,212 @@ app.patch('/api/appointments/:id/cancel', async (req, res) => {
     return res.status(500).json({ error: 'Failed to cancel appointment' })
   }
 })
+
+// PATCH /api/appointments/auto-no-shows/user/:patientId
+app.patch('/api/appointments/auto-no-shows/user/:patientId', async (req, res) => {
+  try {
+    const { patientId } = req.params
+
+    const idValidation = validateRequiredUuid(patientId, 'patient ID')
+
+    if (!idValidation.valid) {
+      return res.status(idValidation.status).json({ error: idValidation.error })
+    }
+
+    const now = new Date()
+
+    const { data: appointments, error: appointmentError } = await supabase
+      .from('appointments')
+      .select('id, clinic_id, slot_id, status')
+      .eq('patient_id', patientId)
+      .in('status', ['Confirmed', 'Waiting'])
+
+    if (appointmentError) throw appointmentError
+
+    if (!appointments || appointments.length === 0) {
+      return res.json({
+        message: 'No missed appointments found',
+        updatedCount: 0,
+        appointments: [],
+      })
+    }
+
+    const slotIds = [
+      ...new Set(appointments.map(appointment => appointment.slot_id).filter(Boolean)),
+    ]
+
+    if (slotIds.length === 0) {
+      return res.json({
+        message: 'No linked appointment slots found',
+        updatedCount: 0,
+        appointments: [],
+      })
+    }
+
+    const { data: slots, error: slotError } = await supabase
+      .from('slots')
+      .select('id, slot_datetime')
+      .in('id', slotIds)
+
+    if (slotError) throw slotError
+
+    const slotsById = Object.fromEntries((slots || []).map(slot => [slot.id, slot]))
+
+    const clinicIds = [
+      ...new Set(appointments.map(appointment => appointment.clinic_id).filter(Boolean)),
+    ]
+
+    const { data: clinics, error: clinicError } = await supabase
+      .from('clinics')
+      .select('*')
+      .in('id', clinicIds)
+
+    if (clinicError) throw clinicError
+
+    const clinicsById = Object.fromEntries((clinics || []).map(clinic => [clinic.id, clinic]))
+
+    const missedAppointmentIds = appointments
+      .filter(appointment => {
+        const slotDatetime = slotsById[appointment.slot_id]?.slot_datetime
+        const clinic = clinicsById[appointment.clinic_id]
+
+        if (!slotDatetime || !clinic) return false
+
+        const autoNoShowTime = getClinicCloseTimeForDate(clinic, slotDatetime)
+
+        if (!autoNoShowTime) return false
+
+        return now >= autoNoShowTime
+      })
+      .map(appointment => appointment.id)
+
+    if (missedAppointmentIds.length === 0) {
+      return res.json({
+        message: 'No missed appointments found',
+        updatedCount: 0,
+        appointments: [],
+      })
+    }
+
+    const { data, error } = await supabase
+      .from('appointments')
+      .update({ status: 'No-show' })
+      .in('id', missedAppointmentIds)
+      .select('*')
+
+    if (error) throw error
+
+    return res.json({
+      message: `${data.length} appointment(s) marked as No-show`,
+      updatedCount: data.length,
+      appointments: data,
+    })
+  } catch (err) {
+    console.error('Failed to auto-mark patient no-shows:', err)
+    return res.status(500).json({ error: 'Failed to auto-mark no-shows' })
+  }
+})
+
+// PATCH /api/appointments/auto-no-shows/:clinicId
+app.patch('/api/appointments/auto-no-shows/:clinicId', async (req, res) => {
+  try {
+    const { clinicId } = req.params
+
+    const idValidation = validateRequiredUuid(clinicId, 'clinic ID')
+
+    if (!idValidation.valid) {
+      return res.status(idValidation.status).json({ error: idValidation.error })
+    }
+
+    const now = new Date()
+
+    const { data: clinic, error: clinicError } = await supabase
+      .from('clinics')
+      .select('*')
+      .eq('id', clinicId)
+      .maybeSingle()
+
+    if (clinicError) throw clinicError
+    if (!clinic) return res.status(404).json({ error: 'Clinic not found' })
+
+    const { data: appointments, error: appointmentError } = await supabase
+      .from('appointments')
+      .select('id, clinic_id, slot_id, status')
+      .eq('clinic_id', clinicId)
+      .in('status', ['Confirmed', 'Waiting'])
+
+    if (appointmentError) throw appointmentError
+
+    if (!appointments || appointments.length === 0) {
+      return res.json({
+        message: 'No missed appointments found',
+        updatedCount: 0,
+        appointments: [],
+      })
+    }
+
+    const slotIds = [
+      ...new Set(appointments.map(appointment => appointment.slot_id).filter(Boolean)),
+    ]
+
+    if (slotIds.length === 0) {
+      return res.json({
+        message: 'No linked appointment slots found',
+        updatedCount: 0,
+        appointments: [],
+      })
+    }
+
+    const { data: slots, error: slotError } = await supabase
+      .from('slots')
+      .select('id, slot_datetime')
+      .in('id', slotIds)
+
+    if (slotError) throw slotError
+
+    const slotsById = Object.fromEntries((slots || []).map(slot => [slot.id, slot]))
+
+    const missedAppointmentIds = appointments
+      .filter(appointment => {
+        const slotDatetime = slotsById[appointment.slot_id]?.slot_datetime
+
+        if (!slotDatetime) return false
+
+        const autoNoShowTime = getClinicCloseTimeForDate(clinic, slotDatetime)
+
+        if (!autoNoShowTime) return false
+
+        return now >= autoNoShowTime
+      })
+      .map(appointment => appointment.id)
+
+    if (missedAppointmentIds.length === 0) {
+      return res.json({
+        message: 'No missed appointments found',
+        updatedCount: 0,
+        appointments: [],
+      })
+    }
+
+    const { data, error } = await supabase
+      .from('appointments')
+      .update({ status: 'No-show' })
+      .in('id', missedAppointmentIds)
+      .select('*')
+
+    if (error) throw error
+
+    return res.json({
+      message: `${data.length} appointment(s) marked as No-show`,
+      updatedCount: data.length,
+      appointments: data,
+    })
+  } catch (err) {
+    console.error('Failed to auto-mark no-shows:', err)
+    return res.status(500).json({ error: 'Failed to auto-mark no-shows' })
+  }
+})
+
 
 // Serve built frontend
 const publicPath = path.join(__dirname, '..', 'public')

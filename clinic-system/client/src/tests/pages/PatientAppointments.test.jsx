@@ -20,6 +20,17 @@ jest.mock('../../lib/getApiBase', () => () => 'http://localhost:5000')
 
 global.fetch = jest.fn()
 
+function mockAutoNoShowsResponse(updatedCount = 0) {
+  fetch.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({
+      message: 'No missed appointments found',
+      updatedCount,
+      appointments: [],
+    }),
+  })
+}
+
 const activeAppointment = {
   id: 'appointment-1',
   patient_id: 'test-patient-id',
@@ -31,6 +42,8 @@ const activeAppointment = {
 }
 
 async function openRescheduleConfirmation(user, slots = ['07:30', '07:45']) {
+  mockAutoNoShowsResponse()
+
   fetch
     .mockResolvedValueOnce({
       ok: true,
@@ -49,7 +62,10 @@ async function openRescheduleConfirmation(user, slots = ['07:30', '07:45']) {
 
   return screen.getByRole('dialog', { name: /confirm reschedule/i })
 }
+
 async function openCancelConfirmation(user) {
+  mockAutoNoShowsResponse()
+
   fetch.mockResolvedValueOnce({
     ok: true,
     json: async () => ({ appointments: [activeAppointment] }),
@@ -62,12 +78,16 @@ async function openCancelConfirmation(user) {
   return screen.getByRole('dialog', { name: /cancel appointment/i })
 }
 
+
 describe('PatientAppointments', () => {
-  beforeEach(() => {
-    jest.clearAllMocks()
-  })
+ beforeEach(() => {
+  jest.clearAllMocks()
+  fetch.mockReset()
+})
 
   it('shows empty state when no appointments exist', async () => {
+    mockAutoNoShowsResponse()
+
     fetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ appointments: [] }),
@@ -84,6 +104,7 @@ describe('PatientAppointments', () => {
   })
 
   it('renders appointment details correctly', async () => {
+    mockAutoNoShowsResponse()
     fetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -105,6 +126,7 @@ describe('PatientAppointments', () => {
   })
 
   it('shows reschedule button for eligible appointments', async () => {
+    mockAutoNoShowsResponse()
     fetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ appointments: [activeAppointment] }),
@@ -117,6 +139,7 @@ describe('PatientAppointments', () => {
   })
 
   it('hides reschedule button for final appointment statuses', async () => {
+    mockAutoNoShowsResponse() 
     fetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -140,7 +163,7 @@ describe('PatientAppointments', () => {
 
   it('opens reschedule interface and fetches slots when date changes', async () => {
     const user = userEvent.setup()
-
+    mockAutoNoShowsResponse()
     fetch
       .mockResolvedValueOnce({
         ok: true,
@@ -178,7 +201,7 @@ describe('PatientAppointments', () => {
   })
     it('displays current appointment details in the reschedule interface', async () => {
     const user = userEvent.setup()
-
+    mockAutoNoShowsResponse()
     fetch
       .mockResolvedValueOnce({
         ok: true,
@@ -206,7 +229,7 @@ describe('PatientAppointments', () => {
 
   it('does not show the current appointment slot as an available reschedule option', async () => {
   const user = userEvent.setup()
-
+    mockAutoNoShowsResponse()
   fetch
     .mockResolvedValueOnce({
       ok: true,
@@ -229,7 +252,7 @@ describe('PatientAppointments', () => {
 })
   it('clears selected slot and disables continue when reschedule date changes', async () => {
     const user = userEvent.setup()
-
+    mockAutoNoShowsResponse()
     fetch
       .mockResolvedValueOnce({
         ok: true,
@@ -270,7 +293,7 @@ describe('PatientAppointments', () => {
     const slotsPromise = new Promise((resolve) => {
       resolveSlots = resolve
     })
-
+    mockAutoNoShowsResponse()
     fetch
       .mockResolvedValueOnce({
         ok: true,
@@ -296,7 +319,7 @@ describe('PatientAppointments', () => {
 
   it('shows slot error state when slot fetch fails', async () => {
     const user = userEvent.setup()
-
+    mockAutoNoShowsResponse()
     fetch
       .mockResolvedValueOnce({
         ok: true,
@@ -317,7 +340,7 @@ describe('PatientAppointments', () => {
 
   it('shows empty state when no slots are available', async () => {
     const user = userEvent.setup()
-
+    mockAutoNoShowsResponse()
     fetch
       .mockResolvedValueOnce({
         ok: true,
@@ -338,7 +361,7 @@ describe('PatientAppointments', () => {
 
   it('marks selected slot visually and enables continue', async () => {
     const user = userEvent.setup()
-
+    mockAutoNoShowsResponse()
     fetch
       .mockResolvedValueOnce({
         ok: true,
@@ -389,14 +412,14 @@ describe('PatientAppointments', () => {
       .not.toBeInTheDocument()
     expect(screen.getByRole('dialog', { name: /reschedule appointment/i }))
       .toBeInTheDocument()
-    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(fetch).toHaveBeenCalledTimes(3)
   })
 
   it('confirm calls PATCH with selected appointment id and body', async () => {
     const user = userEvent.setup()
 
     await openRescheduleConfirmation(user)
-
+  
     fetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -437,7 +460,6 @@ describe('PatientAppointments', () => {
     const user = userEvent.setup()
 
     await openRescheduleConfirmation(user)
-
     fetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -475,7 +497,6 @@ describe('PatientAppointments', () => {
     const user = userEvent.setup()
 
     const confirmDialog = await openRescheduleConfirmation(user)
-
     fetch.mockResolvedValueOnce({
       ok: false,
       json: async () => ({ error: 'This slot is already booked' }),
@@ -492,7 +513,6 @@ describe('PatientAppointments', () => {
   it('confirm button is disabled while reschedule request is loading', async () => {
     const user = userEvent.setup()
     let resolveReschedule
-
     await openRescheduleConfirmation(user)
 
     fetch.mockReturnValueOnce(new Promise((resolve) => {
@@ -503,7 +523,7 @@ describe('PatientAppointments', () => {
 
     expect(screen.getByRole('button', { name: /rescheduling/i }))
       .toBeDisabled()
-
+    mockAutoNoShowsResponse()
     fetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ appointments: [] }),
@@ -524,6 +544,7 @@ describe('PatientAppointments', () => {
   })
 
   it('shows an error message when appointments fail to load', async () => {
+    mockAutoNoShowsResponse()
     fetch.mockResolvedValueOnce({
       ok: false,
       json: async () => ({ error: 'Failed to load test appointments' }),
@@ -558,14 +579,13 @@ it('dismisses patient cancel popup without calling cancel endpoint', async () =>
   expect(screen.queryByRole('dialog', { name: /cancel appointment/i }))
     .not.toBeInTheDocument()
 
-  expect(fetch).toHaveBeenCalledTimes(1)
+  expect(fetch).toHaveBeenCalledTimes(2)
 })
 
 it('patient cancel confirm sends PATCH and removes appointment from view', async () => {
   const user = userEvent.setup()
 
   await openCancelConfirmation(user)
-
   fetch.mockResolvedValueOnce({
     ok: true,
     json: async () => ({
@@ -604,7 +624,6 @@ it('patient cancel displays backend error and keeps popup open', async () => {
   const user = userEvent.setup()
 
   const dialog = await openCancelConfirmation(user)
-
   fetch.mockResolvedValueOnce({
     ok: false,
     json: async () => ({ error: 'Cannot cancel an appointment that is Completed' }),

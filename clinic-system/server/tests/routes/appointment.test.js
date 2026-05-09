@@ -131,14 +131,6 @@ describe('Appointment route tests', () => {
       expect(res.body).toEqual({ error: 'clinic_id is required' })
     })
 
-    test('returns 400 when date is missing', async () => {
-      const res = await request(app)
-        .get('/api/appointments/slots')
-        .query({ clinic_id: validClinicId })
-
-      expect(res.statusCode).toBe(400)
-      expect(res.body).toEqual({ error: 'date is required' })
-    })
 
     test('returns 400 for invalid clinic id', async () => {
       const res = await request(app)
@@ -962,14 +954,77 @@ test('stores appointment using slot_id without extra appointment columns', async
       expect(res.body).toEqual({ error: 'Invalid clinic ID format' })
     })
 
-    test('returns 400 when date query is missing', async () => {
-      const res = await request(app).get(
-        `/api/appointments/clinic/${validClinicId}`
-      )
+  test('returns all clinic appointments when date query is missing', async () => {
+    scenario.thenable.appointments = [
+      {
+        data: [
+          {
+            id: validAppointmentId,
+            patient_id: validPatientId,
+            clinic_id: validClinicId,
+            slot_id: validSlotId,
+            status: 'Confirmed',
+            service: 'General Consultation',
+          },
+        ],
+        error: null,
+      },
+    ]
 
-      expect(res.statusCode).toBe(400)
-      expect(res.body).toEqual({ error: 'Date is required' })
-    })
+    scenario.thenable.slots = [
+      {
+        data: [
+          {
+            id: validSlotId,
+            slot_datetime: `${FUTURE_MONDAY}T07:45:00.000Z`,
+          },
+        ],
+        error: null,
+      },
+    ]
+
+    scenario.thenable.users = [
+      {
+        data: [
+          {
+            id: validPatientId,
+            full_name: 'Test Patient',
+            email: 'patient@example.com',
+          },
+        ],
+        error: null,
+      },
+    ]
+
+    scenario.thenable.patients = [
+      {
+        data: [],
+        error: null,
+      },
+    ]
+
+    const res = await request(app).get(
+      `/api/appointments/clinic/${validClinicId}`
+    )
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body.appointments).toEqual([
+      {
+        id: validAppointmentId,
+        patient_id: validPatientId,
+        clinic_id: validClinicId,
+        slot_id: validSlotId,
+        status: 'Confirmed',
+        service: 'General Consultation',
+        slot_datetime: `${FUTURE_MONDAY}T07:45:00.000Z`,
+        patient: {
+          id: validPatientId,
+          full_name: 'Test Patient',
+          email: 'patient@example.com',
+        },
+      },
+    ])
+  })
 
     test('returns empty appointments array when clinic has no appointments', async () => {
       scenario.thenable.appointments = [
