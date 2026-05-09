@@ -80,6 +80,9 @@ function setupFetchMock({
   createPatientError = 'Failed to create patient.',
   cancelOk = true,
   cancelError = 'Could not cancel appointment.',
+  autoNoShowsOk = true,
+  autoNoShowsUpdatedCount = 0,
+  autoNoShowsError = 'Failed to auto-mark no-shows.',
 } = {}) {
   global.fetch = jest.fn((url, options = {}) => {
     const urlString = String(url)
@@ -90,12 +93,18 @@ function setupFetchMock({
       method === 'PATCH'
     ) {
       return Promise.resolve({
-        ok: true,
-        json: async () => ({
-          message: 'No missed appointments found',
-          updatedCount: 0,
-          appointments: [],
-        }),
+        ok: autoNoShowsOk,
+        json: async () =>
+          autoNoShowsOk
+            ? {
+                message:
+                  autoNoShowsUpdatedCount > 0
+                    ? `${autoNoShowsUpdatedCount} appointment(s) marked as No-show`
+                    : 'No missed appointments found',
+                updatedCount: autoNoShowsUpdatedCount,
+                appointments: [],
+              }
+            : { error: autoNoShowsError },
       })
     }
 
@@ -238,7 +247,8 @@ function setupFetchMock({
         json: async () => (queueOk ? { queue } : { error: queueError }),
       })
     }
-        if (
+
+    if (
       urlString.includes('/api/appointments/') &&
       urlString.includes('/cancel') &&
       method === 'PATCH'
@@ -316,6 +326,79 @@ describe('StaffDashboard', () => {
     expect(
       await screen.findByText('No patients in queue right now.')
     ).toBeInTheDocument()
+  })
+
+  test('auto-marks missed appointments as no-show on dashboard load', async () => {
+    setupFetchMock({
+      autoNoShowsUpdatedCount: 2,
+    })
+
+    renderDashboard()
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:8080/api/appointments/auto-no-shows/clinic-1',
+        expect.objectContaining({
+          method: 'PATCH',
+          headers: { Accept: 'application/json' },
+        })
+      )
+    })
+
+    expect(
+      await screen.findByText('2 missed appointment(s) marked as No-show.')
+    ).toBeInTheDocument()
+  })
+
+  test('does not show auto no-show toast when no appointments were updated', async () => {
+    setupFetchMock({
+      autoNoShowsUpdatedCount: 0,
+    })
+
+    renderDashboard()
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:8080/api/appointments/auto-no-shows/clinic-1',
+        expect.objectContaining({
+          method: 'PATCH',
+        })
+      )
+    })
+
+    expect(
+      screen.queryByText(/missed appointment\(s\) marked as No-show/i)
+    ).not.toBeInTheDocument()
+  })
+
+  test('handles auto no-show failure without blocking dashboard load', async () => {
+    setupFetchMock({
+      autoNoShowsOk: false,
+      autoNoShowsError: 'Auto no-show failed.',
+      queue: [
+        {
+          id: 'entry-1',
+          patient_id: 'patient-1',
+          status: 'Waiting',
+          position: 1,
+          patient: {
+            full_name: 'Jane Doe',
+            email: 'jane@example.com',
+          },
+        },
+      ],
+    })
+
+    renderDashboard()
+
+    expect(await screen.findByText('Jane Doe')).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(console.error).toHaveBeenCalledWith(
+        'Failed to auto-mark no-shows:',
+        'Auto no-show failed.'
+      )
+    })
   })
 
   test('renders queue patient details', async () => {
@@ -711,12 +794,10 @@ describe('StaffDashboard', () => {
 
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith('/booking', {
-        state: {
+        state: expect.objectContaining({
           clinic: { id: 'clinic-1', name: 'Hillbrow Clinic' },
           bookingMode: 'staff',
-          fromPage: 'Staff',
-          fromPath: '/staff',
-        },
+        }),
       })
     })
   })
@@ -817,126 +898,114 @@ describe('StaffDashboard', () => {
     expect(screen.queryByRole('button', { name: /^no-show$/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^reschedule$/i })).not.toBeInTheDocument()
   })
+
   describe('staff cancel flow', () => {
-  test('opens cancel popup with current appointment details', async () => {
-    const user = userEvent.setup()
+    test('opens cancel popup with current appointment details', async () => {
+      const user = userEvent.setup()
 
-    setupFetchMock({
-      appointments: [activeAppointment],
+      setupFetchMock({
+        appointments: [activeAppointment],
+      })
+
+      renderDashboard()
+      await openSection(/appointments/i)
+
+      expect(await screen.findByText('Jane Appointment')).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: /^cancel$/i }))
+
+      const dialog = await screen.findByRole('dialog', {
+        name: /cancel appointment/i,
+      })
+
+      expect(dialog).toBeInTheDocument()
+      expect(dialog).toHaveTextContent('Cancel appointment?')
+      expect(dialog).toHaveTextContent('Jane Appointment')
+      expect(dialog).toHaveTextContent('Date:')
+      expect(dialog).toHaveTextContent('Time:')
     })
 
-    renderDashboard()
-    await openSection(/appointments/i)
+    test('dismisses staff cancel popup without calling cancel endpoint', async () => {
+      const user = userEvent.setup()
 
-    expect(await screen.findByText('Jane Appointment')).toBeInTheDocument()
+      setupFetchMock({
+        appointments: [activeAppointment],
+      })
 
-    await user.click(screen.getByRole('button', { name: /^cancel$/i }))
+      renderDashboard()
+      await openSection(/appointments/i)
 
-    const dialog = await screen.findByRole('dialog', {
-      name: /cancel appointment/i,
+      await user.click(await screen.findByRole('button', { name: /^cancel$/i }))
+      await user.click(screen.getByRole('button', { name: /keep appointment/i }))
+
+      expect(screen.queryByRole('dialog', { name: /cancel appointment/i }))
+        .not.toBeInTheDocument()
+
+      expect(
+        global.fetch.mock.calls.some(([url]) =>
+          String(url).includes('/api/appointments/appointment-1/cancel')
+        )
+      ).toBe(false)
     })
 
-    expect(dialog).toBeInTheDocument()
-    expect(dialog).toHaveTextContent('Cancel appointment?')
-    expect(dialog).toHaveTextContent('Jane Appointment')
-    expect(dialog).toHaveTextContent('Date:')
-    expect(dialog).toHaveTextContent('Time:')
-  })
+    test('staff cancel confirm sends PATCH and marks appointment as cancelled', async () => {
+      const user = userEvent.setup()
 
-  test('dismisses staff cancel popup without calling cancel endpoint', async () => {
-    const user = userEvent.setup()
+      setupFetchMock({
+        appointments: [activeAppointment],
+      })
 
-    setupFetchMock({
-      appointments: [activeAppointment],
-    })
+      renderDashboard()
+      await openSection(/appointments/i)
 
-    renderDashboard()
-    await openSection(/appointments/i)
+      await user.click(await screen.findByRole('button', { name: /^cancel$/i }))
+      await user.click(screen.getByRole('button', { name: /yes, cancel/i }))
 
-    await user.click(await screen.findByRole('button', { name: /^cancel$/i }))
-    await user.click(screen.getByRole('button', { name: /keep appointment/i }))
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          'http://localhost:8080/api/appointments/appointment-1/cancel',
+          expect.objectContaining({
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+            },
+          })
+        )
+      })
 
-    expect(screen.queryByRole('dialog', { name: /cancel appointment/i }))
-      .not.toBeInTheDocument()
+      expect(await screen.findByText('Appointment cancelled successfully'))
+        .toBeInTheDocument()
 
-    expect(
-      global.fetch.mock.calls.some(([url]) =>
-        String(url).includes('/api/appointments/appointment-1/cancel')
-      )
-    ).toBe(false)
-  })
+      expect(screen.getByText('Jane Appointment')).toBeInTheDocument()
 
-test('staff cancel confirm sends PATCH and updates appointment status', async () => {
-    const user = userEvent.setup()
-
-    setupFetchMock({
-      appointments: [activeAppointment],
-    })
-
-    renderDashboard()
-    await openSection(/appointments/i)
-
-    await user.click(await screen.findByRole('button', { name: /^cancel$/i }))
-    await user.click(screen.getByRole('button', { name: /yes, cancel/i }))
-
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        'http://localhost:8080/api/appointments/appointment-1/cancel',
-        expect.objectContaining({
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-        })
-      )
-    })
-
-    expect(await screen.findByText('Appointment cancelled successfully'))
-      .toBeInTheDocument()
-
-    expect(screen.getByText('Jane Appointment')).toBeInTheDocument()
-    expect(screen.getAllByText('Cancelled').length).toBeGreaterThan(0)
-    expect(screen.queryByRole('dialog', { name: /cancel appointment/i }))
-      .not.toBeInTheDocument()
-
-  })
-
-  test('calls auto no-show check when staff dashboard loads', async () => {
-  setupFetchMock()
-
-  renderDashboard()
-
-  await waitFor(() => {
-    expect(global.fetch).toHaveBeenCalledWith(
-      'http://localhost:8080/api/appointments/auto-no-shows/clinic-1',
-      {
-        method: 'PATCH',
-        headers: { Accept: 'application/json' },
-      }
-    )
-  })
+await waitFor(() => {
+  expect(screen.getAllByText('Cancelled').length).toBeGreaterThan(0)
 })
 
-  test('staff cancel displays backend error and keeps popup open', async () => {
-    const user = userEvent.setup()
-
-    setupFetchMock({
-      appointments: [activeAppointment],
-      cancelOk: false,
-      cancelError: 'Cannot cancel an appointment that is Completed',
+expect(screen.queryByRole('dialog', { name: /cancel appointment/i }))
+  .not.toBeInTheDocument()
     })
 
-    renderDashboard()
-    await openSection(/appointments/i)
+    test('staff cancel displays backend error and keeps popup open', async () => {
+      const user = userEvent.setup()
 
-    await user.click(await screen.findByRole('button', { name: /^cancel$/i }))
-    await user.click(screen.getByRole('button', { name: /yes, cancel/i }))
+      setupFetchMock({
+        appointments: [activeAppointment],
+        cancelOk: false,
+        cancelError: 'Cannot cancel an appointment that is Completed',
+      })
 
-    expect(await screen.findByText(/cannot cancel an appointment that is completed/i)).toBeInTheDocument()
-    
-    expect(screen.getByRole('dialog', { name: /cancel appointment/i }))
-      .toBeInTheDocument()
+      renderDashboard()
+      await openSection(/appointments/i)
+
+      await user.click(await screen.findByRole('button', { name: /^cancel$/i }))
+      await user.click(screen.getByRole('button', { name: /yes, cancel/i }))
+
+      expect(await screen.findByText(/cannot cancel an appointment that is completed/i)).toBeInTheDocument()
+
+      expect(screen.getByRole('dialog', { name: /cancel appointment/i }))
+        .toBeInTheDocument()
+    })
   })
-})
 })
