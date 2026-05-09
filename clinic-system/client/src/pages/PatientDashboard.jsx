@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useCallback, useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
@@ -348,30 +348,53 @@ const handleBookAppointment = (clinic) => {
   const [serviceFilter, setServiceFilter] = useState('')
 
   // Fetch clinics on mount
+  const fetchClinics = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      const response = await fetch('/api/clinics')
+
+      if (!response.ok) {
+        throw new Error(`Failed to load clinics (HTTP ${response.status})`)
+      }
+
+      const data = await response.json()
+      setClinics(data.clinics || [])
+    } catch (err) {
+      setError(err.message || 'Something went wrong. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
-    const fetchClinics = async () => {
-      try {
-        setLoading(true)
-        setError(null)
+    fetchClinics()
+  }, [fetchClinics])
 
-        const response = await fetch('/api/clinics')
+  useEffect(() => {
+    function refreshClinics() {
+      fetchClinics()
+    }
 
-        if (!response.ok) {
-          throw new Error(`Failed to load clinics (HTTP ${response.status})`)
-        }
-
-        const data = await response.json()
-        setClinics(data.clinics || [])
-      } catch (err) {
-        setError(err.message || 'Something went wrong. Please try again.')
-      } finally {
-        setLoading(false)
+    function refreshClinicsWhenVisible() {
+      if (document.visibilityState === 'visible') {
+        fetchClinics()
       }
     }
 
-    fetchClinics()
-  }, [])
+    window.addEventListener('clinics-updated', refreshClinics)
+    window.addEventListener('focus', refreshClinics)
+    document.addEventListener('visibilitychange', refreshClinicsWhenVisible)
 
+    return () => {
+      window.removeEventListener('clinics-updated', refreshClinics)
+      window.removeEventListener('focus', refreshClinics)
+      document.removeEventListener('visibilitychange', refreshClinicsWhenVisible)
+    }
+  }, [fetchClinics])
+
+  
   // Derive unique filter options from fetched data
   const provinces = useMemo(() =>
   unique(clinics.map((c) => c.province)),

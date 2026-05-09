@@ -851,6 +851,7 @@ export default function AdminDashboard() {
         currentRequests.filter((currentRequest) => currentRequest.id !== request.id)
       )
       setRoleFeedback('Role request approved.')
+      window.dispatchEvent(new Event('clinics-updated'))
     } catch (err) {
       setRoleFeedback(err.message || 'Failed to approve role request')
     } finally {
@@ -885,6 +886,7 @@ export default function AdminDashboard() {
         currentRequests.filter((currentRequest) => currentRequest.id !== request.id)
       )
       setRoleFeedback('Role request rejected.')
+      window.dispatchEvent(new Event('clinics-updated'))
     } catch (err) {
       setRoleFeedback(err.message || 'Failed to reject role request')
     } finally {
@@ -940,6 +942,7 @@ export default function AdminDashboard() {
       )
       setSelectedClinic(body.clinic)
       setClinicEditFeedback('Clinic updated successfully.')
+      window.dispatchEvent(new Event('clinics-updated'))
     } catch (err) {
       setClinicEditError(err.message || 'Failed to update clinic')
     } finally {
