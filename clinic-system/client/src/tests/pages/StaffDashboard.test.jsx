@@ -85,6 +85,20 @@ function setupFetchMock({
     const urlString = String(url)
     const method = options.method || 'GET'
 
+    if (
+      urlString.includes('/api/appointments/auto-no-shows/') &&
+      method === 'PATCH'
+    ) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          message: 'No missed appointments found',
+          updatedCount: 0,
+          appointments: [],
+        }),
+      })
+    }
+
     if (urlString.includes('/completed-count')) {
       return Promise.resolve({
         ok: true,
@@ -852,7 +866,7 @@ describe('StaffDashboard', () => {
     ).toBe(false)
   })
 
-  test('staff cancel confirm sends PATCH and removes appointment from view', async () => {
+test('staff cancel confirm sends PATCH and updates appointment status', async () => {
     const user = userEvent.setup()
 
     setupFetchMock({
@@ -881,10 +895,28 @@ describe('StaffDashboard', () => {
     expect(await screen.findByText('Appointment cancelled successfully'))
       .toBeInTheDocument()
 
-    expect(screen.queryByText('Jane Appointment')).not.toBeInTheDocument()
+    expect(screen.getByText('Jane Appointment')).toBeInTheDocument()
+    expect(screen.getAllByText('Cancelled').length).toBeGreaterThan(0)
     expect(screen.queryByRole('dialog', { name: /cancel appointment/i }))
       .not.toBeInTheDocument()
+
   })
+
+  test('calls auto no-show check when staff dashboard loads', async () => {
+  setupFetchMock()
+
+  renderDashboard()
+
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/api/appointments/auto-no-shows/clinic-1',
+      {
+        method: 'PATCH',
+        headers: { Accept: 'application/json' },
+      }
+    )
+  })
+})
 
   test('staff cancel displays backend error and keeps popup open', async () => {
     const user = userEvent.setup()

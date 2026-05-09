@@ -843,6 +843,7 @@ export default function StaffDashboard() {
   const [cancelAppointmentLoading, setCancelAppointmentLoading] = useState(false)
   const [cancelAppointmentError, setCancelAppointmentError] = useState('')
 
+  const [allClinicAppointments, setAllClinicAppointments] = useState([])
 
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type, visible: true })
@@ -865,6 +866,54 @@ const closeCancelAppointmentPopup = () => {
   setCancelAppointmentError('')
 }
 
+const autoMarkNoShows = useCallback(async () => {
+  if (authLoading || !resolvedClinicId) return
+
+  try {
+    const res = await fetch(`${API_BASE}/api/appointments/auto-no-shows/${resolvedClinicId}`, {
+      method: 'PATCH',
+      headers: { Accept: 'application/json' },
+    })
+
+    const data = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to auto-mark no-shows.')
+    }
+
+    if (data.updatedCount > 0) {
+      showToast(`${data.updatedCount} missed appointment(s) marked as No-show.`, 'success')
+    }
+  } catch (err) {
+    console.error('Failed to auto-mark no-shows:', err.message)
+  }
+}, [authLoading, resolvedClinicId, API_BASE, showToast])
+
+
+const fetchAllClinicAppointments = useCallback(async () => {
+  if (authLoading || !resolvedClinicId) return
+
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/appointments/clinic/${resolvedClinicId}`,
+      {
+        headers: { Accept: 'application/json' },
+      }
+    )
+
+    const data = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to load clinic appointment stats.')
+    }
+
+    setAllClinicAppointments(Array.isArray(data.appointments) ? data.appointments : [])
+  } catch (err) {
+    console.error('Failed to fetch all clinic appointments:', err.message)
+  }
+}, [authLoading, resolvedClinicId, API_BASE])
+
+
 const handleConfirmCancelAppointment = async () => {
   if (!appointmentToCancel) return
 
@@ -886,9 +935,18 @@ const handleConfirmCancelAppointment = async () => {
       throw new Error(data.error || 'Could not cancel appointment.')
     }
 
+    // setAppointments(current =>
+    //   current.filter(appointment => appointment.id !== appointmentToCancel.id)
+    // )
     setAppointments(current =>
-      current.filter(appointment => appointment.id !== appointmentToCancel.id)
+      current.map(appointment =>
+        appointment.id === appointmentToCancel.id
+          ? { ...appointment, status: 'Cancelled' }
+          : appointment
+      )
     )
+
+    await fetchAllClinicAppointments()
 
     setShowCancelAppointmentPopup(false)
     setAppointmentToCancel(null)
@@ -1141,25 +1199,26 @@ const fetchAppointmentsByDate = useCallback(async () => {
       throw new Error(data.error || 'Failed to load appointments.')
     }
 
-    const finalStatuses = ['Cancelled', 'Completed', 'No-show']
+    // const finalStatuses = ['Cancelled', 'Completed', 'No-show']
 
-    const activeFutureAppointments = (Array.isArray(data.appointments)
-      ? data.appointments
-      : []
-    ).filter(appointment => {
-      if (!appointment.slot_datetime) return false
+    // const activeFutureAppointments = (Array.isArray(data.appointments)
+    //   ? data.appointments
+    //   : []
+    // ).filter(appointment => {
+    //   if (!appointment.slot_datetime) return false
 
-      const appointmentDateTime = new Date(appointment.slot_datetime)
-      const now = new Date()
+    //   const appointmentDateTime = new Date(appointment.slot_datetime)
+    //   const now = new Date()
 
-      return (
-        appointmentDateTime > now &&
-        !finalStatuses.includes(appointment.status)
-      )
-    })
+    //   return (
+    //     appointmentDateTime > now &&
+    //     !finalStatuses.includes(appointment.status)
+    //   )
+    // })
 
-    setAppointments(activeFutureAppointments)
+    // setAppointments(activeFutureAppointments)
 
+    setAppointments(Array.isArray(data.appointments) ? data.appointments : [])
   } catch (err) {
     setAppointmentsError(err.message)
   } finally {
@@ -1244,34 +1303,47 @@ const fetchPatients = useCallback(async () => {
 
 // The useEffect hook is used to trigger the initial data fetching for the queue, completed count, patients, clinic details, and appointments when the component mounts or when any of the dependencies change.
 useEffect(() => {
-  fetchQueue()
-  fetchCompletedCount()
-  fetchPatients()
-  fetchClinicDetails()
-  fetchAppointmentsByDate()
+  async function loadStaffDashboard() {
+    await autoMarkNoShows()
+    fetchQueue()
+    fetchCompletedCount()
+    fetchPatients()
+    fetchClinicDetails()
+    fetchAllClinicAppointments()
+    fetchAppointmentsByDate()
+  }
+
+  loadStaffDashboard()
 }, [
+  autoMarkNoShows,
   fetchQueue,
   fetchCompletedCount,
   fetchPatients,
   fetchClinicDetails,
+  fetchAllClinicAppointments,
   fetchAppointmentsByDate,
 ])
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchQueue()
-      fetchCompletedCount()
-      fetchPatients()
-      fetchAppointmentsByDate()
-    }, 30000)
+useEffect(() => {
+  const interval = setInterval(async () => {
+    await autoMarkNoShows()
+    fetchQueue()
+    fetchCompletedCount()
+    fetchPatients()
+    fetchAllClinicAppointments()
+    fetchAppointmentsByDate()
+  }, 30000)
 
-    return () => clearInterval(interval)
-  }, [
-    fetchQueue,
-    fetchCompletedCount,
-    fetchPatients,
-    fetchAppointmentsByDate,
-  ])
+  return () => clearInterval(interval)
+}, [
+  autoMarkNoShows,
+  fetchQueue,
+  fetchCompletedCount,
+  fetchPatients,
+  fetchAllClinicAppointments,
+  fetchAppointmentsByDate,
+])
+
   const handleStatusUpdate = async entry => {
     const currentIndex = STATUS_SEQUENCE.indexOf(entry.status)
     const nextStatus =
@@ -1374,6 +1446,8 @@ const handleAppointmentStatusUpdate = async (appointment, status) => {
           : item
       )
     )
+
+    await fetchAllClinicAppointments()
 
     showToast(data.message || `Appointment marked as ${status}.`, 'success')
   } catch (err) {
@@ -1693,15 +1767,31 @@ navigate('/booking', {
     complete: completedCount,  
   }
 
-  const appointmentStats = {
-    total: appointments.length,
-    confirmed: appointments.filter(appointment => appointment.status === 'Confirmed').length,
-    waiting: appointments.filter(appointment => appointment.status === 'Waiting').length,
-    completed: appointments.filter(appointment =>
-      ['Completed', 'Complete'].includes(appointment.status)
-    ).length,
-    cancelled: appointments.filter(appointment => appointment.status === 'Cancelled').length,
-  }
+const appointmentStats = {
+  total: allClinicAppointments.length,
+  confirmed: allClinicAppointments.filter(appointment => appointment.status === 'Confirmed').length,
+  waiting: allClinicAppointments.filter(appointment => appointment.status === 'Waiting').length,
+  completed: allClinicAppointments.filter(appointment =>
+    ['Completed', 'Complete'].includes(appointment.status)
+  ).length,
+  cancelled: allClinicAppointments.filter(appointment => appointment.status === 'Cancelled').length,
+  noShow: allClinicAppointments.filter(appointment => appointment.status === 'No-show').length,
+}
+
+const dailyAppointmentStats = {
+  total: appointments.length,
+  confirmed: appointments.filter(appointment => appointment.status === 'Confirmed').length,
+  waiting: appointments.filter(appointment => appointment.status === 'Waiting').length,
+  completed: appointments.filter(appointment =>
+    ['Completed', 'Complete'].includes(appointment.status)
+  ).length,
+  cancelled: appointments.filter(appointment => appointment.status === 'Cancelled').length,
+  noShow: appointments.filter(appointment => appointment.status === 'No-show').length,
+}
+
+const visibleAppointments = appointments.filter(
+  appointment => !['Cancelled', 'Completed', 'Complete', 'No-show'].includes(appointment.status)
+)
 
   // The return statement of the StaffDashboard component renders the UI for the staff dashboard, including sections for clinic details, queue management, appointments, and availability settings, along with a toast component for notifications.
 return (
@@ -1955,7 +2045,7 @@ return (
           {activeSection === 'appointments' && (
             <>
               <h2 className="sd-heading" style={{ marginTop: 0 }}>
-                Clinic appointments for {formatDisplayDate(appointmentDate)} ({appointmentDate})
+                  Clinic appointment summary
               </h2>
 
               <ul className="sd-stats" aria-label="Appointment summary">
@@ -1983,6 +2073,52 @@ return (
                   <p className="sd-stat-label">Cancelled</p>
                   <p className="sd-stat-value" style={{ color: '#B91C1C' }}>
                     {appointmentStats.cancelled}
+                  </p>
+                </li>
+                <li className="sd-stat">
+                  <p className="sd-stat-label">No-show</p>
+                  <p className="sd-stat-value" style={{ color: '#B91C1C' }}>
+                    {appointmentStats.noShow}
+                  </p>
+                </li>
+              </ul>
+
+              <h2 className="sd-heading" style={{ marginTop: 24 }}>
+                Daily stats for {formatDisplayDate(appointmentDate)} ({appointmentDate})
+              </h2>
+
+              <ul className="sd-stats" aria-label="Daily appointment summary">
+                <li className="sd-stat">
+                  <p className="sd-stat-label">Daily total</p>
+                  <p className="sd-stat-value sd-stat-value--black">{dailyAppointmentStats.total}</p>
+                </li>
+
+                <li className="sd-stat">
+                  <p className="sd-stat-label">Confirmed</p>
+                  <p className="sd-stat-value sd-stat-value--blue">{dailyAppointmentStats.confirmed}</p>
+                </li>
+
+                <li className="sd-stat">
+                  <p className="sd-stat-label">Waiting</p>
+                  <p className="sd-stat-value sd-stat-value--yellow">{dailyAppointmentStats.waiting}</p>
+                </li>
+
+                <li className="sd-stat">
+                  <p className="sd-stat-label">Completed</p>
+                  <p className="sd-stat-value sd-stat-value--green">{dailyAppointmentStats.completed}</p>
+                </li>
+
+                <li className="sd-stat">
+                  <p className="sd-stat-label">Cancelled</p>
+                  <p className="sd-stat-value" style={{ color: '#B91C1C' }}>
+                    {dailyAppointmentStats.cancelled}
+                  </p>
+                </li>
+
+                <li className="sd-stat">
+                  <p className="sd-stat-label">No-show</p>
+                  <p className="sd-stat-value" style={{ color: '#B91C1C' }}>
+                    {dailyAppointmentStats.noShow}
                   </p>
                 </li>
               </ul>
@@ -2050,7 +2186,7 @@ return (
                   </p>
                 )}
 
-                {!appointmentsLoading && !appointmentsError && appointments.length === 0 && (
+                {!appointmentsLoading && !appointmentsError && visibleAppointments.length === 0 && (
                   <p className="sd-empty">No appointments found for this date.</p>
                 )}
 

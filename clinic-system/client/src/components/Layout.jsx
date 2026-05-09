@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { canAccess } from '../Utils/Permissions'
@@ -52,6 +53,12 @@ const styles = `
   text-decoration: none;
   color: var(--uh-text);
   min-width: 0;
+}
+  .uh-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: #D1D5DB !important;
+  color: #6B7280 !important;
 }
 
 .uh-brand-logo {
@@ -223,6 +230,9 @@ export default function Layout() {
   const location = useLocation()
   const navigate = useNavigate()
 
+  const [staffRequestClicked, setStaffRequestClicked] = useState(false)
+  const [adminRequestClicked, setAdminRequestClicked] = useState(false)
+
   const isLoginPage = location.pathname === '/login'
   const isQueuePage = location.pathname === '/queue'
   const isBookingPage = location.pathname === '/booking'
@@ -236,6 +246,27 @@ export default function Layout() {
   const showRequestAdmin = role === 'Staff'
 
   const isFlowPage = isQueuePage || isBookingPage || isAppointmentsPage
+
+  const handleRequestStaffRole = async () => {
+    setStaffRequestClicked(true)
+
+    try {
+      await RoleRequest('Staff')
+    } catch (err) {
+      setStaffRequestClicked(false)
+    }
+  }
+
+  const handleRequestAdminRole = async () => {
+    setAdminRequestClicked(true)
+
+    try {
+      await RoleRequest('Admin')
+    } catch (err) {
+      setAdminRequestClicked(false)
+    }
+  }
+
 
   {/* The return statement of the Layout component conditionally renders the navigation bar based on whether the user is on the login page. */}
   return (
@@ -291,26 +322,27 @@ export default function Layout() {
               )}
 
               {!isFlowPage && showRequestStaff && (
-                <li>
-                  <button
-                    className="uh-btn uh-btn-secondary"
-                    onClick={() => RoleRequest('Staff')}
-                  >
-                    Request Staff Role
-                  </button>
-                </li>
-              )}
-
+              <li>
+                <button
+                  className="uh-btn uh-btn-secondary"
+                  onClick={handleRequestStaffRole}
+                  disabled={staffRequestClicked}
+                >
+                  {staffRequestClicked ? 'Staff role requested' : 'Request Staff Role'}
+                </button>
+              </li>
+            )}
               {!isFlowPage && showRequestAdmin && (
-                <li>
-                  <button
-                    className="uh-btn uh-btn-secondary"
-                    onClick={() => RoleRequest('Admin')}
-                  >
-                    Request Admin Role
-                  </button>
-                </li>
-              )}
+              <li>
+                <button
+                  className="uh-btn uh-btn-secondary"
+                  onClick={handleRequestAdminRole}
+                  disabled={adminRequestClicked}
+                >
+                  {adminRequestClicked ? 'Admin role requested' : 'Request Admin Role'}
+                </button>
+              </li>
+            )}
 
               {!isFlowPage && (
                 <li>

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import getApiBase from '../lib/getApiBase'
 import { useAuth } from '../context/AuthContext'
@@ -463,6 +463,7 @@ const STATUS_DOT = {
   Waiting: 'waiting',
   Completed: 'served',
   Cancelled: 'skipped',
+  'No-show': 'skipped',
 }
 
 const FINAL_APPOINTMENT_STATUSES = ['Cancelled', 'Completed', 'No-show']
@@ -548,6 +549,9 @@ export default function PatientAppointments() {
   const [rescheduleSubmitError, setRescheduleSubmitError] = useState('')
   const [rescheduleSuccess, setRescheduleSuccess] = useState('')
 
+ //const [autoNoShowsChecked, setAutoNoShowsChecked] = useState(false)
+  const autoNoShowsCheckedRef = useRef(false)
+
   const fetchAppointments = useCallback(async () => {
     try {
       setLoadingAppointments(true)
@@ -575,11 +579,36 @@ export default function PatientAppointments() {
       setLoadingAppointments(false)
     }
   }, [API_BASE, patientId])
+  
+const autoMarkNoShows = useCallback(async () => {
+  if (!patientId || autoNoShowsCheckedRef.current) return
+
+  autoNoShowsCheckedRef.current = true
+
+  try {
+    const res = await fetch(`${API_BASE}/api/appointments/auto-no-shows/user/${patientId}`, {
+      method: 'PATCH',
+      headers: { Accept: 'application/json' },
+    })
+
+    const data = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to auto-mark no-shows.')
+    }
+  } catch (err) {
+    console.error('Failed to auto-mark no-shows:', err.message)
+  }
+}, [API_BASE, patientId])
 
   useEffect(() => {
-    fetchAppointments()
-  }, [fetchAppointments])
+    async function loadAppointmentsPage() {
+      await autoMarkNoShows()
+      await fetchAppointments()
+    }
 
+    loadAppointmentsPage()
+  }, [autoMarkNoShows, fetchAppointments])
   useEffect(() => {
     if (!showRescheduleModal || !appointmentToReschedule || !rescheduleDate) {
       setRescheduleSlots([])
@@ -936,7 +965,7 @@ export default function PatientAppointments() {
         >
           <article className="q-modal q-modal-reschedule">
             <div className="q-modal-scroll">
-              <div className="q-modal-icon" aria-hidden="true">R</div>
+              <div className="q-modal-icon" aria-hidden="true">📅</div>
 
               <h2 id="reschedule-modal-title">Reschedule appointment</h2>
               <p className="q-modal-subtitle" id="reschedule-modal-desc">
@@ -1037,7 +1066,7 @@ export default function PatientAppointments() {
           onClick={(e) => { if (e.target === e.currentTarget) dismissRescheduleConfirm() }}
         >
           <article className="q-modal">
-            <div className="q-modal-icon" aria-hidden="true">C</div>
+            <div className="q-modal-icon" aria-hidden="true">📅</div>
 
             <h2 id="reschedule-confirm-title">Confirm reschedule</h2>
             <p className="q-modal-subtitle" id="reschedule-confirm-desc">
