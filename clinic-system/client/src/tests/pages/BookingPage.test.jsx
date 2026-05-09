@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import BookingPage from '../../pages/BookingPage'
 import { useAuth } from '../../context/AuthContext'
@@ -27,12 +27,32 @@ const clinic = {
   facility_type: 'Clinic',
 }
 
-function renderPage({
-  auth = {
-    user: { id: 'staff-1', full_name: 'Staff User', email: 'staff@example.com' },
-    role: 'Staff',
+const staffAuth = {
+  user: {
+    id: 'staff-1',
+    full_name: 'Staff User',
+    email: 'staff@example.com',
   },
-  locationState = { clinic, bookingMode: 'staff' },
+  role: 'Staff',
+}
+
+const patientAuth = {
+  user: {
+    id: 'patient-self',
+    full_name: 'Patient User',
+    email: 'patient@example.com',
+  },
+  role: 'Patient',
+}
+
+function renderPage({
+  auth = staffAuth,
+  locationState = {
+    clinic,
+    bookingMode: 'staff',
+    fromPage: 'Staff',
+    fromPath: '/staff',
+  },
 } = {}) {
   useAuth.mockReturnValue(auth)
   useLocation.mockReturnValue({ state: locationState })
@@ -45,15 +65,28 @@ function renderPage({
 function setupFetchMock({
   users = [
     { id: 'patient-1', full_name: 'Jane Doe', role: 'Patient' },
+    { id: 'patient-2', full_name: 'John Smith', role: 'Patient' },
     { id: 'staff-2', full_name: 'Someone Staff', role: 'Staff' },
   ],
-  slots = ['09:00', '09:30'],
+  slots = ['09:00', '09:30', '14:00'],
   patientsOk = true,
+  patientsError = 'Failed to load users',
   slotsOk = true,
+  slotsError = 'Failed to load slots',
   createPatientOk = true,
-  createPatient = { patient: { id: 'new-patient-1' } },
+  createPatientResponse = {
+    patient: {
+      id: 'new-patient-row-1',
+      user_id: 'new-patient-user-1',
+      full_name: 'New Patient',
+    },
+  },
+  createPatientError = 'Failed to create patient.',
   appointmentOk = true,
-  appointmentResponse = { appointment: { id: 'appt-1' } },
+  appointmentResponse = {
+    appointment: { id: 'appt-1' },
+  },
+  appointmentError = 'Booking failed.',
 } = {}) {
   global.fetch = jest.fn((url, options = {}) => {
     const urlString = String(url)
@@ -62,14 +95,16 @@ function setupFetchMock({
     if (urlString.includes('/api/users') && method === 'GET') {
       return Promise.resolve({
         ok: patientsOk,
-        json: async () => (patientsOk ? { users } : { error: 'Failed to load users' }),
+        json: async () =>
+          patientsOk ? { users } : { error: patientsError },
       })
     }
 
     if (urlString.includes('/api/appointments/slots') && method === 'GET') {
       return Promise.resolve({
         ok: slotsOk,
-        json: async () => (slotsOk ? slots : { error: 'Failed to load slots' }),
+        json: async () =>
+          slotsOk ? slots : { error: slotsError },
       })
     }
 
@@ -77,7 +112,9 @@ function setupFetchMock({
       return Promise.resolve({
         ok: createPatientOk,
         json: async () =>
-          createPatientOk ? createPatient : { error: 'Failed to create patient.' },
+          createPatientOk
+            ? createPatientResponse
+            : { error: createPatientError },
       })
     }
 
@@ -85,7 +122,9 @@ function setupFetchMock({
       return Promise.resolve({
         ok: appointmentOk,
         json: async () =>
-          appointmentOk ? appointmentResponse : { error: 'Booking failed.' },
+          appointmentOk
+            ? appointmentResponse
+            : { error: appointmentError },
       })
     }
 
@@ -96,95 +135,238 @@ function setupFetchMock({
   })
 }
 
-async function selectExistingPatientAndSlot(user) {
+async function chooseDate(date = '2099-05-10') {
+  await userEvent.type(screen.getByLabelText('Appointment date'), date)
+}
+
+async function chooseSlot(name = '9:00 AM') {
+  await userEvent.click(await screen.findByRole('button', { name }))
+}
+
+async function chooseExistingPatient(patientId = 'patient-1') {
   await waitFor(() => {
-    expect(screen.getByRole('option', { name: /Jane Doe/ })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /Jane Doe/i })).toBeInTheDocument()
   })
 
-  await user.selectOptions(screen.getByLabelText('Select existing patient'), 'patient-1')
-  await user.type(screen.getByLabelText('Appointment date'), '2099-05-10')
-  await user.click(await screen.findByRole('button', { name: '9:00 AM' }))
+  await userEvent.selectOptions(
+    screen.getByLabelText('Select existing patient'),
+    patientId
+  )
+}
+
+async function completeStaffExistingPatientBookingForm() {
+  await chooseExistingPatient('patient-1')
+  await chooseDate('2099-05-10')
+  await chooseSlot('9:00 AM')
+}
+
+async function openConfirmationDialog() {
+  await userEvent.click(screen.getByRole('button', { name: /review booking/i }))
+  return screen.findByRole('dialog')
 }
 
 describe('BookingPage', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     jest.spyOn(console, 'error').mockImplementation(() => {})
+    setupFetchMock()
   })
 
   afterEach(() => {
     jest.restoreAllMocks()
   })
 
-  test('opens the confirmation popup when booking details are complete', async () => {
-    const user = userEvent.setup()
-    setupFetchMock()
+  test('shows no clinic selected fallback and back button', async () => {
+    renderPage({
+      locationState: null,
+    })
 
-    renderPage()
-    await selectExistingPatientAndSlot(user)
+    expect(screen.getByText('No clinic selected')).toBeInTheDocument()
+    expect(
+      screen.getByText('Please go back and select a clinic before booking.')
+    ).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /Review Booking/i }))
+    await userEvent.click(screen.getByRole('button', { name: /back/i }))
 
-    expect(await screen.findByRole('dialog')).toBeInTheDocument()
-    expect(screen.getByText('Confirm Appointment')).toBeInTheDocument()
+    expect(mockNavigate).toHaveBeenCalledWith('/clinic')
   })
 
-  test('shows the selected booking details in the confirmation popup', async () => {
-    const user = userEvent.setup()
-    setupFetchMock()
+  test('renders clinic details and initial empty slot state', () => {
+    renderPage()
+
+    expect(screen.getAllByText(/Hillbrow Clinic/i).length).toBeGreaterThan(0)
+
+    expect(screen.getByText(/Region F/i)).toBeInTheDocument()
+    expect(screen.getByText('Book an Appointment')).toBeInTheDocument()
+    expect(screen.getByText('Pick a date first')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /review booking/i })).toBeDisabled()
+  })
+
+  test('back and cancel buttons navigate to staff page', async () => {
+    renderPage()
+
+    await userEvent.click(screen.getByRole('button', { name: /^← Back$/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^Cancel$/i }))
+
+    expect(mockNavigate).toHaveBeenCalledWith('/staff')
+    expect(mockNavigate).toHaveBeenCalledTimes(2)
+  })
+
+  test('fetches and displays staff patient dropdown options', async () => {
+    renderPage()
+
+    expect(await screen.findByRole('option', { name: /Jane Doe/i })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /John Smith/i })).toBeInTheDocument()
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/api/users',
+      expect.objectContaining({
+        headers: { Accept: 'application/json' },
+      })
+    )
+  })
+
+  test('logs patient fetch failure without blocking staff booking page', async () => {
+    setupFetchMock({
+      patientsOk: false,
+      patientsError: 'Could not load patients.',
+    })
 
     renderPage()
-    await selectExistingPatientAndSlot(user)
 
-    await user.click(screen.getByRole('button', { name: /Review Booking/i }))
+    await waitFor(() => {
+      expect(console.error).toHaveBeenCalledWith(
+        'Failed to fetch patients:',
+        'Could not load patients.'
+      )
+    })
 
-    const dialog = await screen.findByRole('dialog')
+    expect(screen.getByText('Book an Appointment')).toBeInTheDocument()
+  })
+
+  test('loads future slots after selecting a date', async () => {
+    renderPage()
+
+    await chooseDate('2099-05-10')
+
+    expect(await screen.findByRole('button', { name: '9:00 AM' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '9:30 AM' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '2:00 PM' })).toBeInTheDocument()
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/api/appointments/slots?clinic_id=clinic-1&date=2099-05-10'
+    )
+  })
+
+  test('shows slot API error when available slots fail to load', async () => {
+    setupFetchMock({
+      slotsOk: false,
+      slotsError: 'Slots unavailable today.',
+    })
+
+    renderPage()
+
+    await chooseDate('2099-05-10')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load slots')
+    expect(screen.getByText('Slots unavailable today.')).toBeInTheDocument()
+  })
+
+  test('shows no slots message when backend returns no future slots', async () => {
+    setupFetchMock({
+      slots: [],
+    })
+
+    renderPage()
+
+    await chooseDate('2099-05-10')
+
+    expect(await screen.findByText('No slots available')).toBeInTheDocument()
+    expect(
+      screen.getByText('There are no available appointment slots for this date. Please try another day.')
+    ).toBeInTheDocument()
+  })
+
+  test('resets selected slot when date changes', async () => {
+    renderPage()
+
+    await chooseDate('2099-05-10')
+    const firstSlot = await screen.findByRole('button', { name: '9:00 AM' })
+
+    await userEvent.click(firstSlot)
+
+    expect(firstSlot).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.change(screen.getByLabelText('Appointment date'), {
+      target: { value: '2099-05-11' },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /review booking/i })).toBeDisabled()
+    })
+  })
+
+  test('cannot proceed to confirmation without selecting a slot', async () => {
+    renderPage()
+
+    await chooseExistingPatient('patient-1')
+    await chooseDate('2099-05-10')
+
+    expect(screen.getByRole('button', { name: /review booking/i })).toBeDisabled()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  test('cannot proceed to confirmation with missing staff patient data', async () => {
+    renderPage()
+
+    await chooseDate('2099-05-10')
+    await chooseSlot('9:00 AM')
+
+    expect(screen.getByRole('button', { name: /review booking/i })).toBeDisabled()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  test('opens confirmation popup when staff booking details are complete', async () => {
+    renderPage()
+
+    await completeStaffExistingPatientBookingForm()
+    const dialog = await openConfirmationDialog()
+
     expect(dialog).toBeInTheDocument()
+    expect(within(dialog).getByText('Confirm Appointment')).toBeInTheDocument()
+  })
+
+  test('shows selected staff booking details in confirmation popup', async () => {
+    renderPage()
+
+    await completeStaffExistingPatientBookingForm()
+    const dialog = await openConfirmationDialog()
+
     expect(within(dialog).getByText('Hillbrow Clinic')).toBeInTheDocument()
     expect(within(dialog).getByText('Sunday, 10 May 2099')).toBeInTheDocument()
     expect(within(dialog).getByText('9:00 AM')).toBeInTheDocument()
     expect(within(dialog).getByText('Jane Doe')).toBeInTheDocument()
   })
 
-  test('cannot proceed to confirmation without selecting a slot', async () => {
-    const user = userEvent.setup()
-    setupFetchMock()
-
+  test('closes confirmation popup with dialog cancel button', async () => {
     renderPage()
 
-    await waitFor(() => {
-      expect(screen.getByRole('option', { name: /Jane Doe/ })).toBeInTheDocument()
-    })
+    await completeStaffExistingPatientBookingForm()
+    const dialog = await openConfirmationDialog()
 
-    await user.selectOptions(screen.getByLabelText('Select existing patient'), 'patient-1')
-    await user.type(screen.getByLabelText('Appointment date'), '2099-05-10')
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: /^Cancel$/i })
+    )
 
-    expect(screen.getByRole('button', { name: /Review Booking/i })).toBeDisabled()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  test('cannot proceed to confirmation with missing patient data', async () => {
-    const user = userEvent.setup()
-    setupFetchMock()
-
+  test('submits a valid staff booking for an existing patient and shows success feedback', async () => {
     renderPage()
 
-    await user.type(screen.getByLabelText('Appointment date'), '2099-05-10')
-    await user.click(await screen.findByRole('button', { name: '9:00 AM' }))
-
-    expect(screen.getByRole('button', { name: /Review Booking/i })).toBeDisabled()
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  })
-
-  test('submits a valid booking and shows success feedback', async () => {
-    const user = userEvent.setup()
-    setupFetchMock()
-
-    renderPage()
-    await selectExistingPatientAndSlot(user)
-
-    await user.click(screen.getByRole('button', { name: /Review Booking/i }))
-    await user.click(await screen.findByRole('button', { name: 'Confirm' }))
+    await completeStaffExistingPatientBookingForm()
+    await openConfirmationDialog()
+    await userEvent.click(screen.getByRole('button', { name: /^Confirm$/i }))
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
@@ -210,66 +392,267 @@ describe('BookingPage', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  test('shows API error feedback when booking fails', async () => {
-    const user = userEvent.setup()
+  test('success page back button returns to staff page', async () => {
+    renderPage()
+
+    await completeStaffExistingPatientBookingForm()
+    await openConfirmationDialog()
+    await userEvent.click(screen.getByRole('button', { name: /^Confirm$/i }))
+
+    expect(await screen.findByText('Appointment Booked!')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /back to staff/i }))
+
+    expect(mockNavigate).toHaveBeenCalledWith('/staff')
+  })
+
+  test('shows API error feedback when appointment booking fails', async () => {
     setupFetchMock({
       appointmentOk: false,
+      appointmentError: 'Selected slot is already booked.',
     })
 
     renderPage()
-    await selectExistingPatientAndSlot(user)
 
-    await user.click(screen.getByRole('button', { name: /Review Booking/i }))
-    await user.click(await screen.findByRole('button', { name: 'Confirm' }))
+    await completeStaffExistingPatientBookingForm()
+    await openConfirmationDialog()
+    await userEvent.click(screen.getByRole('button', { name: /^Confirm$/i }))
 
-    const errors = await screen.findAllByText((text) => text.includes('Booking failed.'))
+    expect(
+      (await screen.findAllByText(/Selected slot is already booked/i)).length
+    ).toBeGreaterThan(0)
 
-    expect(errors.length).toBeGreaterThan(0)
     expect(screen.getByRole('alert')).toBeInTheDocument()
     expect(screen.queryByText('Appointment Booked!')).not.toBeInTheDocument()
   })
 
-  test('date input prevents selecting past dates using min attribute', () => {
-  setupFetchMock()
-  renderPage()
+  test('allows staff to switch to new patient form and back to existing patient dropdown', async () => {
+    renderPage()
 
-  const dateInput = screen.getByLabelText('Appointment date')
+    await userEvent.click(await screen.findByRole('button', {
+      name: /\+ Add new patient instead/i,
+    }))
 
-  expect(dateInput).toHaveAttribute('min')
-  expect(dateInput.getAttribute('min')).toMatch(/^\d{4}-\d{2}-\d{2}$/)
-})
+    expect(screen.getByText('New Patient Details')).toBeInTheDocument()
+    expect(screen.getByLabelText('Full name')).toBeInTheDocument()
+    expect(screen.getByLabelText('Email address')).toBeInTheDocument()
 
-test('shows slot API error when available slots fail to load', async () => {
-  const user = userEvent.setup()
-  setupFetchMock({
-    slotsOk: false,
+    await userEvent.type(screen.getByLabelText('Full name'), 'Temporary Patient')
+    await userEvent.type(screen.getByLabelText('Email address'), 'temp@example.com')
+
+    await userEvent.click(screen.getByRole('button', {
+      name: /select existing patient instead/i,
+    }))
+
+    expect(screen.getByLabelText('Select existing patient')).toBeInTheDocument()
+    expect(screen.queryByText('New Patient Details')).not.toBeInTheDocument()
   })
 
-  renderPage()
+  test('new patient form keeps review disabled when name and email are missing', async () => {
+    renderPage()
 
-  await user.type(screen.getByLabelText('Appointment date'), '2099-05-10')
+    await userEvent.click(await screen.findByRole('button', {
+      name: /\+ Add new patient instead/i,
+    }))
 
-  expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load slots')
-  expect(screen.getByText('Failed to load slots')).toBeInTheDocument()
-})
-test('shows only valid slots returned by the backend', async () => {
-  const user = userEvent.setup()
+    await chooseDate('2099-05-10')
+    await chooseSlot('9:00 AM')
 
-  setupFetchMock({
-    slots: ['09:00', '09:30'],
+    expect(screen.getByRole('button', { name: /review booking/i })).toBeDisabled()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  renderPage()
+  test('new patient form keeps review disabled for invalid email', async () => {
+    renderPage()
 
-  await waitFor(() => {
-    expect(screen.getByRole('option', { name: /Jane Doe/ })).toBeInTheDocument()
+    await userEvent.click(await screen.findByRole('button', {
+      name: /\+ Add new patient instead/i,
+    }))
+
+    await userEvent.type(screen.getByLabelText('Full name'), 'Bad Email Patient')
+    await userEvent.type(screen.getByLabelText('Email address'), 'bad-email')
+    await chooseDate('2099-05-10')
+    await chooseSlot('9:00 AM')
+
+    expect(screen.getByRole('button', { name: /review booking/i })).toBeDisabled()
   })
 
-  await user.type(screen.getByLabelText('Appointment date'), '2099-05-10')
+  test('staff can create a new patient and book for that patient', async () => {
+    renderPage()
 
-  expect(await screen.findByRole('button', { name: '9:00 AM' })).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: '9:30 AM' })).toBeInTheDocument()
-  expect(screen.queryByText('bad-slot')).not.toBeInTheDocument()
-  expect(screen.queryByText('25:99')).not.toBeInTheDocument()
-})
+    await userEvent.click(await screen.findByRole('button', {
+      name: /\+ Add new patient instead/i,
+    }))
+
+    await userEvent.type(screen.getByLabelText('Full name'), 'New Patient')
+    await userEvent.type(screen.getByLabelText('Email address'), 'new@example.com')
+    await chooseDate('2099-05-10')
+    await chooseSlot('9:00 AM')
+
+    await openConfirmationDialog()
+
+    expect(screen.getByText('New Patient')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /^Confirm$/i }))
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:8080/api/patients',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            full_name: 'New Patient',
+            email: 'new@example.com',
+            created_by: 'staff-1',
+          }),
+        })
+      )
+    })
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:8080/api/appointments',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            clinic_id: 'clinic-1',
+            patient_id: 'new-patient-user-1',
+            date: '2099-05-10',
+            time: '09:00',
+            booked_by: 'staff-1',
+            is_new_patient: true,
+          }),
+        })
+      )
+    })
+
+    expect(await screen.findByText('Appointment Booked!')).toBeInTheDocument()
+  })
+
+  test('shows error when staff new patient creation fails', async () => {
+    setupFetchMock({
+      createPatientOk: false,
+      createPatientError: 'Email already exists.',
+    })
+
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', {
+      name: /\+ Add new patient instead/i,
+    }))
+
+    await userEvent.type(screen.getByLabelText('Full name'), 'Duplicate Patient')
+    await userEvent.type(screen.getByLabelText('Email address'), 'duplicate@example.com')
+    await chooseDate('2099-05-10')
+    await chooseSlot('9:00 AM')
+
+    await openConfirmationDialog()
+    await userEvent.click(screen.getByRole('button', { name: /^Confirm$/i }))
+
+    expect(
+      (await screen.findAllByText(/Email already exists/i)).length
+    ).toBeGreaterThan(0)
+
+    expect(screen.queryByText('Appointment Booked!')).not.toBeInTheDocument()
+  })
+
+  test('shows missing patient information when new patient response has no user id', async () => {
+    setupFetchMock({
+      createPatientResponse: {
+        patient: {
+          id: 'new-patient-row-1',
+          full_name: 'New Patient',
+        },
+      },
+    })
+
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', {
+      name: /\+ Add new patient instead/i,
+    }))
+
+    await userEvent.type(screen.getByLabelText('Full name'), 'New Patient')
+    await userEvent.type(screen.getByLabelText('Email address'), 'new@example.com')
+    await chooseDate('2099-05-10')
+    await chooseSlot('9:00 AM')
+
+    await openConfirmationDialog()
+    await userEvent.click(screen.getByRole('button', { name: /^Confirm$/i }))
+
+    expect(
+      (await screen.findAllByText(/Missing patient information/i)).length
+    ).toBeGreaterThan(0)
+
+    expect(screen.queryByText('Appointment Booked!')).not.toBeInTheDocument()
+  })
+
+  test('patient mode does not show staff patient selector and books for logged-in patient', async () => {
+    renderPage({
+      auth: patientAuth,
+      locationState: {
+        clinic,
+        bookingMode: 'patient',
+        fromPage: 'Clinics',
+        fromPath: '/clinic',
+      },
+    })
+
+    expect(screen.queryByLabelText('Select existing patient')).not.toBeInTheDocument()
+
+    await chooseDate('2099-05-10')
+    await chooseSlot('9:00 AM')
+    await openConfirmationDialog()
+
+    expect(screen.queryByText('Patient')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /^Confirm$/i }))
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:8080/api/appointments',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            clinic_id: 'clinic-1',
+            patient_id: 'patient-self',
+            date: '2099-05-10',
+            time: '09:00',
+            booked_by: 'patient-self',
+            is_new_patient: false,
+          }),
+        })
+      )
+    })
+
+    expect(await screen.findByText('Appointment Booked!')).toBeInTheDocument()
+  })
+
+  test('patient mode requires logged-in user before proceeding', async () => {
+    renderPage({
+      auth: {
+        user: null,
+        role: 'Patient',
+      },
+      locationState: {
+        clinic,
+        bookingMode: 'patient',
+      },
+    })
+
+    await chooseDate('2099-05-10')
+    await chooseSlot('9:00 AM')
+
+    expect(screen.getByRole('button', { name: /review booking/i })).toBeDisabled()
+  })
+
+  test('date input has today as minimum selectable date', () => {
+    renderPage()
+
+    const dateInput = screen.getByLabelText('Appointment date')
+
+    expect(dateInput).toHaveAttribute('min')
+    expect(dateInput.getAttribute('min')).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
 })
