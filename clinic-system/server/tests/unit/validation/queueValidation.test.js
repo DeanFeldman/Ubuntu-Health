@@ -3,8 +3,11 @@ const {
   canJoinQueue,
   validateQueueJoin,
   isValidStatusTransition,
+  getTimeFromAppointmentDatetime,
+  attachSlotDatetimesToAppointments,
+  findSameDayClinicAppointment,
+  buildLinkedAppointmentResponse,
 } = require('../../../src/queueValidation')
-
 const {
   calculateEstimatedWaitTime,
 } = require('../../../src/patientValidation')
@@ -153,4 +156,165 @@ describe('Estimated wait time validation', () => {
       message: 'Estimate not available',
     })
   })
+  describe('Queue appointment sync helpers', () => {
+  test('formats appointment datetime as local appointment time', () => {
+    expect(getTimeFromAppointmentDatetime('2099-05-11T07:45:00.000Z')).toBe(
+      '09:45'
+    )
+  })
+
+  test('returns existing HH:mm value without parsing', () => {
+    expect(getTimeFromAppointmentDatetime('07:45')).toBe('07:45')
+  })
+
+  test('returns null for missing or invalid datetime', () => {
+    expect(getTimeFromAppointmentDatetime(null)).toBeNull()
+    expect(getTimeFromAppointmentDatetime('not-a-date')).toBeNull()
+  })
+
+  test('attaches slot datetimes to matching appointments', () => {
+    const appointments = [
+      {
+        id: 'appointment-1',
+        clinic_id: 'clinic-1',
+        slot_id: 'slot-1',
+        status: 'Confirmed',
+      },
+      {
+        id: 'appointment-2',
+        clinic_id: 'clinic-1',
+        slot_id: 'slot-2',
+        status: 'Confirmed',
+      },
+    ]
+
+    const slots = [
+      {
+        id: 'slot-1',
+        slot_datetime: '2099-05-11T07:45:00.000Z',
+      },
+    ]
+
+    expect(attachSlotDatetimesToAppointments(appointments, slots)).toEqual([
+      {
+        id: 'appointment-1',
+        clinic_id: 'clinic-1',
+        slot_id: 'slot-1',
+        status: 'Confirmed',
+        slot_datetime: '2099-05-11T07:45:00.000Z',
+      },
+      {
+        id: 'appointment-2',
+        clinic_id: 'clinic-1',
+        slot_id: 'slot-2',
+        status: 'Confirmed',
+        slot_datetime: null,
+      },
+    ])
+  })
+
+  test('finds same-day appointment at the selected clinic', () => {
+    const appointments = [
+      {
+        id: 'wrong-clinic',
+        clinic_id: 'clinic-2',
+        slot_datetime: '2099-05-11T07:45:00.000Z',
+      },
+      {
+        id: 'matching-appointment',
+        clinic_id: 'clinic-1',
+        slot_datetime: '2099-05-11T08:00:00.000Z',
+      },
+    ]
+
+    expect(
+      findSameDayClinicAppointment(appointments, 'clinic-1', '2099-05-11')
+    ).toEqual({
+      id: 'matching-appointment',
+      clinic_id: 'clinic-1',
+      slot_datetime: '2099-05-11T08:00:00.000Z',
+    })
+  })
+
+  test('does not match appointments from a different day or missing slot time', () => {
+    const appointments = [
+      {
+        id: 'different-day',
+        clinic_id: 'clinic-1',
+        slot_datetime: '2099-05-12T07:45:00.000Z',
+      },
+      {
+        id: 'missing-time',
+        clinic_id: 'clinic-1',
+        slot_datetime: null,
+      },
+    ]
+
+    expect(
+      findSameDayClinicAppointment(appointments, 'clinic-1', '2099-05-11')
+    ).toBeNull()
+  })
+
+  test('builds linked appointment response with appointment time', () => {
+    expect(
+      buildLinkedAppointmentResponse({
+        id: 'appointment-1',
+        status: 'Waiting',
+        slot_datetime: '2099-05-11T07:45:00.000Z',
+      })
+    ).toEqual({
+      id: 'appointment-1',
+      status: 'Waiting',
+      slot_datetime: '2099-05-11T07:45:00.000Z',
+      appointment_time: '09:45',
+    })
+  })
+
+  test('returns null linked appointment response when no appointment matched', () => {
+    expect(buildLinkedAppointmentResponse(null)).toBeNull()
+  })
+  test('handles default empty queue inputs', () => {
+  expect(canJoinQueue('patient-1')).toBe(true)
+  expect(validateQueueJoin('patient-1', undefined, true)).toBe(true)
+})
+
+test('attaches no slot datetimes when appointments and slots are missing', () => {
+  expect(attachSlotDatetimesToAppointments()).toEqual([])
+  expect(attachSlotDatetimesToAppointments(null, null)).toEqual([])
+})
+
+test('builds linked appointment response with null appointment time when slot datetime is missing', () => {
+  expect(
+    buildLinkedAppointmentResponse({
+      id: 'appointment-1',
+      status: 'Waiting',
+      slot_datetime: null,
+    })
+  ).toEqual({
+    id: 'appointment-1',
+    status: 'Waiting',
+    slot_datetime: null,
+    appointment_time: null,
+  })
+})
+
+test('does not match same-clinic appointment when slot date does not equal today', () => {
+  const appointments = [
+    {
+      id: 'different-day',
+      clinic_id: 'clinic-1',
+      slot_datetime: '2099-05-12T07:45:00.000Z',
+    },
+  ]
+
+  expect(
+    findSameDayClinicAppointment(appointments, 'clinic-1', '2099-05-11')
+  ).toBeNull()
+})
+})
+test('returns null when no appointment list is provided', () => {
+  expect(
+    findSameDayClinicAppointment(undefined, 'clinic-1', '2099-05-11')
+  ).toBeNull()
+})
 })
