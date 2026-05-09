@@ -1018,7 +1018,7 @@ if (!adminIdValidation.valid) {
 })
 
 // POST /api/queue/:clinicId/join — patient joins the virtual queue
-const { validateQueueJoin, findSameDayClinicAppointment } = require('./queueValidation')
+const { validateQueueJoin, findSameDayClinicAppointment, attachSlotDatetimesToAppointments, buildLinkedAppointmentResponse } = require('./queueValidation')
 
 app.post('/api/queue/:clinicId/join', async (req, res) => {
   try {
@@ -1109,24 +1109,25 @@ if (!idValidation.valid) {
 
     if (apptError) throw apptError
 
-    const slotIds = [...new Set((patientAppointments || []).map(a => a.slot_id).filter(Boolean))]
-    let appointmentsWithDatetime = []
+    const slotIds = [
+  ...new Set((patientAppointments || []).map(a => a.slot_id).filter(Boolean)),
+]
 
-    if (slotIds.length > 0) {
-      const { data: slots, error: slotsError } = await supabase
-        .from('slots')
-        .select('id, slot_datetime')
-        .in('id', slotIds)
+let appointmentsWithDatetime = []
 
-      if (slotsError) throw slotsError
+if (slotIds.length > 0) {
+  const { data: slots, error: slotsError } = await supabase
+    .from('slots')
+    .select('id, slot_datetime')
+    .in('id', slotIds)
 
-      const slotsById = Object.fromEntries((slots || []).map(s => [s.id, s]))
+  if (slotsError) throw slotsError
 
-      appointmentsWithDatetime = (patientAppointments || []).map(a => ({
-        ...a,
-        slot_datetime: slotsById[a.slot_id]?.slot_datetime || null,
-      }))
-    }
+  appointmentsWithDatetime = attachSlotDatetimesToAppointments(
+    patientAppointments,
+    slots
+  )
+}
 
     // US-29-1-1: Find matching same-day appointment at this clinic
     const matchedAppointment = findSameDayClinicAppointment(appointmentsWithDatetime, clinicId, today)
@@ -1155,16 +1156,7 @@ if (!idValidation.valid) {
     res.status(201).json({
       entry: newEntry,
       queue_notifications: queueNotifications,
-      linked_appointment: linkedAppointment
-        ? {
-            id: linkedAppointment.id,
-            status: linkedAppointment.status,
-            slot_datetime: linkedAppointment.slot_datetime,
-            appointment_time: linkedAppointment.slot_datetime
-              ? getTimeFromAppointmentDatetime(linkedAppointment.slot_datetime)
-              : null,
-          }
-        : null,
+   linked_appointment: buildLinkedAppointmentResponse(linkedAppointment),
     })
   } catch (err) {
     console.error(err)
