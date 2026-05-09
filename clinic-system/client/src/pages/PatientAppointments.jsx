@@ -859,7 +859,7 @@ const autoMarkNoShows = useCallback(async () => {
           </p>
         )}
 
-        {!loadingAppointments && !fetchError && appointments.filter((a) => a.status !== 'Cancelled').length === 0 && (
+        {!loadingAppointments && !fetchError && appointments.filter((a) => a.status !== 'Cancelled' && a.status !== 'Completed').length === 0 && (
           <article className="q-card">
             <section className="q-empty-state">
               <p className="q-empty-icon" aria-hidden="true">📋</p>
@@ -876,7 +876,7 @@ const autoMarkNoShows = useCallback(async () => {
         )}
 
         {!loadingAppointments && !fetchError && appointments
-          .filter((a) => a.status !== 'Cancelled')
+          .filter((a) => a.status !== 'Cancelled' && a.status !== 'Completed')
           .map((appointment) => (
           <article className="q-card" key={appointment.id}>
             <header className="q-status-row">
