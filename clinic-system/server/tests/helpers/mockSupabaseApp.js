@@ -73,6 +73,13 @@ function makeBuilder(table) {
         reject
       )
     },
+    ilike: jest.fn(function () {
+        return this
+    }),
+
+    range: jest.fn(function () {
+        return this
+    }),
   }
 
   createdBuilders.push(builder)
