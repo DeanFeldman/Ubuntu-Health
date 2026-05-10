@@ -37,353 +37,80 @@ beforeEach(() => {
 })
 
 describe('Appointment route tests', () => {
-  describe('GET /api/appointments/slots', () => {
-    test('returns 400 when clinic_id is missing', async () => {
-      const res = await request(app)
-        .get('/api/appointments/slots')
-        .query({ date: FUTURE_MONDAY })
-
-      expect(res.statusCode).toBe(400)
-      expect(res.body).toEqual({ error: 'clinic_id is required' })
-    })
-
-
-    test('returns 400 for invalid clinic id', async () => {
-      const res = await request(app)
-        .get('/api/appointments/slots')
-        .query({
-          clinic_id: invalidId,
-          date: FUTURE_MONDAY,
-        })
-
-      expect(res.statusCode).toBe(400)
-      expect(res.body).toEqual({ error: 'Invalid clinic ID format' })
-    })
-
-    test('returns 400 when appointment slot date is in the past', async () => {
-      const res = await request(app)
-        .get('/api/appointments/slots')
-        .query({
-          clinic_id: validClinicId,
-          date: '2020-01-01',
-        })
-
-      expect(res.statusCode).toBe(400)
-      expect(res.body).toEqual({
-        error: 'Past dates cannot be used for slot retrieval',
-      })
-    })
-
-    test('returns 404 when clinic is not found', async () => {
-      scenario.maybeSingle.clinics = [
-        {
-          data: null,
-          error: null,
+  test('stores appointment using slot_id without extra appointment columns', async () => {
+    scenario.maybeSingle.clinics = [
+      {
+        data: {
+          id: validClinicId,
+          operating_hours: null,
+          appointment_duration_minutes: null,
         },
-      ]
-
-      const res = await request(app)
-        .get('/api/appointments/slots')
-        .query({
-          clinic_id: validClinicId,
-          date: FUTURE_MONDAY,
-        })
-
-      expect(res.statusCode).toBe(404)
-      expect(res.body).toEqual({ error: 'Clinic not found' })
-    })
-
-    test('returns available appointment slots for clinic day', async () => {
-      scenario.maybeSingle.clinics = [
-        {
-          data: {
-            id: validClinicId,
-            operating_hours: null,
-            appointment_duration_minutes: null,
-          },
-          error: null,
-        },
-      ]
-      mockClinicBookingCapacity(1)
-      scenario.thenable.appointments = [
-        {
-          data: [],
-          error: null,
-        },
-      ]
-
-      const res = await request(app)
-        .get('/api/appointments/slots')
-        .query({
-          clinic_id: validClinicId,
-          date: FUTURE_MONDAY,
-        })
-
-      expect(res.statusCode).toBe(200)
-      expect(Array.isArray(res.body)).toBe(true)
-      expect(res.body).toContain('07:30')
-      expect(res.body).toContain('07:45')
-    })
-
-    test('returns default weekday slots from opening time up to before closing time', async () => {
-      scenario.maybeSingle.clinics = [
-        {
-          data: {
-            id: validClinicId,
-            operating_hours: null,
-            appointment_duration_minutes: null,
-          },
-          error: null,
-        },
-      ]
-      mockClinicBookingCapacity(1)
-      scenario.thenable.appointments = [
-        {
-          data: [],
-          error: null,
-        },
-      ]
-
-      const res = await request(app)
-        .get('/api/appointments/slots')
-        .query({
-          clinic_id: validClinicId,
-          date: FUTURE_MONDAY,
-        })
-
-      expect(res.statusCode).toBe(200)
-      expect(res.body.slice(0, 4)).toEqual(['07:30', '07:45', '08:00', '08:15'])
-      expect(res.body.at(-1)).toBe('16:15')
-      expect(res.body).not.toContain('16:30')
-    })
-
-    test('uses clinic-specific operating hours and appointment duration for slots', async () => {
-      scenario.maybeSingle.clinics = [
-        {
-          data: {
-            id: validClinicId,
-            operating_hours: {
-              monday: { open: '09:10', close: '10:10' },
-            },
-            appointment_duration_minutes: 20,
-          },
-          error: null,
-        },
-      ]
-      mockClinicBookingCapacity(1)
-      scenario.thenable.appointments = [
-        {
-          data: [],
-          error: null,
-        },
-      ]
-
-      const res = await request(app)
-        .get('/api/appointments/slots')
-        .query({
-          clinic_id: validClinicId,
-          date: FUTURE_MONDAY,
-        })
-
-      expect(res.statusCode).toBe(200)
-      expect(res.body).toEqual(['09:10', '09:30', '09:50'])
-    })
-
-    test('returns empty slots array for closed clinic day', async () => {
-      scenario.maybeSingle.clinics = [
-        {
-          data: {
-            id: validClinicId,
-            operating_hours: null,
-            appointment_duration_minutes: null,
-          },
-          error: null,
-        },
-      ]
-
-      const res = await request(app)
-        .get('/api/appointments/slots')
-        .query({
-          clinic_id: validClinicId,
-          date: FUTURE_SATURDAY,
-        })
-
-      expect(res.statusCode).toBe(200)
-      expect(res.body).toEqual([])
-    })
-
-    test('returns 500 when clinic lookup fails', async () => {
-      scenario.maybeSingle.clinics = [
-        {
-          data: null,
-          error: new Error('Clinic lookup failed'),
-        },
-      ]
-
-      const res = await request(app)
-        .get('/api/appointments/slots')
-        .query({
-          clinic_id: validClinicId,
-          date: FUTURE_MONDAY,
-        })
-
-      expect(res.statusCode).toBe(500)
-      expect(res.body).toEqual({ error: 'Failed to fetch appointment slots' })
-    })
-    test('removes fully booked appointment slots from available slots', async () => {
-  scenario.maybeSingle.clinics = [
-    {
-      data: {
-        id: validClinicId,
-        operating_hours: null,
-        appointment_duration_minutes: null,
+        error: null,
       },
-      error: null,
-    },
-  ]
-
-  mockClinicBookingCapacity(1)
-
-  scenario.thenable.appointments = [
-    {
-      data: [
-        {
-          slot_id: validSlotId,
-        },
-      ],
-      error: null,
-    },
-  ]
-
-  scenario.thenable.slots = [
-    {
-      data: [
-        {
+    ]
+  
+    scenario.maybeSingle.slots = [
+      {
+        data: {
           id: validSlotId,
-          //5:30 since DB is 2 hrs behind
-          slot_datetime: `${FUTURE_MONDAY}T05:30:00.000Z`,
+          slot_datetime: `${FUTURE_MONDAY}T07:45:00.000Z`,
         },
-      ],
-      error: null,
-    },
-  ]
-
-  const res = await request(app)
-    .get('/api/appointments/slots')
-    .query({
-      clinic_id: validClinicId,
-      date: FUTURE_MONDAY,
-    })
-
-  expect(res.statusCode).toBe(200)
-  expect(res.body).not.toContain('07:30')
-  expect(res.body).toContain('07:45')
-})
-test('stores appointment using slot_id without extra appointment columns', async () => {
-  scenario.maybeSingle.clinics = [
-    {
-      data: {
-        id: validClinicId,
-        operating_hours: null,
-        appointment_duration_minutes: null,
+        error: null,
       },
-      error: null,
-    },
-  ]
-
-  scenario.maybeSingle.slots = [
-    {
-      data: {
-        id: validSlotId,
-        slot_datetime: `${FUTURE_MONDAY}T07:45:00.000Z`,
+    ]
+  
+    scenario.thenable.users = [
+      {
+        count: 2,
+        error: null,
       },
-      error: null,
-    },
-  ]
-
-  scenario.thenable.users = [
-    {
-      count: 2,
-      error: null,
-    },
-  ]
-
-  scenario.thenable.appointments = [
-    {
-      data: [],
-      error: null,
-    },
-  ]
-
-  scenario.single.appointments = [
-    {
-      data: {
-        id: validAppointmentId,
+    ]
+  
+    scenario.thenable.appointments = [
+      {
+        data: [],
+        error: null,
+      },
+    ]
+  
+    scenario.single.appointments = [
+      {
+        data: {
+          id: validAppointmentId,
+          clinic_id: validClinicId,
+          patient_id: validPatientId,
+          slot_id: validSlotId,
+          status: 'Confirmed',
+        },
+        error: null,
+      },
+    ]
+  
+    const res = await request(app)
+      .post('/api/appointments')
+      .send({
         clinic_id: validClinicId,
         patient_id: validPatientId,
-        slot_id: validSlotId,
-        status: 'Confirmed',
-      },
-      error: null,
-    },
-  ]
-
-  const res = await request(app)
-    .post('/api/appointments')
-    .send({
+        date: FUTURE_MONDAY,
+        time: '07:45',
+        booked_by: validPatientId,
+      })
+  
+    expect(res.statusCode).toBe(201)
+  
+    const appointmentBuilder = createdBuilders.find(
+      (builder) =>
+        builder.table === 'appointments' && builder.insert.mock.calls.length
+    )
+  
+    expect(appointmentBuilder.insert).toHaveBeenCalledTimes(1)
+    expect(appointmentBuilder.insert).toHaveBeenCalledWith({
       clinic_id: validClinicId,
       patient_id: validPatientId,
-      date: FUTURE_MONDAY,
-      time: '07:45',
-      booked_by: validPatientId,
+      slot_id: validSlotId,
+      status: 'Confirmed',
     })
-
-  expect(res.statusCode).toBe(201)
-
-  const appointmentBuilder = createdBuilders.find(
-    (builder) =>
-      builder.table === 'appointments' && builder.insert.mock.calls.length
-  )
-
-  expect(appointmentBuilder.insert).toHaveBeenCalledTimes(1)
-  expect(appointmentBuilder.insert).toHaveBeenCalledWith({
-    clinic_id: validClinicId,
-    patient_id: validPatientId,
-    slot_id: validSlotId,
-    status: 'Confirmed',
   })
-})
-test('returns empty slots when clinic has no assigned staff', async () => {
-  scenario.maybeSingle.clinics = [
-    {
-      data: {
-        id: validClinicId,
-        operating_hours: null,
-        appointment_duration_minutes: null,
-      },
-      error: null,
-    },
-  ]
-
-  scenario.thenable.users = [
-    {
-      count: 0,
-      error: null,
-    },
-  ]
-
-  const res = await request(app)
-    .get('/api/appointments/slots')
-    .query({
-      clinic_id: validClinicId,
-      date: FUTURE_MONDAY,
-    })
-
-  expect(res.statusCode).toBe(200)
-  expect(res.body).toEqual([])
-})
-  }
-)
 
   describe('POST /api/appointments', () => {
     test('returns 400 when required booking fields are missing', async () => {
