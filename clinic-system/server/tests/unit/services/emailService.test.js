@@ -34,9 +34,11 @@ describe('emailService', () => {
 
       expect(email.subject).toBe('Appointment Confirmation — Ubuntu Clinic')
       expect(email.text).toContain('Hi Jane Patient,')
+      expect(email.text).toContain('Your appointment has been confirmed.')
       expect(email.text).toContain('Clinic:  Ubuntu Clinic')
       expect(email.text).toContain('Date:    2099-05-11')
       expect(email.text).toContain('Time:    09:30')
+      expect(email.text).toContain('Ubuntu Health')
     })
 
     test('uses fallback values when appointment details are missing', () => {
@@ -47,6 +49,18 @@ describe('emailService', () => {
       expect(email.text).toContain('Clinic:  the clinic')
       expect(email.text).toContain('Date:    Unknown date')
       expect(email.text).toContain('Time:    Unknown time')
+    })
+
+    test('trims the generated email body', () => {
+      const email = buildAppointmentConfirmationEmail({
+        patientName: 'Jane Patient',
+        clinicName: 'Ubuntu Clinic',
+        date: '2099-05-11',
+        time: '09:30',
+      })
+
+      expect(email.text.startsWith('Hi Jane Patient,')).toBe(true)
+      expect(email.text.endsWith('Ubuntu Health')).toBe(true)
     })
   })
 
@@ -131,9 +145,10 @@ describe('emailService', () => {
       process.env.GMAIL_APP_PASSWORD = 'app-password'
 
       const error = new Error('SMTP failed')
+      const sendMail = jest.fn().mockRejectedValue(error)
 
       nodemailer.createTransport.mockReturnValue({
-        sendMail: jest.fn().mockRejectedValue(error),
+        sendMail,
       })
 
       const result = await sendAppointmentConfirmationEmail({
@@ -149,6 +164,8 @@ describe('emailService', () => {
         reason: 'exception',
         error,
       })
+
+      expect(sendMail).toHaveBeenCalled()
     })
   })
 })
