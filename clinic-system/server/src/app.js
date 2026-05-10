@@ -312,47 +312,6 @@ async function findOrCreateClinicSlot(clinicId, slotDatetimeIso) {
 
   return createdSlot
 }
-/*
-function getClinicCloseTimeForDate(clinic, slotDatetime) {
-  if (!clinic || !slotDatetime) return null
-
-  const date = new Date(slotDatetime)
-
-  if (Number.isNaN(date.getTime())) return null
-
-  const dayName = date.toLocaleDateString('en-US', {
-    weekday: 'long',
-    timeZone: 'Africa/Johannesburg',
-  }).toLowerCase()
-
-  const schedule = resolveClinicSchedule(clinic)
-  const operatingHours = schedule.operating_hours || {}
-
-  const dayHours =
-    operatingHours[dayName] ||
-    operatingHours[dayName.slice(0, 3)] ||
-    null
-
-  if (!dayHours) return null
-
-  const close =
-    dayHours.close ||
-    dayHours.end ||
-    dayHours.end_time ||
-    dayHours.closing_time ||
-    null
-
-  if (!close) return null
-
-  const slotDate = slotDatetime.slice(0, 10)
-  const closeDateTime = new Date(`${slotDate}T${String(close).slice(0, 5)}:00`)
-
-  if (Number.isNaN(closeDateTime.getTime())) return null
-
-  closeDateTime.setHours(closeDateTime.getHours() + 2)
-
-  return closeDateTime
-}*/
 const {
   findMissedAppointmentIds,
   buildAutoNoShowResponse,
@@ -2459,15 +2418,6 @@ app.post('/api/appointments', async (req, res) => {
       createdPatientId = patient_id
     }
 
-    /*const normalizedTime = getTimeFromAppointmentDatetime(time)
-    const slot_datetime = new Date(`${date}T${normalizedTime}:00`)
-
-    if (Number.isNaN(slot_datetime.getTime())) {
-      await rollbackCreatedPatient()
-      return res.status(400).json({ error: 'Invalid date or time format' })
-    }*/
-   //const normalizedTime = normalizeSlotTime(time)
-
     const { data: clinic, error: clinicError } = await supabase
       .from('clinics')
       .select('*')
@@ -2480,20 +2430,6 @@ app.post('/api/appointments', async (req, res) => {
       await rollbackCreatedPatient()
       return res.status(404).json({ error: 'Clinic not found' })
     }
-
-    /*const schedule = resolveClinicSchedule(clinic)
-    const validSlots = generateDailySlots({
-      date,
-      operating_hours: schedule.operating_hours,
-      appointment_duration_minutes: schedule.appointment_duration_minutes,
-    })
-
-    if (!validSlots.includes(normalizedTime)) {
-      await rollbackCreatedPatient()
-      return res.status(400).json({
-        error: 'Selected time is outside clinic hours or does not match the appointment duration',
-      })
-    }*/
     const schedule = resolveClinicSchedule(clinic)
 
 const validSlots = generateDailySlots({
@@ -2754,10 +2690,6 @@ app.get('/api/appointments/clinic/:clinicId', async (req, res) => {
 if (!idValidation.valid) {
   return res.status(idValidation.status).json({ error: idValidation.error })
 }
-
-    // if (!date) {
-    //   return res.status(400).json({ error: 'Date is required' })
-    // }
 
     const { data: appointments, error: appointmentError } = await supabase
       .from('appointments')
