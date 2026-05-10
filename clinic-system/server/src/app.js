@@ -307,47 +307,6 @@ async function findOrCreateClinicSlot(clinicId, slotDatetimeIso) {
 
   return createdSlot
 }
-/*
-function getClinicCloseTimeForDate(clinic, slotDatetime) {
-  if (!clinic || !slotDatetime) return null
-
-  const date = new Date(slotDatetime)
-
-  if (Number.isNaN(date.getTime())) return null
-
-  const dayName = date.toLocaleDateString('en-US', {
-    weekday: 'long',
-    timeZone: 'Africa/Johannesburg',
-  }).toLowerCase()
-
-  const schedule = resolveClinicSchedule(clinic)
-  const operatingHours = schedule.operating_hours || {}
-
-  const dayHours =
-    operatingHours[dayName] ||
-    operatingHours[dayName.slice(0, 3)] ||
-    null
-
-  if (!dayHours) return null
-
-  const close =
-    dayHours.close ||
-    dayHours.end ||
-    dayHours.end_time ||
-    dayHours.closing_time ||
-    null
-
-  if (!close) return null
-
-  const slotDate = slotDatetime.slice(0, 10)
-  const closeDateTime = new Date(`${slotDate}T${String(close).slice(0, 5)}:00`)
-
-  if (Number.isNaN(closeDateTime.getTime())) return null
-
-  closeDateTime.setHours(closeDateTime.getHours() + 2)
-
-  return closeDateTime
-}*/
 const {
   findMissedAppointmentIds,
   buildAutoNoShowResponse,
@@ -2460,7 +2419,6 @@ app.post('/api/appointments', async (req, res) => {
       createdPatientId = patient_id
     }
 
-
     const { data: clinic, error: clinicError } = await supabase
       .from('clinics')
       .select('*')
@@ -2741,10 +2699,6 @@ app.get('/api/appointments/clinic/:clinicId', async (req, res) => {
 if (!idValidation.valid) {
   return res.status(idValidation.status).json({ error: idValidation.error })
 }
-
-    // if (!date) {
-    //   return res.status(400).json({ error: 'Date is required' })
-    // }
 
     const { data: appointments, error: appointmentError } = await supabase
       .from('appointments')
@@ -3295,9 +3249,9 @@ app.patch('/api/appointments/auto-no-shows/:clinicId', async (req, res) => {
   now,
 })
 
-if (missedAppointmentIds.length === 0) {
-  return res.json(buildAutoNoShowResponse())
-}
+  if (missedAppointmentIds.length === 0) {
+    return res.json(buildAutoNoShowResponse())
+  }
 
     const { data, error } = await supabase
       .from('appointments')
@@ -3313,7 +3267,6 @@ if (missedAppointmentIds.length === 0) {
     return res.status(500).json({ error: 'Failed to auto-mark no-shows' })
   }
 })
-
 
 // Serve built frontend
 const publicPath = path.join(__dirname, '..', 'public')
