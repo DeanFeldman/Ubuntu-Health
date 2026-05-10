@@ -27,6 +27,10 @@ function makeBuilder(table) {
       return this
     }),
 
+    lt: jest.fn(function () {
+      return this
+    }),
+
     in: jest.fn(function () {
       return this
     }),
@@ -51,6 +55,10 @@ function makeBuilder(table) {
       return this
     }),
 
+    delete: jest.fn(function () {
+      return this
+    }),
+
     maybeSingle: jest.fn(function () {
       return Promise.resolve(getNextResponse(scenario.maybeSingle, table))
     }),
@@ -71,7 +79,7 @@ function makeBuilder(table) {
   return builder
 }
 
-function setupMockApp() {
+function setupMockApp({ mockQueueNotificationService = true } = {}) {
   jest.resetModules()
 
   createdBuilders = []
@@ -87,16 +95,26 @@ function setupMockApp() {
 
   mockSupabase = {
     from: jest.fn((table) => makeBuilder(table)),
+    rpc: jest.fn(() =>
+      Promise.resolve({
+        data: null,
+        error: null,
+      })
+    ),
   }
 
   jest.doMock('@supabase/supabase-js', () => ({
     createClient: jest.fn(() => mockSupabase),
   }))
 
-  jest.doMock('../../src/queueNotificationService', () => ({
-    configureQueueNotificationService: jest.fn(),
-    checkAndTriggerNotifications: jest.fn(() => []),
-  }))
+  if (mockQueueNotificationService) {
+    jest.doMock('../../src/queueNotificationService', () => ({
+      configureQueueNotificationService: jest.fn(),
+      checkAndTriggerNotifications: jest.fn(() => []),
+    }))
+  } else {
+    jest.dontMock('../../src/queueNotificationService')
+  }
 
   jest.doMock('../../src/emailService', () => ({
     sendAppointmentConfirmationEmail: jest.fn(() =>
