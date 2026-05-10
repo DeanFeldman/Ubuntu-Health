@@ -7,6 +7,66 @@ const { sendAppointmentConfirmationEmail } = require('./emailService')
 const app = express()
 const DEFAULT_ESTIMATED_WAIT_APPOINTMENT_DURATION = 15
 const ESTIMATED_WAIT_FALLBACK_MESSAGE = 'Estimated wait time may be inaccurate'
+//imports:
+const {
+  validateQueueJoin,
+  findSameDayClinicAppointment,
+  attachSlotDatetimesToAppointments,
+  buildLinkedAppointmentResponse,
+  isValidStatusTransition,
+} = require('./queueValidation')
+const {
+  isAdminUser,
+  canAssignStaffToClinic,
+  canUnassignStaff,
+  validateClinicUpdatePayload,
+  normalizeServicesInput,
+} = require('./clinicManagementValidation')
+const {
+  validateSlotRetrievalInput,
+  validateGeneratedSlots,
+  validateSelectedSlot,
+  removeFullyBookedSlots,
+  validateClinicBookingCapacity,
+} = require('./appointmentSlotValidation')
+const {
+  findMissedAppointmentIds,
+  buildAutoNoShowResponse,
+} = require('./appointmentAutoNoShowValidation')
+const {
+  hasRequiredRoleRequestFields,
+  isValidUuid,
+  isValidRequestedRole,
+  isDifferentFromCurrentRole,
+  doesUserExist,
+  hasDuplicatePendingRoleRequest,
+} = require('./roleRequestValidation')
+const {
+  validateAvailabilityCreateInput,
+  validateAvailabilityUpdateInput,
+  validateAvailabilityWithinClinicHours,
+} = require('./staffAvailabilityValidation')
+const { validatePatientInput } = require('./patientValidation')
+const {
+  validateAppointmentBookingInput,
+  validateStaffSelfBookingAvailabilityRule,
+} = require('./appointmentBookingValidation')
+const {
+  BOOKED_APPOINTMENT_STATUSES,
+  normalizeAppointmentStatus,
+  canMarkAppointmentStatus,
+  canRescheduleAppointment,
+} = require('./appointmentStatusValidation')
+const {
+  validateCancelRequest,
+  validateAppointmentCanBeCancelled,
+  buildCancelResponse,
+} = require('./appointmentCancelValidation')
+const {
+  validateRescheduleRequest,
+  canUseRescheduleSlot,
+  buildRescheduleResponse,
+} = require('./appointmentRescheduleValidation')
 
 const {
   checkAndTriggerNotifications,
@@ -205,16 +265,6 @@ function getTimeFromAppointmentDatetime(slotDatetime) {
   })
 }
 
-const {
-  isValidDateFormat,
-  normalizeSlotTime,
-  validateSlotRetrievalInput,
-  validateGeneratedSlots,
-  validateSelectedSlot,
-  removeFullyBookedSlots,
-  validateClinicBookingCapacity,
-} = require('./appointmentSlotValidation')
-
 async function fetchClinicBookingCapacity(clinicId) {
   const { count, error } = await supabase
     .from('users')
@@ -307,10 +357,6 @@ async function findOrCreateClinicSlot(clinicId, slotDatetimeIso) {
 
   return createdSlot
 }
-const {
-  findMissedAppointmentIds,
-  buildAutoNoShowResponse,
-} = require('./appointmentAutoNoShowValidation')
 
 async function countActiveAppointmentsForSlot(clinicId, slotId) {
   if (!slotId) return 0
@@ -712,9 +758,6 @@ if (!idValidation.valid) {
 })
 
 // POST /api/role-requests — submit a new role request
-const {
-  hasRequiredRoleRequestFields,isValidUuid,isValidRequestedRole, isDifferentFromCurrentRole,doesUserExist, 
-  hasDuplicatePendingRoleRequest,} = require('./roleRequestValidation')
 app.post('/api/role-requests', async (req, res) => {
   try {
     const { user_id, requested_role } = req.body
@@ -1029,7 +1072,6 @@ if (!adminIdValidation.valid) {
 })
 
 // POST /api/queue/:clinicId/join — patient joins the virtual queue
-const { validateQueueJoin, findSameDayClinicAppointment, attachSlotDatetimesToAppointments, buildLinkedAppointmentResponse } = require('./queueValidation')
 
 app.post('/api/queue/:clinicId/join', async (req, res) => {
   try {
@@ -1176,8 +1218,6 @@ if (slotIds.length > 0) {
 })
 
 // PATCH /api/queue/:clinicId/entry/:entryId/status — staff updates a patient's queue status
-const { isValidStatusTransition } = require('./queueValidation')
-
 app.patch('/api/queue/:clinicId/entry/:entryId/status', async (req, res) => {
   try {
     const { clinicId, entryId } = req.params
@@ -1567,14 +1607,6 @@ if (!idValidation.valid) {
   }
 })
 
-const {
-  isValidUuid: isValidClinicUuid,
-  isAdminUser,
-  canAssignStaffToClinic,
-  canUnassignStaff,
-  validateClinicUpdatePayload,
-  normalizeServicesInput,
-} = require('./clinicManagementValidation')
 // PATCH /api/users/:userId/assign-clinic — admin assigns a staff member to a clinic
 app.patch('/api/users/:userId/assign-clinic', async (req, res) => {
   try {
@@ -1946,11 +1978,6 @@ if (!idValidation.valid) {
     res.status(500).json({ error: 'Failed to add patient to queue' })
   }
 })
-const {
-  validateAvailabilityCreateInput,
-  validateAvailabilityUpdateInput,
-  validateAvailabilityWithinClinicHours,
-} = require('./staffAvailabilityValidation')
 // GET /api/staff/:staffId/availability — retrieve staff availability
 app.get('/api/staff/:staffId/availability', async (req, res) => {
   try {
@@ -2165,10 +2192,6 @@ app.patch('/api/staff/:staffId/availability/:availabilityId', async (req, res) =
 
 // POST /api/patients — staff creates a patient record for a walk-in
 
-const { validatePatientInput } = require('./patientValidation')
-
-// POST /api/patients — staff creates a patient record for a walk-in
-
 app.post('/api/patients', async (req, res) => {
   let createdAuthUserId = null
 
@@ -2296,10 +2319,7 @@ if (authEmailExists) {
   }
 })
 
-const {
-  validateAppointmentBookingInput,
-  validateStaffSelfBookingAvailabilityRule,
-} = require('./appointmentBookingValidation')
+//GET /api/appointments/slots?clinic_id=&date= — retrieve available appointment slots for a clinic on a specific date
 app.get('/api/appointments/slots', async (req, res) => {
   try {
     const { clinic_id, date } = req.query
@@ -2793,18 +2813,6 @@ if (!idValidation.valid) {
     res.status(500).json({ error: 'Failed to fetch clinic appointments' })
   }
 })
-const {
-  BOOKED_APPOINTMENT_STATUSES,
-  normalizeAppointmentStatus,
-  canMarkAppointmentStatus,
-  canRescheduleAppointment,
-  canCancelAppointment,
-} = require('./appointmentStatusValidation')
-const {
-  validateCancelRequest,
-  validateAppointmentCanBeCancelled,
-  buildCancelResponse,
-} = require('./appointmentCancelValidation')
 
 //PATCH /api/appointments/:id/status
 app.patch('/api/appointments/:id/status', async (req, res) => {
@@ -2880,11 +2888,6 @@ app.patch('/api/appointments/:id/status', async (req, res) => {
     return res.status(500).json({ error: 'Failed to update appointment status' })
   }
 })
-const {
-  validateRescheduleRequest,
-  canUseRescheduleSlot,
-  buildRescheduleResponse,
-} = require('./appointmentRescheduleValidation')
 
 //PATCH /api/appointments/:id/reschedule
 app.patch('/api/appointments/:id/reschedule', async (req, res) => {
