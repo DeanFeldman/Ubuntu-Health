@@ -39,11 +39,19 @@ function makeBuilder(table) {
       return this
     }),
 
+    ilike: jest.fn(function () {
+      return this
+    }),
+
     order: jest.fn(function () {
       return this
     }),
 
     limit: jest.fn(function () {
+      return this
+    }),
+
+    range: jest.fn(function () {
       return this
     }),
 
@@ -73,17 +81,41 @@ function makeBuilder(table) {
         reject
       )
     },
-    ilike: jest.fn(function () {
-        return this
-    }),
-
-    range: jest.fn(function () {
-        return this
-    }),
   }
 
   createdBuilders.push(builder)
   return builder
+}
+
+function makeAuthAdminMock() {
+  return {
+    listUsers: jest.fn(() =>
+      Promise.resolve({
+        data: {
+          users: [],
+        },
+        error: null,
+      })
+    ),
+
+    createUser: jest.fn(() =>
+      Promise.resolve({
+        data: {
+          user: {
+            id: '00000000-0000-0000-0000-000000000099',
+          },
+        },
+        error: null,
+      })
+    ),
+
+    deleteUser: jest.fn(() =>
+      Promise.resolve({
+        data: null,
+        error: null,
+      })
+    ),
+  }
 }
 
 function setupMockApp({ mockQueueNotificationService = true } = {}) {
@@ -108,6 +140,9 @@ function setupMockApp({ mockQueueNotificationService = true } = {}) {
         error: null,
       })
     ),
+    auth: {
+      admin: makeAuthAdminMock(),
+    },
   }
 
   jest.doMock('@supabase/supabase-js', () => ({
