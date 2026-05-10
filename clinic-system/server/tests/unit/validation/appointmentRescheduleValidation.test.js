@@ -4,67 +4,62 @@ const {
   buildRescheduleResponse,
 } = require('../../../src/appointmentRescheduleValidation')
 
+const validRequest = {
+  appointmentId: 'appointment-1',
+  date: '2099-05-11',
+  time: '09:15',
+}
+
+function existingAppointment(id = 'appointment-2') {
+  return { id }
+}
+
 describe('appointmentRescheduleValidation', () => {
   describe('validateRescheduleRequest', () => {
     test('accepts valid reschedule input and normalizes time', () => {
-  expect(
-    validateRescheduleRequest({
-      appointmentId: 'appointment-1',
-      date: '2099-05-11',
-      time: '09:15',
+      expect(validateRescheduleRequest(validRequest)).toEqual({
+        valid: true,
+        normalizedTime: '09:15',
+      })
     })
-  ).toEqual({
-    valid: true,
-    normalizedTime: '09:15',
+
+    test('normalizes datetime values to Johannesburg HH:mm time', () => {
+    expect(
+        validateRescheduleRequest({
+          ...validRequest,
+          time: '2099-05-11T10:30:00.000Z',
+        })
+      ).toEqual({
+      valid: true,
+      normalizedTime: '12:30',
+    })
   })
-})
 
-    test('rejects missing appointment ID', () => {
-      expect(
-        validateRescheduleRequest({
-          appointmentId: '',
-          date: '2099-05-11',
-          time: '09:15',
-        })
-      ).toEqual({
+    test.each([
+      ['appointmentId', 'appointment ID is required'],
+      ['date', 'date is required'],
+      ['time', 'time is required'],
+    ])('rejects missing %s', (field, error) => {
+      const request = { ...validRequest }
+      delete request[field]
+
+      expect(validateRescheduleRequest(request)).toEqual({
         valid: false,
         status: 400,
-        error: 'appointment ID is required',
+        error,
       })
     })
 
-    test('rejects missing date', () => {
+    test.each([
+      '11-05-2099',
+      '2099/05/11',
+      '2099-02-30',
+      'bad-date',
+    ])('rejects invalid date value %s', (date) => {
       expect(
         validateRescheduleRequest({
-          appointmentId: 'appointment-1',
-          time: '09:15',
-        })
-      ).toEqual({
-        valid: false,
-        status: 400,
-        error: 'date is required',
-      })
-    })
-
-    test('rejects missing time', () => {
-      expect(
-        validateRescheduleRequest({
-          appointmentId: 'appointment-1',
-          date: '2099-05-11',
-        })
-      ).toEqual({
-        valid: false,
-        status: 400,
-        error: 'time is required',
-      })
-    })
-
-    test('rejects invalid date format', () => {
-      expect(
-        validateRescheduleRequest({
-          appointmentId: 'appointment-1',
-          date: '11-05-2099',
-          time: '09:15',
+          ...validRequest,
+          date,
         })
       ).toEqual({
         valid: false,
@@ -73,12 +68,14 @@ describe('appointmentRescheduleValidation', () => {
       })
     })
 
-    test('rejects invalid time format', () => {
+    test.each([
+      'bad-time',
+      '25:00',
+    ])('rejects invalid time value %s', (time) => {
       expect(
         validateRescheduleRequest({
-          appointmentId: 'appointment-1',
-          date: '2099-05-11',
-          time: 'bad-time',
+          ...validRequest,
+          time,
         })
       ).toEqual({
         valid: false,
@@ -92,7 +89,7 @@ describe('appointmentRescheduleValidation', () => {
     test('allows slot when booked count is below staff capacity', () => {
       expect(
         canUseRescheduleSlot({
-          existingAppointments: [{ id: 'appointment-2' }],
+          existingAppointments: [existingAppointment()],
           staffCount: 2,
         })
       ).toEqual({
@@ -115,78 +112,86 @@ describe('appointmentRescheduleValidation', () => {
       })
     })
 
-    test('rejects slot when booked count equals staff capacity', () => {
-      expect(
-        canUseRescheduleSlot({
-          existingAppointments: [{ id: 'appointment-2' }],
-          staffCount: 1,
-        })
-      ).toEqual({
-        valid: false,
-        status: 409,
-        error: 'This slot is already booked',
-      })
-    })
-
-    test('rejects slot when booked count exceeds staff capacity', () => {
-      expect(
-        canUseRescheduleSlot({
-          existingAppointments: [
-            { id: 'appointment-2' },
-            { id: 'appointment-3' },
-          ],
-          staffCount: 1,
-        })
-      ).toEqual({
-        valid: false,
-        status: 409,
-        error: 'This slot is already booked',
-      })
-    })
     test('treats a single non-array existing appointment as one booking', () => {
-  expect(
-    canUseRescheduleSlot({
-      existingAppointments: { id: 'appointment-2' },
-      staffCount: 2,
-    })
-  ).toEqual({
-    valid: true,
-    bookedCount: 1,
-    capacity: 2,
-  })
-})
-
-test('treats missing existing appointments as zero bookings', () => {
-  expect(
-    canUseRescheduleSlot({
-      existingAppointments: null,
-      staffCount: 1,
-    })
-  ).toEqual({
-    valid: true,
-    bookedCount: 0,
-    capacity: 1,
-  })
-})
-
-test('defaults invalid staff capacity to one when slot is empty', () => {
-  expect(
-    canUseRescheduleSlot({
-      existingAppointments: [],
-      staffCount: 'not-a-number',
-    })
-  ).toEqual({
-    valid: true,
-    bookedCount: 0,
-    capacity: 1,
-  })
-})
-
-    test('defaults invalid staff capacity to one', () => {
       expect(
         canUseRescheduleSlot({
-          existingAppointments: [{ id: 'appointment-2' }],
-          staffCount: 0,
+          existingAppointments: existingAppointment(),
+          staffCount: 2,
+        })
+      ).toEqual({
+        valid: true,
+        bookedCount: 1,
+        capacity: 2,
+      })
+    })
+
+    test('treats missing existing appointments as zero bookings', () => {
+      expect(
+        canUseRescheduleSlot({
+          existingAppointments: null,
+          staffCount: 1,
+        })
+      ).toEqual({
+        valid: true,
+        bookedCount: 0,
+        capacity: 1,
+      })
+    })
+
+    test.each([
+      [1, 1],
+      [2, 1],
+    ])(
+      'rejects slot when booked count %i is greater than or equal to staff capacity %i',
+      (bookedCount, staffCount) => {
+        const existingAppointments = Array.from(
+          { length: bookedCount },
+          (_, index) => existingAppointment(`appointment-${index + 1}`)
+        )
+
+        expect(
+          canUseRescheduleSlot({
+            existingAppointments,
+            staffCount,
+          })
+        ).toEqual({
+          valid: false,
+          status: 409,
+          error: 'This slot is already booked',
+        })
+      }
+    )
+
+    test.each([
+      0,
+      -1,
+      null,
+      undefined,
+      'not-a-number',
+    ])('defaults invalid staff capacity %s to one when slot is empty', (staffCount) => {
+      expect(
+        canUseRescheduleSlot({
+          existingAppointments: [],
+          staffCount,
+        })
+      ).toEqual({
+        valid: true,
+        bookedCount: 0,
+        capacity: 1,
+      })
+    })
+
+    test.each([
+      0,
+      -1,
+      null,
+      undefined,
+      'not-a-number',
+    ])('defaults invalid staff capacity %s to one when slot has one booking', (staffCount) => {
+      expect(
+        canUseRescheduleSlot({
+          existingAppointments: [existingAppointment()],
+          staffCount,
         })
       ).toEqual({
         valid: false,
@@ -225,6 +230,33 @@ test('defaults invalid staff capacity to one when slot is empty', () => {
         },
         old_slot_id: 'slot-old',
         new_slot_id: 'slot-new',
+      })
+    })
+
+    test('preserves other updated appointment fields in the response', () => {
+      expect(
+        buildRescheduleResponse({
+          appointment: {
+            id: 'appointment-1',
+          },
+          updatedAppointment: {
+            id: 'appointment-1',
+            slot_id: 'slot-new',
+            status: 'Confirmed',
+            service: 'General consultation',
+          },
+          oldSlotId: 'slot-old',
+          newSlot: {
+            id: 'slot-new',
+            slot_datetime: '2099-05-11T09:15:00.000Z',
+          },
+        }).appointment
+      ).toEqual({
+        id: 'appointment-1',
+        slot_id: 'slot-new',
+        status: 'Confirmed',
+        service: 'General consultation',
+        slot_datetime: '2099-05-11T09:15:00.000Z',
       })
     })
   })
