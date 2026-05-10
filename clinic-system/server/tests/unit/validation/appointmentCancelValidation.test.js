@@ -4,27 +4,42 @@ const {
   buildCancelResponse,
 } = require('../../../src/appointmentCancelValidation')
 
+const validAppointmentId = '11111111-1111-4111-8111-111111111111'
+
+function appointment(overrides = {}) {
+  return {
+    id: validAppointmentId,
+    status: 'Confirmed',
+    slot_id: 'slot-1',
+    ...overrides,
+  }
+}
+
 describe('appointmentCancelValidation', () => {
   describe('validateCancelRequest', () => {
     test('accepts a valid appointment ID', () => {
       expect(
         validateCancelRequest({
-          appointmentId: '11111111-1111-4111-8111-111111111111',
+          appointmentId: validAppointmentId,
         })
       ).toEqual({
         valid: true,
       })
     })
 
-    test('rejects missing appointment ID', () => {
+    test.each([
+      ['', 'appointment ID is required'],
+      [null, 'appointment ID is required'],
+      [undefined, 'appointment ID is required'],
+    ])('rejects missing appointment ID value %s', (appointmentId, error) => {
       expect(
         validateCancelRequest({
-          appointmentId: '',
+          appointmentId,
         })
       ).toEqual({
         valid: false,
         status: 400,
-        error: 'appointment ID is required',
+        error,
       })
     })
 
@@ -50,97 +65,90 @@ describe('appointmentCancelValidation', () => {
       })
     })
 
-    test('allows confirmed appointment to be cancelled', () => {
-      expect(
-        validateAppointmentCanBeCancelled({
-          id: 'appointment-1',
-          status: 'Confirmed',
+    test.each(['Confirmed', 'Waiting'])(
+      'allows %s appointment to be cancelled',
+      (status) => {
+        expect(
+          validateAppointmentCanBeCancelled(
+            appointment({
+              status,
+            })
+          )
+        ).toEqual({
+          valid: true,
         })
-      ).toEqual({
-        valid: true,
-      })
-    })
+      }
+    )
 
-    test('allows waiting appointment to be cancelled', () => {
+    test('allows appointment with missing status to be cancelled', () => {
       expect(
-        validateAppointmentCanBeCancelled({
-          id: 'appointment-1',
-          status: 'Waiting',
-        })
+        validateAppointmentCanBeCancelled(
+          appointment({
+            status: undefined,
+          })
+        )
       ).toEqual({
         valid: true,
       })
     })
 
     test('rejects already cancelled appointment', () => {
-  expect(
-    validateAppointmentCanBeCancelled({
-      id: 'appointment-1',
-      status: 'Cancelled',
+      expect(
+        validateAppointmentCanBeCancelled(
+          appointment({
+            status: 'Cancelled',
+          })
+        )
+      ).toEqual({
+        valid: false,
+        status: 409,
+        error: 'Appointment is already cancelled',
+      })
     })
-  ).toEqual({
-    valid: false,
-    status: 409,
-    error: 'Appointment is already cancelled',
-  })
-})
 
-test('rejects completed appointment', () => {
-  expect(
-    validateAppointmentCanBeCancelled({
-      id: 'appointment-1',
-      status: 'Completed',
-    })
-  ).toEqual({
-    valid: false,
-    status: 409,
-    error: 'Cannot cancel an appointment that is Completed',
-  })
-})
-
-test('rejects no-show appointment', () => {
-  expect(
-    validateAppointmentCanBeCancelled({
-      id: 'appointment-1',
-      status: 'No-show',
-    })
-  ).toEqual({
-    valid: false,
-    status: 409,
-    error: 'Cannot cancel an appointment that is No-show',
-  })
-})
+    test.each(['Completed', 'No-show'])(
+      'rejects %s appointment',
+      (status) => {
+        expect(
+          validateAppointmentCanBeCancelled(
+            appointment({
+              status,
+            })
+          )
+        ).toEqual({
+          valid: false,
+          status: 409,
+          error: `Cannot cancel an appointment that is ${status}`,
+        })
+      }
+    )
   })
 
   describe('buildCancelResponse', () => {
     test('returns standard cancellation response', () => {
-      const appointment = {
-        id: 'appointment-1',
+      const cancelledAppointment = appointment({
         status: 'Cancelled',
-        slot_id: 'slot-1',
-      }
+      })
 
-      expect(buildCancelResponse({ appointment })).toEqual({
+      expect(
+        buildCancelResponse({
+          appointment: cancelledAppointment,
+        })
+      ).toEqual({
         message: 'Appointment cancelled successfully',
-        appointment,
+        appointment: cancelledAppointment,
       })
     })
-    test('allows appointment with missing status to be cancelled', () => {
-  expect(
-    validateAppointmentCanBeCancelled({
-      id: 'appointment-1',
-    })
-  ).toEqual({
-    valid: true,
-  })
-})
 
-test('builds response with null appointment when passed through', () => {
-  expect(buildCancelResponse({ appointment: null })).toEqual({
-    message: 'Appointment cancelled successfully',
-    appointment: null,
+    test('builds response with null appointment when passed through', () => {
+      expect(
+        buildCancelResponse({
+          appointment: null,
+        })
+      ).toEqual({
+        message: 'Appointment cancelled successfully',
+        appointment: null,
+      })
+    })
   })
-})
-  })
-  
 })
