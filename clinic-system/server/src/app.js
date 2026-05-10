@@ -3240,9 +3240,9 @@ app.patch('/api/appointments/auto-no-shows/:clinicId', async (req, res) => {
   now,
 })
 
-if (missedAppointmentIds.length === 0) {
-  return res.json(buildAutoNoShowResponse())
-}
+  if (missedAppointmentIds.length === 0) {
+    return res.json(buildAutoNoShowResponse())
+  }
 
     const { data, error } = await supabase
       .from('appointments')
@@ -3258,7 +3258,6 @@ if (missedAppointmentIds.length === 0) {
     return res.status(500).json({ error: 'Failed to auto-mark no-shows' })
   }
 })
-
 
 // Serve built frontend
 const publicPath = path.join(__dirname, '..', 'public')
