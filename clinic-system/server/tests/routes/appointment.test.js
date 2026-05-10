@@ -1,98 +1,5 @@
 const request = require('supertest')
-
-let app
-let mockSupabase
-let scenario
-let createdBuilders = []
-
-/**
- * Returns the next mocked response for a given table/method.
- * If no response is queued, it returns a safe default.
- */
-function getNextResponse(bucket, table, fallback = { data: null, error: null }) {
-  if (!bucket[table] || bucket[table].length === 0) {
-    return fallback
-  }
-
-  return bucket[table].shift()
-}
-
-/**
- * Creates a chainable mock builder similar to Supabase's query API.
- * This lets route tests force exact API branches without relying on a real DB.
- */
-function makeBuilder(table) {
-  const builder = {
-    table,
-
-    select: jest.fn(function () {
-      return this
-    }),
-
-    eq: jest.fn(function () {
-      return this
-    }),
-
-    neq: jest.fn(function () {
-      return this
-    }),
-
-    in: jest.fn(function () {
-      return this
-    }),
-
-    or: jest.fn(function () {
-      return this
-    }),
-
-    order: jest.fn(function () {
-      return this
-    }),
-
-    limit: jest.fn(function () {
-      return this
-    }),
-
-    insert: jest.fn(function () {
-      return this
-    }),
-
-    update: jest.fn(function () {
-      return this
-    }),
-
-    maybeSingle: jest.fn(function () {
-      return Promise.resolve(getNextResponse(scenario.maybeSingle, table))
-    }),
-
-    single: jest.fn(function () {
-      return Promise.resolve(getNextResponse(scenario.single, table))
-    }),
-
-    then(resolve, reject) {
-      return Promise.resolve(getNextResponse(scenario.thenable, table)).then(
-        resolve,
-        reject
-      )
-    },
-  }
-
-  createdBuilders.push(builder)
-  return builder
-}
-
-jest.mock('@supabase/supabase-js', () => ({
-  createClient: jest.fn(() => mockSupabase),
-}))
-
-jest.mock('../../src/queueNotificationService', () => ({
-  configureQueueNotificationService: jest.fn(),
-  checkAndTriggerNotifications: jest.fn(() => []),
-}))
-
-jest.mock('../../src/emailService', () => ({
-  sendAppointmentConfirmationEmail: jest.fn(() => Promise.resolve({ sent: true })),
-}))
+const { setupMockApp } = require('../helpers/mockSupabaseApp')
 
 const validClinicId = '00000000-0000-0000-0000-000000000001'
 const validPatientId = '00000000-0000-0000-0000-000000000002'
@@ -100,10 +7,13 @@ const validAppointmentId = '00000000-0000-0000-0000-000000000010'
 const validSlotId = '00000000-0000-0000-0000-000000000020'
 const newSlotId = '00000000-0000-0000-0000-000000000021'
 const invalidId = 'invalid-id'
-
 const FUTURE_MONDAY = '2099-05-11'
 const FUTURE_SATURDAY = '2099-05-16'
+let app
+let scenario
+let createdBuilders
 let sendAppointmentConfirmationEmail
+
 function mockClinicBookingCapacity(count = 1) {
   scenario.thenable.users = [
     {
@@ -117,28 +27,13 @@ function mockClinicBookingCapacity(count = 1) {
   ]
 }
 beforeEach(() => {
-  jest.resetModules()
-  createdBuilders = []
+  const mockContext = setupMockApp()
 
-  process.env.SUPABASE_URL = 'https://example.supabase.co'
-  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key'
-
-  scenario = {
-    maybeSingle: {},
-    single: {},
-    thenable: {},
-  }
-
-  mockSupabase = {
-    from: jest.fn((table) => makeBuilder(table)),
-  }
-
-  app = require('../../src/app')
-
-sendAppointmentConfirmationEmail =
-  require('../../src/emailService').sendAppointmentConfirmationEmail
-
-sendAppointmentConfirmationEmail.mockClear()
+  app = mockContext.app
+  scenario = mockContext.scenario
+  createdBuilders = mockContext.createdBuilders
+  sendAppointmentConfirmationEmail =
+    mockContext.sendAppointmentConfirmationEmail
 })
 
 describe('Appointment route tests', () => {
