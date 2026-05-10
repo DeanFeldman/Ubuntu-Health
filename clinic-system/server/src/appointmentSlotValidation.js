@@ -151,6 +151,23 @@ function removeFullyBookedSlots(generatedSlots, bookedTimes) {
   const bookedSet = bookedTimes instanceof Set ? bookedTimes : new Set(bookedTimes || [])
   return generatedSlots.filter(slot => !bookedSet.has(slot))
 }
+function validateClinicBookingCapacity(staffCount) {
+  const parsedStaffCount = Number(staffCount)
+
+  if (!Number.isFinite(parsedStaffCount) || parsedStaffCount <= 0) {
+    return {
+      valid: false,
+      status: 409,
+      reason: 'NO_STAFF',
+      error: 'Appointments are not currently available for this clinic',
+    }
+  }
+
+  return {
+    valid: true,
+    capacity: parsedStaffCount,
+  }
+}
 module.exports = {
   isValidUuid,
   isValidDateFormat,
@@ -161,4 +178,5 @@ module.exports = {
   validateGeneratedSlots,
   validateSelectedSlot,
   removeFullyBookedSlots,
+  validateClinicBookingCapacity,
 }

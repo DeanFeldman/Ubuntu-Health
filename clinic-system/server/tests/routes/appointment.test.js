@@ -104,6 +104,18 @@ const invalidId = 'invalid-id'
 const FUTURE_MONDAY = '2099-05-11'
 const FUTURE_SATURDAY = '2099-05-16'
 let sendAppointmentConfirmationEmail
+function mockClinicBookingCapacity(count = 1) {
+  scenario.thenable.users = [
+    {
+      count,
+      error: null,
+    },
+    {
+      count,
+      error: null,
+    },
+  ]
+}
 beforeEach(() => {
   jest.resetModules()
   createdBuilders = []
@@ -197,7 +209,7 @@ describe('Appointment route tests', () => {
           error: null,
         },
       ]
-
+      mockClinicBookingCapacity(1)
       scenario.thenable.appointments = [
         {
           data: [],
@@ -229,7 +241,7 @@ describe('Appointment route tests', () => {
           error: null,
         },
       ]
-
+      mockClinicBookingCapacity(1)
       scenario.thenable.appointments = [
         {
           data: [],
@@ -263,7 +275,7 @@ describe('Appointment route tests', () => {
           error: null,
         },
       ]
-
+      mockClinicBookingCapacity(1)
       scenario.thenable.appointments = [
         {
           data: [],
@@ -335,12 +347,7 @@ describe('Appointment route tests', () => {
     },
   ]
 
-  scenario.thenable.users = [
-    {
-      count: 1,
-      error: null,
-    },
-  ]
+  mockClinicBookingCapacity(1)
 
   scenario.thenable.appointments = [
     {
@@ -450,6 +457,35 @@ test('stores appointment using slot_id without extra appointment columns', async
     slot_id: validSlotId,
     status: 'Confirmed',
   })
+})
+test('returns empty slots when clinic has no assigned staff', async () => {
+  scenario.maybeSingle.clinics = [
+    {
+      data: {
+        id: validClinicId,
+        operating_hours: null,
+        appointment_duration_minutes: null,
+      },
+      error: null,
+    },
+  ]
+
+  scenario.thenable.users = [
+    {
+      count: 0,
+      error: null,
+    },
+  ]
+
+  const res = await request(app)
+    .get('/api/appointments/slots')
+    .query({
+      clinic_id: validClinicId,
+      date: FUTURE_MONDAY,
+    })
+
+  expect(res.statusCode).toBe(200)
+  expect(res.body).toEqual([])
 })
   }
 )
@@ -1034,6 +1070,134 @@ test('still creates appointment when confirmation email fails', async () => {
   })
 
   expect(sendAppointmentConfirmationEmail).toHaveBeenCalledTimes(1)
+})
+test('returns 409 when booking clinic has no assigned staff', async () => {
+  scenario.maybeSingle.clinics = [
+    {
+      data: {
+        id: validClinicId,
+        operating_hours: null,
+        appointment_duration_minutes: null,
+      },
+      error: null,
+    },
+  ]
+
+  scenario.maybeSingle.slots = [
+    {
+      data: {
+        id: validSlotId,
+        slot_datetime: `${FUTURE_MONDAY}T07:45:00.000Z`,
+      },
+      error: null,
+    },
+  ]
+
+  scenario.thenable.users = [
+    {
+      count: 0,
+      error: null,
+    },
+  ]
+
+  const res = await request(app)
+    .post('/api/appointments')
+    .send({
+      clinic_id: validClinicId,
+      patient_id: validPatientId,
+      date: FUTURE_MONDAY,
+      time: '07:45',
+      booked_by: validPatientId,
+    })
+
+  expect(res.statusCode).toBe(409)
+  expect(res.body).toEqual({
+    error: 'Appointments are not currently available for this clinic',
+  })
+})
+test('triggers confirmation email when staff book an appointment for a patient', async () => {
+  const validStaffId = '00000000-0000-0000-0000-000000000030'
+
+  scenario.maybeSingle.clinics = [
+    {
+      data: {
+        id: validClinicId,
+        name: 'Ubuntu Clinic',
+        operating_hours: null,
+        appointment_duration_minutes: null,
+      },
+      error: null,
+    },
+  ]
+
+  scenario.maybeSingle.slots = [
+    {
+      data: {
+        id: validSlotId,
+        slot_datetime: `${FUTURE_MONDAY}T07:45:00.000Z`,
+      },
+      error: null,
+    },
+  ]
+
+  scenario.thenable.users = [
+    {
+      count: 2,
+      error: null,
+    },
+  ]
+
+  scenario.thenable.appointments = [
+    {
+      data: [],
+      error: null,
+    },
+  ]
+
+  scenario.single.appointments = [
+    {
+      data: {
+        id: validAppointmentId,
+        clinic_id: validClinicId,
+        patient_id: validPatientId,
+        slot_id: validSlotId,
+        status: 'Confirmed',
+      },
+      error: null,
+    },
+  ]
+
+  scenario.maybeSingle.users = [
+    {
+      data: {
+        email: 'patient@example.com',
+        full_name: 'Jane Patient',
+      },
+      error: null,
+    },
+  ]
+
+  const response = await request(app)
+    .post('/api/appointments')
+    .send({
+      clinic_id: validClinicId,
+      patient_id: validPatientId,
+      date: FUTURE_MONDAY,
+      time: '07:45',
+      booked_by: validStaffId,
+    })
+
+  expect(response.statusCode).toBe(201)
+
+  expect(sendAppointmentConfirmationEmail).toHaveBeenCalledTimes(1)
+
+  expect(sendAppointmentConfirmationEmail).toHaveBeenCalledWith({
+    to: 'patient@example.com',
+    patientName: 'Jane Patient',
+    clinicName: 'Ubuntu Clinic',
+    date: FUTURE_MONDAY,
+    time: '07:45',
+  })
 })
   })
 

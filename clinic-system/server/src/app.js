@@ -212,26 +212,21 @@ const {
   validateGeneratedSlots,
   validateSelectedSlot,
   removeFullyBookedSlots,
+  validateClinicBookingCapacity,
 } = require('./appointmentSlotValidation')
 
 async function fetchClinicBookingCapacity(clinicId) {
-  try {
-    const { count, error } = await supabase
-      .from('users')
-      .select('id', { count: 'exact', head: true })
-      .eq('clinic_id', clinicId)
-      .in('role', ['Staff', 'Admin'])
+  const { count, error } = await supabase
+    .from('users')
+    .select('id', { count: 'exact', head: true })
+    .eq('clinic_id', clinicId)
+    .in('role', ['Staff', 'Admin'])
 
-    if (error) throw error
+  if (error) throw error
 
-    const parsedCount = Number(count)
+  const parsedCount = Number(count)
 
-    return Number.isFinite(parsedCount) && parsedCount > 0
-      ? parsedCount
-      : 1
-  } catch (err) {
-    return 1
-  }
+  return Number.isFinite(parsedCount) ? parsedCount : 0
 }
 
 async function fetchBookedSlotTimes(clinicId, startIso, endIso) {
@@ -2321,11 +2316,17 @@ app.get('/api/appointments/slots', async (req, res) => {
       .maybeSingle()
 
     if (clinicError) throw clinicError
-    if (!clinic) {
-      return res.status(404).json({ error: 'Clinic not found' })
-    }
+if (!clinic) {
+  return res.status(404).json({ error: 'Clinic not found' })
+}
+const staffCount = await fetchClinicBookingCapacity(clinic_id)
+const capacityValidation = validateClinicBookingCapacity(staffCount)
 
-    const schedule = resolveClinicSchedule(clinic)
+if (!capacityValidation.valid) {
+  return res.json([])
+}
+
+const schedule = resolveClinicSchedule(clinic)
     const dailySlots = generateDailySlots({
       date,
       operating_hours: schedule.operating_hours,
@@ -2515,6 +2516,14 @@ const slot_datetime = selectedSlotValidation.slotDateTime
     )
 
     const staffCount = await fetchClinicBookingCapacity(clinic_id)
+const capacityValidation = validateClinicBookingCapacity(staffCount)
+
+if (!capacityValidation.valid) {
+  await rollbackCreatedPatient()
+  return res.status(capacityValidation.status).json({
+    error: capacityValidation.error,
+  })
+}
 
     const { data: existingAppointments, error: existingError } = await supabase
       .from('appointments')

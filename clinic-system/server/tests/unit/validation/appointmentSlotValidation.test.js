@@ -8,6 +8,7 @@ const {
   validateSelectedSlot,
   removeFullyBookedSlots,
   normalizeSlotTime,
+  validateClinicBookingCapacity,
 } = require('../../../src/appointmentSlotValidation')
 const VALID_UUID = '0b0d9f9a-9a5e-47fe-92e0-7d1696e41464'
 const INVALID_UUID = 'not-a-uuid'
@@ -333,6 +334,69 @@ describe('removeFullyBookedSlots extra branches', () => {
     const result = removeFullyBookedSlots(['09:00', '09:30'], null)
 
     expect(result).toEqual(['09:00', '09:30'])
+  })
+})
+describe('validateClinicBookingCapacity', () => {
+  it('accepts a positive staff count', () => {
+    const result = validateClinicBookingCapacity(2)
+
+    expect(result).toEqual({
+      valid: true,
+      capacity: 2,
+    })
+  })
+
+  it('accepts a positive numeric staff count string', () => {
+    const result = validateClinicBookingCapacity('3')
+
+    expect(result).toEqual({
+      valid: true,
+      capacity: 3,
+    })
+  })
+
+  it('rejects zero staff count', () => {
+    const result = validateClinicBookingCapacity(0)
+
+    expect(result).toEqual({
+      valid: false,
+      status: 409,
+      reason: 'NO_STAFF',
+      error: 'Appointments are not currently available for this clinic',
+    })
+  })
+
+  it('rejects negative staff count', () => {
+    const result = validateClinicBookingCapacity(-1)
+
+    expect(result).toEqual({
+      valid: false,
+      status: 409,
+      reason: 'NO_STAFF',
+      error: 'Appointments are not currently available for this clinic',
+    })
+  })
+
+  it('rejects missing staff count', () => {
+    const result = validateClinicBookingCapacity()
+
+    expect(result).toEqual({
+      valid: false,
+      status: 409,
+      reason: 'NO_STAFF',
+      error: 'Appointments are not currently available for this clinic',
+    })
+  })
+
+  it('rejects non-numeric staff count', () => {
+    const result = validateClinicBookingCapacity('not-a-number')
+
+    expect(result).toEqual({
+      valid: false,
+      status: 409,
+      reason: 'NO_STAFF',
+      error: 'Appointments are not currently available for this clinic',
+    })
   })
 })
 })
