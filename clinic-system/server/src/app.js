@@ -221,6 +221,191 @@ function calculateEstimatedWaitTime({
   }
 }
 
+function validateReportDate(value, fieldName) {
+  if (value === undefined || value === null || String(value).trim() === '') {
+    return { valid: true, value: null }
+  }
+
+  const normalizedValue = String(value).trim()
+  const match = normalizedValue.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+
+  if (!match) {
+    return {
+      valid: false,
+      error: `Invalid ${fieldName} format. Use YYYY-MM-DD`,
+    }
+  }
+
+  const [, year, month, day] = match
+  const parsedDate = new Date(
+    Date.UTC(Number(year), Number(month) - 1, Number(day))
+  )
+
+  if (
+    Number.isNaN(parsedDate.getTime()) ||
+    parsedDate.getUTCFullYear() !== Number(year) ||
+    parsedDate.getUTCMonth() !== Number(month) - 1 ||
+    parsedDate.getUTCDate() !== Number(day)
+  ) {
+    return {
+      valid: false,
+      error: `Invalid ${fieldName} value. Use YYYY-MM-DD`,
+    }
+  }
+
+  return { valid: true, value: normalizedValue }
+}
+
+function buildDateRangeLabel(startDate, endDate) {
+  if (startDate && endDate) return `${startDate} to ${endDate}`
+  if (startDate) return `From ${startDate}`
+  if (endDate) return `Up to ${endDate}`
+  return 'All time'
+}
+
+function roundAverage(sum, count) {
+  if (!count) return null
+  return Number((sum / count).toFixed(2))
+}
+
+function getWaitMinutes(entry) {
+  if (!entry?.joined_at || !entry?.called_at) return null
+
+  const joinedAt = new Date(entry.joined_at)
+  const calledAt = new Date(entry.called_at)
+
+  if (
+    Number.isNaN(joinedAt.getTime()) ||
+    Number.isNaN(calledAt.getTime()) ||
+    calledAt < joinedAt
+  ) {
+    return null
+  }
+
+  return (calledAt - joinedAt) / 60000
+}
+
+function getHourInSouthAfrica(dateValue) {
+  const date = new Date(dateValue)
+  if (Number.isNaN(date.getTime())) return null
+
+  const hourPart = new Intl.DateTimeFormat('en-ZA', {
+    timeZone: 'Africa/Johannesburg',
+    hour: '2-digit',
+    hour12: false,
+  })
+    .formatToParts(date)
+    .find((part) => part.type === 'hour')
+
+  const hour = Number(hourPart?.value)
+  return Number.isFinite(hour) ? hour % 24 : null
+}
+
+function getTimeOfDay(dateValue) {
+  const hour = getHourInSouthAfrica(dateValue)
+
+  if (hour === null) return null
+  if (hour >= 5 && hour <= 11) return 'Morning'
+  if (hour >= 12 && hour <= 16) return 'Afternoon'
+  if (hour >= 17 && hour <= 20) return 'Evening'
+  return 'Night'
+}
+
+function addAggregateValue(aggregate, waitMinutes) {
+  aggregate.sum += waitMinutes
+  aggregate.count += 1
+}
+
+function buildAverageWaitTimeReport({
+  entries,
+  clinicsById,
+  selectedClinic,
+  filters,
+}) {
+  const byClinic = {}
+  const timeOfDayOrder = ['Morning', 'Afternoon', 'Evening', 'Night']
+  const byTimeOfDay = Object.fromEntries(
+    timeOfDayOrder.map((timeOfDay) => [
+      timeOfDay,
+      {
+        sum: 0,
+        count: 0,
+      },
+    ])
+  )
+  const summary = {
+    sum: 0,
+    count: 0,
+  }
+
+  for (const entry of entries || []) {
+    const waitMinutes = getWaitMinutes(entry)
+    if (waitMinutes === null) continue
+
+    const clinicId = entry.clinic_id || null
+    const clinicName = clinicsById[clinicId]?.name || 'Unknown clinic'
+
+    if (!byClinic[clinicId]) {
+      byClinic[clinicId] = {
+        clinic_id: clinicId,
+        clinic_name: clinicName,
+        sum: 0,
+        count: 0,
+      }
+    }
+
+    addAggregateValue(summary, waitMinutes)
+    addAggregateValue(byClinic[clinicId], waitMinutes)
+
+    const timeOfDay = getTimeOfDay(entry.joined_at)
+    if (timeOfDay) {
+      addAggregateValue(byTimeOfDay[timeOfDay], waitMinutes)
+    }
+  }
+
+  if (selectedClinic && !byClinic[selectedClinic.id]) {
+    byClinic[selectedClinic.id] = {
+      clinic_id: selectedClinic.id,
+      clinic_name: selectedClinic.name,
+      sum: 0,
+      count: 0,
+    }
+  }
+
+  return {
+    filters: {
+      clinic_id: filters.clinicId,
+      clinic_name: selectedClinic?.name || 'All clinics',
+      start_date: filters.startDate,
+      end_date: filters.endDate,
+      date_range_label: buildDateRangeLabel(filters.startDate, filters.endDate),
+    },
+    summary: {
+      overall_average_wait_time_minutes: roundAverage(summary.sum, summary.count),
+      queue_records_used: summary.count,
+    },
+    by_clinic: Object.values(byClinic)
+      .sort((a, b) => (a.clinic_name || '').localeCompare(b.clinic_name || ''))
+      .map((clinicAggregate) => ({
+        clinic_id: clinicAggregate.clinic_id,
+        clinic_name: clinicAggregate.clinic_name,
+        average_wait_time_minutes: roundAverage(
+          clinicAggregate.sum,
+          clinicAggregate.count
+        ),
+        queue_records_used: clinicAggregate.count,
+      })),
+    by_time_of_day: timeOfDayOrder.map((timeOfDay) => ({
+      time_of_day: timeOfDay,
+      average_wait_time_minutes: roundAverage(
+        byTimeOfDay[timeOfDay].sum,
+        byTimeOfDay[timeOfDay].count
+      ),
+      queue_records_used: byTimeOfDay[timeOfDay].count,
+    })),
+  }
+}
+
 async function fetchWaitingQueuePosition(clinicId, patientId) {
   const { data, error } = await supabase
     .from('queue_entries')
@@ -434,6 +619,126 @@ async function resequenceQueue(clinicId) {
 // API health check
 app.get('/api', (req, res) => {
   res.json({ message: 'Ubuntu Health API running' })
+})
+
+// GET /api/reports/average-wait-time
+app.get('/api/reports/average-wait-time', async (req, res) => {
+  try {
+    const rawClinicId = req.query.clinic_id
+    const clinicId =
+      rawClinicId === undefined || rawClinicId === null
+        ? null
+        : String(rawClinicId).trim()
+    const shouldFilterClinic =
+      clinicId && clinicId.toLowerCase() !== 'all'
+
+    if (shouldFilterClinic && !isValidUuid(clinicId)) {
+      return res.status(400).json({ error: 'Invalid clinic ID format' })
+    }
+
+    const startDateValidation = validateReportDate(
+      req.query.start_date,
+      'start_date'
+    )
+    if (!startDateValidation.valid) {
+      return res.status(400).json({ error: startDateValidation.error })
+    }
+
+    const endDateValidation = validateReportDate(req.query.end_date, 'end_date')
+    if (!endDateValidation.valid) {
+      return res.status(400).json({ error: endDateValidation.error })
+    }
+
+    const startDate = startDateValidation.value
+    const endDate = endDateValidation.value
+
+    if (startDate && endDate && startDate > endDate) {
+      return res.status(400).json({
+        error: 'start_date must be before or equal to end_date',
+      })
+    }
+
+    let selectedClinic = null
+
+    if (shouldFilterClinic) {
+      const { data: clinic, error: clinicError } = await supabase
+        .from('clinics')
+        .select('id, name')
+        .eq('id', clinicId)
+        .maybeSingle()
+
+      if (clinicError) throw clinicError
+      if (!clinic) return res.status(404).json({ error: 'Clinic not found' })
+
+      selectedClinic = clinic
+    }
+
+    let queueQuery = supabase
+      .from('queue_entries')
+      .select('id, clinic_id, joined_at, called_at')
+      .order('joined_at', { ascending: true })
+
+    if (shouldFilterClinic) {
+      queueQuery = queueQuery.eq('clinic_id', clinicId)
+    }
+
+    if (startDate) {
+      queueQuery = queueQuery.gte('joined_at', `${startDate}T00:00:00.000Z`)
+    }
+
+    if (endDate) {
+      queueQuery = queueQuery.lte('joined_at', `${endDate}T23:59:59.999Z`)
+    }
+
+    const { data: queueEntries, error: queueError } = await queueQuery
+
+    if (queueError) throw queueError
+
+    const clinicIds = [
+      ...new Set(
+        (queueEntries || [])
+          .map((entry) => entry.clinic_id)
+          .filter(Boolean)
+      ),
+    ]
+
+    const clinicsById = selectedClinic
+      ? {
+          [selectedClinic.id]: selectedClinic,
+        }
+      : {}
+
+    if (!selectedClinic && clinicIds.length > 0) {
+      const { data: clinics, error: clinicsError } = await supabase
+        .from('clinics')
+        .select('id, name')
+        .in('id', clinicIds)
+
+      if (clinicsError) throw clinicsError
+
+      for (const clinic of clinics || []) {
+        clinicsById[clinic.id] = clinic
+      }
+    }
+
+    return res.json(
+      buildAverageWaitTimeReport({
+        entries: queueEntries || [],
+        clinicsById,
+        selectedClinic,
+        filters: {
+          clinicId: selectedClinic ? selectedClinic.id : null,
+          startDate,
+          endDate,
+        },
+      })
+    )
+  } catch (err) {
+    console.error('Failed to fetch average wait time report:', err)
+    return res.status(500).json({
+      error: 'Failed to fetch average wait time report',
+    })
+  }
 })
 
 // GET /api/clinics
