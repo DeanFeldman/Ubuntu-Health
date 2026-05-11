@@ -33,7 +33,7 @@ describe('emailService', () => {
       })
 
       expect(email.subject).toBe('Appointment Confirmation — Ubuntu Clinic')
-      expect(email.text).toContain('Hi Jane Patient,')
+      expect(email.text).toContain('Hi testing Jane Patient,')
       expect(email.text).toContain('Your appointment has been confirmed.')
       expect(email.text).toContain('Clinic:  Ubuntu Clinic')
       expect(email.text).toContain('Date:    2099-05-11')
@@ -45,7 +45,7 @@ describe('emailService', () => {
       const email = buildAppointmentConfirmationEmail({})
 
       expect(email.subject).toBe('Appointment Confirmation — the clinic')
-      expect(email.text).toContain('Hi Patient,')
+      expect(email.text).toContain('Hi testing Patient,')
       expect(email.text).toContain('Clinic:  the clinic')
       expect(email.text).toContain('Date:    Unknown date')
       expect(email.text).toContain('Time:    Unknown time')
@@ -59,7 +59,7 @@ describe('emailService', () => {
         time: '09:30',
       })
 
-      expect(email.text.startsWith('Hi Jane Patient,')).toBe(true)
+     expect(email.text.startsWith('Hi testing Jane Patient,')).toBe(true)
       expect(email.text.endsWith('Ubuntu Health')).toBe(true)
     })
   })
@@ -136,7 +136,7 @@ describe('emailService', () => {
         from: 'Ubuntu Health <ubuntu@example.com>',
         to: 'jane@example.com',
         subject: 'Appointment Confirmation — Ubuntu Clinic',
-        text: expect.stringContaining('Hi Jane Patient,'),
+        text: expect.stringContaining('Hi testing Jane Patient,'),
       })
     })
 
