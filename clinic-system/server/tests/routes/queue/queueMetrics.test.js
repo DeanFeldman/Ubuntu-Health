@@ -111,8 +111,8 @@ describe('clinic queue metrics', () => {
   })
 })
 
-describe('estimated wait time', () => {
-  test('GET /api/queue/:clinicId/estimated-wait-time/:patientId returns the full wait estimate', async () => {
+describe('queue position wait time', () => {
+  test('GET /api/queue/:clinicId/position/:patientId returns the full wait estimate', async () => {
     scenario.maybeSingle.queue_entries = [
       {
         data: {
@@ -146,15 +146,13 @@ describe('estimated wait time', () => {
     ]
 
     const res = await request(app).get(
-      `/api/queue/${validClinicId}/estimated-wait-time/${validPatientId}`
+      `/api/queue/${validClinicId}/position/${validPatientId}`
     )
 
     expect(res.statusCode).toBe(200)
     expect(res.body).toEqual({
       position: 5,
       patientsAhead: 4,
-      appointmentDuration: 10,
-      staffCount: 3,
       estimatedWaitTime: 14,
     })
 
@@ -195,7 +193,7 @@ describe('estimated wait time', () => {
     ])
   })
 
-  test('GET /api/queue/:clinicId/estimated-wait-time/:patientId calculates the normal case', async () => {
+  test('GET /api/queue/:clinicId/position/:patientId calculates the normal case', async () => {
     scenario.maybeSingle.queue_entries = [
       {
         data: {
@@ -229,20 +227,18 @@ describe('estimated wait time', () => {
     ]
 
     const res = await request(app).get(
-      `/api/queue/${validClinicId}/estimated-wait-time/${validPatientId}`
+      `/api/queue/${validClinicId}/position/${validPatientId}`
     )
 
     expect(res.statusCode).toBe(200)
     expect(res.body).toEqual({
       position: 4,
       patientsAhead: 3,
-      appointmentDuration: 15,
-      staffCount: 3,
       estimatedWaitTime: 15,
     })
   })
 
-  test('GET /api/queue/:clinicId/estimated-wait-time/:patientId returns zero when no patients are ahead', async () => {
+  test('GET /api/queue/:clinicId/position/:patientId returns zero when no patients are ahead', async () => {
     scenario.maybeSingle.queue_entries = [
       {
         data: {
@@ -276,20 +272,18 @@ describe('estimated wait time', () => {
     ]
 
     const res = await request(app).get(
-      `/api/queue/${validClinicId}/estimated-wait-time/${validPatientId}`
+      `/api/queue/${validClinicId}/position/${validPatientId}`
     )
 
     expect(res.statusCode).toBe(200)
     expect(res.body).toEqual({
       position: 1,
       patientsAhead: 0,
-      appointmentDuration: 15,
-      staffCount: 3,
       estimatedWaitTime: 0,
     })
   })
 
-  test('GET /api/queue/:clinicId/estimated-wait-time/:patientId returns unavailable when staff count is zero', async () => {
+  test('GET /api/queue/:clinicId/position/:patientId returns unavailable when staff count is zero', async () => {
     scenario.maybeSingle.queue_entries = [
       {
         data: {
@@ -323,21 +317,19 @@ describe('estimated wait time', () => {
     ]
 
     const res = await request(app).get(
-      `/api/queue/${validClinicId}/estimated-wait-time/${validPatientId}`
+      `/api/queue/${validClinicId}/position/${validPatientId}`
     )
 
     expect(res.statusCode).toBe(200)
     expect(res.body).toEqual({
       position: 4,
       patientsAhead: 3,
-      appointmentDuration: 15,
-      staffCount: 0,
       estimatedWaitTime: null,
-      message: 'Estimate not available',
+      message: 'Estimated wait time may be inaccurate',
     })
   })
 
-  test('GET /api/queue/:clinicId/estimated-wait-time/:patientId falls back to fifteen minutes when duration is missing', async () => {
+  test('GET /api/queue/:clinicId/position/:patientId falls back to fifteen minutes when duration is missing', async () => {
     scenario.maybeSingle.queue_entries = [
       {
         data: {
@@ -371,20 +363,19 @@ describe('estimated wait time', () => {
     ]
 
     const res = await request(app).get(
-      `/api/queue/${validClinicId}/estimated-wait-time/${validPatientId}`
+      `/api/queue/${validClinicId}/position/${validPatientId}`
     )
 
     expect(res.statusCode).toBe(200)
     expect(res.body).toEqual({
       position: 4,
       patientsAhead: 3,
-      appointmentDuration: 15,
-      staffCount: 3,
       estimatedWaitTime: 15,
+      message: 'Estimated wait time may be inaccurate',
     })
   })
 
-  test('GET /api/queue/:clinicId/estimated-wait-time/:patientId scales for a large queue', async () => {
+  test('GET /api/queue/:clinicId/position/:patientId scales for a large queue', async () => {
     scenario.maybeSingle.queue_entries = [
       {
         data: {
@@ -418,206 +409,18 @@ describe('estimated wait time', () => {
     ]
 
     const res = await request(app).get(
-      `/api/queue/${validClinicId}/estimated-wait-time/${validPatientId}`
+      `/api/queue/${validClinicId}/position/${validPatientId}`
     )
 
     expect(res.statusCode).toBe(200)
     expect(res.body).toEqual({
       position: 48,
       patientsAhead: 47,
-      appointmentDuration: 20,
-      staffCount: 4,
       estimatedWaitTime: 235,
     })
   })
 
-  test('GET /api/queue/:clinicId/estimated-wait-time/:patientId returns 404 when patient is not waiting', async () => {
-    scenario.maybeSingle.queue_entries = [
-      {
-        data: null,
-        error: null,
-      },
-    ]
-
-    const res = await request(app).get(
-      `/api/queue/${validClinicId}/estimated-wait-time/${validPatientId}`
-    )
-
-    expect(res.statusCode).toBe(404)
-    expect(res.body).toEqual({
-      error: 'No active queue entry found for this patient',
-    })
-    expect(createdBuilders).toHaveLength(1)
-  })
-})
-
-describe('queue position', () => {
-  test('GET /api/queue/:clinicId/position/:patientId returns position and patientsAhead', async () => {
-    scenario.maybeSingle.queue_entries = [
-      {
-        data: {
-          position: 4,
-        },
-        error: null,
-      },
-    ]
-
-    scenario.maybeSingle.clinics = [
-      {
-        data: {
-          appointment_duration_minutes: 20,
-        },
-        error: null,
-      },
-    ]
-
-    scenario.thenable.queue_entries = [
-      {
-        count: 3,
-        error: null,
-      },
-    ]
-
-    scenario.thenable.users = [
-      {
-        count: 2,
-        error: null,
-      },
-    ]
-
-    const res = await request(app).get(
-      `/api/queue/${validClinicId}/position/${validPatientId}`
-    )
-
-    expect(res.statusCode).toBe(200)
-    expect(res.body).toEqual({
-      position: 4,
-      patientsAhead: 3,
-      estimatedWaitTime: 30,
-    })
-
-    const positionLookupBuilder = createdBuilders[0]
-    const patientsAheadBuilder = createdBuilders[1]
-    const clinicMetricsBuilder = createdBuilders[2]
-    const staffMetricsBuilder = createdBuilders[3]
-
-    expect(positionLookupBuilder.table).toBe('queue_entries')
-    expect(positionLookupBuilder.select).toHaveBeenCalledWith('position')
-    expect(positionLookupBuilder.eq).toHaveBeenCalledWith('status', 'Waiting')
-
-    expect(patientsAheadBuilder.table).toBe('queue_entries')
-    expect(patientsAheadBuilder.select).toHaveBeenCalledWith('*', {
-      count: 'exact',
-      head: true,
-    })
-    expect(patientsAheadBuilder.eq).toHaveBeenCalledWith(
-      'clinic_id',
-      validClinicId
-    )
-    expect(patientsAheadBuilder.eq).toHaveBeenCalledWith('status', 'Waiting')
-    expect(patientsAheadBuilder.lt).toHaveBeenCalledWith('position', 4)
-
-    expect(clinicMetricsBuilder.table).toBe('clinics')
-    expect(staffMetricsBuilder.table).toBe('users')
-    expect(staffMetricsBuilder.in).toHaveBeenCalledWith('role', [
-      'Staff',
-      'Admin',
-    ])
-  })
-
-  test('GET /api/queue/:clinicId/position/:patientId returns zero estimatedWaitTime when nobody is ahead', async () => {
-    scenario.maybeSingle.queue_entries = [
-      {
-        data: {
-          position: 1,
-        },
-        error: null,
-      },
-    ]
-
-    scenario.maybeSingle.clinics = [
-      {
-        data: {
-          appointment_duration_minutes: null,
-        },
-        error: null,
-      },
-    ]
-
-    scenario.thenable.queue_entries = [
-      {
-        count: 0,
-        error: null,
-      },
-    ]
-
-    scenario.thenable.users = [
-      {
-        count: 0,
-        error: null,
-      },
-    ]
-
-    const res = await request(app).get(
-      `/api/queue/${validClinicId}/position/${validPatientId}`
-    )
-
-    expect(res.statusCode).toBe(200)
-    expect(res.body).toEqual({
-      position: 1,
-      patientsAhead: 0,
-      estimatedWaitTime: null,
-      message: 'Estimated wait time may be inaccurate',
-    })
-  })
-
-  test('GET /api/queue/:clinicId/position/:patientId defaults missing duration to 15 minutes', async () => {
-    scenario.maybeSingle.queue_entries = [
-      {
-        data: {
-          position: 3,
-        },
-        error: null,
-      },
-    ]
-
-    scenario.maybeSingle.clinics = [
-      {
-        data: {
-          appointment_duration_minutes: null,
-        },
-        error: null,
-      },
-    ]
-
-    scenario.thenable.queue_entries = [
-      {
-        count: 2,
-        error: null,
-      },
-    ]
-
-    scenario.thenable.users = [
-      {
-        count: 2,
-        error: null,
-      },
-    ]
-
-    const res = await request(app).get(
-      `/api/queue/${validClinicId}/position/${validPatientId}`
-    )
-
-    expect(res.statusCode).toBe(200)
-    expect(res.body).toEqual({
-      position: 3,
-      patientsAhead: 2,
-      estimatedWaitTime: 15,
-      message: 'Estimated wait time may be inaccurate',
-    })
-  })
-
-  test('GET /api/queue/:clinicId/position/:patientId returns 404 when no waiting entry exists', async () => {
+  test('GET /api/queue/:clinicId/position/:patientId returns 404 when patient is not waiting', async () => {
     scenario.maybeSingle.queue_entries = [
       {
         data: null,

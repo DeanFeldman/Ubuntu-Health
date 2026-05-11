@@ -404,28 +404,74 @@ const fetchQueue = useCallback(async () => {
     setLoadingQueue(true)
     setFetchError(null)
 
-    const clinicId = pendingClinic?.id || localStorage.getItem('selectedClinicId')
+    let clinicId = pendingClinic?.id || localStorage.getItem('selectedClinicId')
     const patientId = user?.id
 
-    if (!patientId || !clinicId) {
+    if (!patientId) {
       setQueueEntry(null)
       return
     }
 
-    const res = await fetch(`${API_BASE}/api/queue/${clinicId}`, {
-      headers: { Accept: 'application/json' },
-    })
+    async function findActiveClinicId() {
+      try {
+        const activeRes = await fetch(`${API_BASE}/api/queue/active/${patientId}`, {
+          headers: { Accept: 'application/json' },
+        })
 
-    const data = await res.json().catch(() => null)
+        const activeData = await activeRes.json().catch(() => null)
 
-    if (!res.ok) {
-      throw new Error(data?.error || 'Failed to load queue')
+        if (!activeRes.ok) {
+          return null
+        }
+
+        return activeData?.entry?.clinic_id ?? null
+      } catch {
+        return null
+      }
     }
 
-    // QueueNotifications uses the resulting queueEntry id to poll patient-specific alerts.
-    const fullQueue = Array.isArray(data?.queue) ? data.queue : []
+    async function loadQueueForClinic(id) {
+      const res = await fetch(`${API_BASE}/api/queue/${id}`, {
+        headers: { Accept: 'application/json' },
+      })
 
-    const myEntry = fullQueue.find(entry => entry.patient_id === patientId)
+      const data = await res.json().catch(() => null)
+
+      if (!res.ok) {
+        throw new Error(data?.error || 'Failed to load queue')
+      }
+
+      const fullQueue = Array.isArray(data?.queue) ? data.queue : []
+      const myEntry = fullQueue.find(entry => entry.patient_id === patientId)
+
+      return { fullQueue, myEntry }
+    }
+
+    let fullQueue = []
+    let myEntry = null
+
+    if (clinicId) {
+      const loaded = await loadQueueForClinic(clinicId)
+      fullQueue = loaded.fullQueue
+      myEntry = loaded.myEntry
+    }
+
+    if (!myEntry) {
+      const activeClinicId = await findActiveClinicId()
+
+      if (!activeClinicId) {
+        localStorage.removeItem('selectedClinicId')
+        setQueueEntry(null)
+        return
+      }
+
+      clinicId = activeClinicId
+      localStorage.setItem('selectedClinicId', clinicId)
+
+      const loaded = await loadQueueForClinic(clinicId)
+      fullQueue = loaded.fullQueue
+      myEntry = loaded.myEntry
+    }
 
     if (!myEntry) {
       setQueueEntry(null)
@@ -449,7 +495,6 @@ const fetchQueue = useCallback(async () => {
       waitData = null
     }
 
-    // Display position is recalculated from active rows so completed/skipped patients do not count.
     const visibleQueue = fullQueue
       .filter(entry => ['Waiting', 'Called', 'In Consultation'].includes(entry.status))
       .sort((a, b) => (a.position ?? 999999) - (b.position ?? 999999))
@@ -462,7 +507,6 @@ const fetchQueue = useCallback(async () => {
     let peopleAhead = 0
 
     if (myEntry.status === 'In Consultation') {
-      // Consultation is shown as position 0 because the patient is no longer waiting.
       displayPosition = 0
       peopleAhead = 0
     } else {
@@ -474,11 +518,11 @@ const fetchQueue = useCallback(async () => {
     let clinicName = myEntry.clinic_name || pendingClinic?.name || null
 
     if (!clinicName) {
-      // Older queue payloads may omit clinic_name; fetch it once so notifications retain context.
       try {
         const clinicRes = await fetch(`${API_BASE}/api/clinics/${clinicId}`, {
           headers: { Accept: 'application/json' },
         })
+
         if (clinicRes.ok) {
           const clinicData = await clinicRes.json().catch(() => null)
           clinicName = clinicData?.clinic?.name ?? null
@@ -495,6 +539,9 @@ const fetchQueue = useCallback(async () => {
       clinic_name: clinicName,
       estimated_wait_minutes: waitData?.estimatedWaitTime ?? null,
       estimated_wait_message: waitData?.message ?? null,
+      predicted_wait_minutes: waitData?.predictedWaitTime ?? null,
+      predicted_wait_message: waitData?.predictionMessage ?? null,
+      prediction_based_on_rows: waitData?.predictionBasedOnRows ?? 0,
     })
   } catch (err) {
     setFetchError(err.message)
@@ -502,6 +549,7 @@ const fetchQueue = useCallback(async () => {
     setLoadingQueue(false)
   }
 }, [API_BASE, pendingClinic?.id, pendingClinic?.name, user?.id])
+
 
   useEffect(() => {
     fetchQueue()
@@ -546,17 +594,33 @@ const fetchQueue = useCallback(async () => {
 
       const data = await res.json().catch(() => null)
 
-      if (!res.ok) {
-        if (res.status === 409) {
-          setActionError(data?.error ?? 'Patient already has an active queue entry')
-        } else if (res.status === 400) {
-          setActionError(data?.error ?? 'Invalid queue join request')
-        } else {
-          throw new Error(data?.error ?? `Failed to join queue (HTTP ${res.status})`)
+      if (res.status === 409) {
+        const existingClinicId = data?.existingEntry?.clinic_id
+
+        if (existingClinicId) {
+          localStorage.setItem('selectedClinicId', existingClinicId)
         }
+
+        setActionError(null)
+        setActionSuccess('You are already in a queue. Loading your current queue...')
+        setPendingClinic(null)
+
+        setTimeout(() => {
+          navigate('/queue')
+          fetchQueue()
+        }, 800)
+
         return
       }
 
+      if (!res.ok) {
+          if (res.status === 400) {
+            setActionError(data?.error ?? 'Invalid queue join request')
+          } else {
+            setActionError(data?.error ?? `Failed to join queue (HTTP ${res.status})`)
+          }
+          return
+        }
       localStorage.setItem('selectedClinicId', clinicId)
 
       setQueueEntry({
@@ -770,6 +834,18 @@ const fetchQueue = useCallback(async () => {
                     <dd className="q-detail-val">{queueEntry.estimated_wait_minutes} min</dd>
                   </span>
                 )
+              )}
+
+              {queueEntry.predicted_wait_minutes != null && (
+                <span className="q-detail-row">
+                  <dt className="q-detail-key">Predicted wait</dt>
+                  <dd className="q-detail-val">
+                    {queueEntry.predicted_wait_minutes} min
+                    {queueEntry.prediction_based_on_rows > 0
+                      ? ` based on ${queueEntry.prediction_based_on_rows} past queue records`
+                      : ''}
+                  </dd>
+                </span>
               )}
               
             </dl>

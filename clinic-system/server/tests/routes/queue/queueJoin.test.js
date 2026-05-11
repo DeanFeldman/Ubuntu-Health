@@ -133,9 +133,15 @@ describe('patient joins queue', () => {
       })
 
     expect(res.statusCode).toBe(409)
-    expect(res.body).toEqual({
+    expect(res.body).toMatchObject({
       error: 'Patient already has an active queue entry',
+      existingEntry: {
+        clinic_id: validClinicId,
+        patient_id: validPatientId,
+        status: 'Waiting',
+      },
     })
+    
   })
 
   test('POST /api/queue/:clinicId/join returns 409 when insert hits duplicate active queue constraint', async () => {
