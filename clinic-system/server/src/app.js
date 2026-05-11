@@ -80,6 +80,7 @@ const {
   validateRequiredUuid,
   validateRequiredUuids,
 } = require('./commonValidation')
+const { calculateNoShowReport } = require('./noShowReportCalculation')
 app.use(cors())
 app.use(express.json())
 
@@ -737,6 +738,127 @@ app.get('/api/reports/average-wait-time', async (req, res) => {
     console.error('Failed to fetch average wait time report:', err)
     return res.status(500).json({
       error: 'Failed to fetch average wait time report',
+    })
+  }
+})
+
+// GET /api/reports/no-shows
+app.get('/api/reports/no-shows', async (req, res) => {
+  try {
+    const rawClinicId = req.query.clinic_id
+    const clinicId =
+      rawClinicId === undefined || rawClinicId === null
+        ? null
+        : String(rawClinicId).trim()
+    const shouldFilterClinic =
+      clinicId && clinicId.toLowerCase() !== 'all'
+
+    if (shouldFilterClinic && !isValidUuid(clinicId)) {
+      return res.status(400).json({ error: 'Invalid clinic ID format' })
+    }
+
+    const startDateValidation = validateReportDate(
+      req.query.start_date,
+      'start_date'
+    )
+    if (!startDateValidation.valid) {
+      return res.status(400).json({ error: startDateValidation.error })
+    }
+
+    const endDateValidation = validateReportDate(req.query.end_date, 'end_date')
+    if (!endDateValidation.valid) {
+      return res.status(400).json({ error: endDateValidation.error })
+    }
+
+    const startDate = startDateValidation.value
+    const endDate = endDateValidation.value
+
+    if (startDate && endDate && startDate > endDate) {
+      return res.status(400).json({
+        error: 'start_date must be before or equal to end_date',
+      })
+    }
+
+    let selectedClinic = null
+
+    if (shouldFilterClinic) {
+      const { data: clinic, error: clinicError } = await supabase
+        .from('clinics')
+        .select('id, name')
+        .eq('id', clinicId)
+        .maybeSingle()
+
+      if (clinicError) throw clinicError
+      if (!clinic) return res.status(404).json({ error: 'Clinic not found' })
+
+      selectedClinic = clinic
+    }
+
+    const shouldFilterDate = Boolean(startDate || endDate)
+    const slotSelect = shouldFilterDate
+      ? 'slots!inner(id, slot_datetime)'
+      : 'slots(id, slot_datetime)'
+
+    let appointmentQuery = supabase
+      .from('appointments')
+      .select(
+        `id, clinic_id, slot_id, status, ${slotSelect}, clinics(id, name)`
+      )
+
+    if (shouldFilterClinic) {
+      appointmentQuery = appointmentQuery.eq('clinic_id', clinicId)
+    }
+
+    if (startDate) {
+      appointmentQuery = appointmentQuery.gte(
+        'slots.slot_datetime',
+        `${startDate}T00:00:00.000Z`
+      )
+    }
+
+    if (endDate) {
+      appointmentQuery = appointmentQuery.lte(
+        'slots.slot_datetime',
+        `${endDate}T23:59:59.999Z`
+      )
+    }
+
+    const { data: appointments, error: appointmentError } = await appointmentQuery
+
+    if (appointmentError) throw appointmentError
+
+    const report = calculateNoShowReport(appointments || [])
+
+    if (
+      selectedClinic &&
+      !report.by_clinic.some((clinic) => clinic.clinic_id === selectedClinic.id)
+    ) {
+      report.by_clinic.push({
+        clinic_id: selectedClinic.id,
+        clinic_name: selectedClinic.name,
+        scheduled_appointments: 0,
+        completed_appointments: 0,
+        cancelled_appointments: 0,
+        no_show_appointments: 0,
+        no_show_rate_percent: 0,
+      })
+    }
+
+    return res.json({
+      filters: {
+        clinic_id: selectedClinic ? selectedClinic.id : null,
+        clinic_name: selectedClinic?.name || 'All clinics',
+        start_date: startDate,
+        end_date: endDate,
+        date_range_label: buildDateRangeLabel(startDate, endDate),
+      },
+      summary: report.summary,
+      by_clinic: report.by_clinic,
+    })
+  } catch (err) {
+    console.error('Failed to fetch no-show report:', err)
+    return res.status(500).json({
+      error: 'Failed to fetch no-show report',
     })
   }
 })
