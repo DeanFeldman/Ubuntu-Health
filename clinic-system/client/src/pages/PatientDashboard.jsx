@@ -1,6 +1,7 @@
 import { useCallback, useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import getApiBase from '../lib/getApiBase'
 
 // STYLES FOR THE PAGE
 const styles = `
@@ -66,6 +67,24 @@ const styles = `
     margin: 0;
     padding: 0;
   }
+
+    .uh-predicted-wait {
+    margin: 10px 0 12px;
+    padding: 9px 11px;
+    border-radius: 10px;
+    background: #EFF6FF;
+    border: 1px solid #BFDBFE;
+    color: #1D4ED8;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .uh-predicted-wait-muted {
+    background: #F9FAFB;
+    border-color: var(--uh-border);
+    color: var(--uh-muted);
+  }
+
   .uh-nav-links a {
     text-decoration: none;
     color: var(--uh-muted);
@@ -317,6 +336,7 @@ const unique = (arr) => [...new Set(arr)].sort()
 export default function PatientDashboard() {
 
 const navigate = useNavigate()
+const API_BASE = getApiBase()
 
 const handleJoinQueue = (clinic) => {
   navigate('/queue', { state: { clinic } })
@@ -346,27 +366,80 @@ const handleBookAppointment = (clinic) => {
   const [municipality, setMunicipality] = useState('')
   const [facilityType, setFacilityType] = useState('')
   const [serviceFilter, setServiceFilter] = useState('')
+  
+  const [clinicPredictions, setClinicPredictions] = useState({})
+  const [loadingPredictions, setLoadingPredictions] = useState(false) 
 
   // Fetch clinics on mount
-  const fetchClinics = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
+  const fetchClinicPredictions = useCallback(async (clinicList) => {
+  try {
+    setLoadingPredictions(true)
 
-      const response = await fetch('/api/clinics')
+    const visibleClinics = clinicList.slice(0, 30)
 
-      if (!response.ok) {
-        throw new Error(`Failed to load clinics (HTTP ${response.status})`)
+    const results = await Promise.allSettled(
+      visibleClinics.map(async (clinic) => {
+        const response = await fetch(`${API_BASE}/api/clinics/${clinic.id}/predicted-wait-time`)
+
+        if (!response.ok) {
+          throw new Error('Prediction unavailable')
+        }
+
+        const data = await response.json()
+
+        return [
+          clinic.id,
+          {
+            predictedWaitTime: data.predictedWaitTime,
+            message: data.predictionMessage,
+            basedOnRows: data.predictionBasedOnRows,
+          },
+        ]
+      })
+    )
+
+    const nextPredictions = {}
+
+    results.forEach(result => {
+      if (result.status === 'fulfilled') {
+        const [clinicId, prediction] = result.value
+        nextPredictions[clinicId] = prediction
       }
+    })
 
-      const data = await response.json()
-      setClinics(data.clinics || [])
-    } catch (err) {
-      setError(err.message || 'Something went wrong. Please try again.')
-    } finally {
-      setLoading(false)
+    setClinicPredictions(nextPredictions)
+  } catch {
+    setClinicPredictions({})
+  } finally {
+    setLoadingPredictions(false)
+  }
+}, [API_BASE])
+
+// Fetch clinics on mount
+const fetchClinics = useCallback(async () => {
+  try {
+    setLoading(true)
+    setError(null)
+
+    const response = await fetch(`${API_BASE}/api/clinics`)
+
+    if (!response.ok) {
+      throw new Error(`Failed to load clinics (HTTP ${response.status})`)
     }
-  }, [])
+
+    const data = await response.json()
+    const loadedClinics = data.clinics || []
+
+    setClinics(loadedClinics)
+    fetchClinicPredictions(loadedClinics)
+  } catch (err) {
+    setError(err.message || 'Something went wrong. Please try again.')
+  } finally {
+    setLoading(false)
+  }
+}, [fetchClinicPredictions])
+
+
 
   useEffect(() => {
     fetchClinics()
@@ -577,6 +650,19 @@ const handleBookAppointment = (clinic) => {
                             ))}
                           </ul>
                         )}
+                        {loadingPredictions ? (
+                            <p className="uh-predicted-wait uh-predicted-wait-muted">
+                              Loading predicted wait…
+                            </p>
+                          ) : clinicPredictions[clinic.id]?.predictedWaitTime != null ? (
+                            <p className="uh-predicted-wait">
+                              Predicted wait: {clinicPredictions[clinic.id].predictedWaitTime} min
+                            </p>
+                          ) : (
+                            <p className="uh-predicted-wait uh-predicted-wait-muted">
+                              Predicted wait unavailable
+                            </p>
+                          )}
 
                         <button
                           className="uh-join-btn"
