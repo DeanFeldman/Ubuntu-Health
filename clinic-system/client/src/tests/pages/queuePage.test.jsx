@@ -55,6 +55,9 @@ function mockWaitTimeFetchResponse({
   status = 200,
   estimatedWaitTime = null,
   message,
+  predictedWaitTime = null,
+  predictionBasedOnRows = 0,
+  predictionMessage,
 } = {}) {
   fetch.mockResolvedValueOnce({
     ok,
@@ -64,6 +67,9 @@ function mockWaitTimeFetchResponse({
         ? {
             estimatedWaitTime,
             message,
+            predictedWaitTime,
+            predictionBasedOnRows,
+            predictionMessage,
           }
         : {
             error: 'Failed to fetch estimated wait time',
@@ -189,32 +195,65 @@ describe('QueuePage join flow', () => {
     ).toBeInTheDocument()
   })
 
-  test('confirm join shows duplicate queue error from backend', async () => {
-    const user = userEvent.setup()
+test('confirm join handles duplicate active queue from backend', async () => {
+  jest.useFakeTimers()
+  const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
 
-    mockQueueFetchResponse({
-      ok: false,
-      status: 404,
-      error: 'No active queue entry found for this patient',
-    })
-
-    fetch.mockResolvedValueOnce({
-      ok: false,
-      status: 409,
-      json: async () => ({
-        error: 'Patient already has an active queue entry',
-      }),
-    })
-
-    render(<QueuePage />)
-
-    await user.click(await screen.findByRole('button', { name: 'Confirm' }))
-
-    expect(
-      (await screen.findAllByText('Patient already has an active queue entry'))
-        .length
-    ).toBeGreaterThan(0)
+  mockQueueFetchResponse({
+    ok: false,
+    status: 404,
+    error: 'No active queue entry found for this patient',
   })
+
+  fetch.mockResolvedValueOnce({
+    ok: false,
+    status: 409,
+    json: async () => ({
+      error: 'Patient already has an active queue entry',
+      existingEntry: {
+        id: 'entry-1',
+        clinic_id: 'clinic-123',
+        patient_id: 'patient-123',
+        position: 1,
+        status: 'Waiting',
+        joined_at: '2026-04-16T10:00:00.000Z',
+      },
+    }),
+  })
+
+  mockQueueFetchResponse({
+    queue: [
+      {
+        id: 'entry-1',
+        clinic_id: 'clinic-123',
+        patient_id: 'patient-123',
+        clinic_name: 'Test Clinic',
+        position: 1,
+        status: 'Waiting',
+        joined_at: '2026-04-16T10:00:00.000Z',
+      },
+    ],
+  })
+
+  mockWaitTimeFetchResponse({
+    estimatedWaitTime: 0,
+    predictedWaitTime: 15,
+  })
+
+  render(<QueuePage />)
+
+  await user.click(await screen.findByRole('button', { name: 'Confirm' }))
+
+  expect(
+    await screen.findByText('You are already in a queue. Loading your current queue...')
+  ).toBeInTheDocument()
+
+  jest.advanceTimersByTime(800)
+
+  await waitFor(() => {
+    expect(localStorage.getItem('selectedClinicId')).toBe('clinic-123')
+  })
+})
 
   test('confirm join shows validation error from backend', async () => {
     const user = userEvent.setup()

@@ -5,6 +5,7 @@ const { createClient } = require('@supabase/supabase-js')
 require('dotenv').config()
 const { sendAppointmentConfirmationEmail } = require('./emailService')
 const app = express()
+const { predictWaitTimeFromHistory } = require('./waitTimePrediction')
 const DEFAULT_ESTIMATED_WAIT_APPOINTMENT_DURATION = 15
 const ESTIMATED_WAIT_FALLBACK_MESSAGE = 'Estimated wait time may be inaccurate'
 //imports:
@@ -94,6 +95,60 @@ if (!supabaseUrl || !supabaseKey) {
 const supabase = createClient(supabaseUrl, supabaseKey)
 configureQueueNotificationService(supabase)
 
+async function fetchHistoricalQueueRows(clinicId) {
+  const { data, error } = await supabase
+    .from('queue_entries')
+    .select('id, clinic_id, joined_at, called_at, completed_at, status')
+    .eq('clinic_id', clinicId)
+    .not('joined_at', 'is', null)
+    .not('called_at', 'is', null)
+    .order('joined_at', { ascending: false })
+    .limit(200)
+
+  if (error) throw error
+
+  return data || []
+}
+
+async function fetchCurrentQueueLength(clinicId) {
+  const { count, error } = await supabase
+    .from('queue_entries')
+    .select('id', { count: 'exact', head: true })
+    .eq('clinic_id', clinicId)
+    .in('status', ['Waiting', 'Called'])
+
+  if (error) throw error
+
+  return Number(count) || 0
+}
+
+async function fetchPredictedWaitTime(clinicId, patientsAhead = null) {
+  const historyRows = await fetchHistoricalQueueRows(clinicId)
+  const prediction = predictWaitTimeFromHistory(historyRows)
+
+  if (!prediction.fallbackUsed) {
+    return prediction
+  }
+
+  const queueMetrics = await fetchClinicQueueMetrics(clinicId)
+  const currentQueueLength = await fetchCurrentQueueLength(clinicId)
+
+  const waitEstimate = calculateEstimatedWaitTime({
+    patientsAhead: patientsAhead ?? currentQueueLength,
+    appointmentDuration:
+      queueMetrics?.appointmentDuration ?? DEFAULT_ESTIMATED_WAIT_APPOINTMENT_DURATION,
+    staffCount: queueMetrics?.staffCount ?? 0,
+  })
+
+  return {
+    predictedWaitMinutes:
+      waitEstimate.estimatedWaitTime ?? prediction.predictedWaitMinutes,
+    basedOnRows: prediction.basedOnRows,
+    fallbackUsed: true,
+    strategy: 'estimated-wait-fallback',
+    message: waitEstimate.message || prediction.message,
+  }
+}
 
 async function fetchActiveQueueSnapshot(clinicId) {
   const { data, error } = await supabase
@@ -436,6 +491,32 @@ app.get('/api', (req, res) => {
   res.json({ message: 'Ubuntu Health API running' })
 })
 
+// GET /api/clinics/:id/predicted-wait-time
+app.get('/api/clinics/:id/predicted-wait-time', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const idValidation = validateRequiredUuid(id, 'clinic ID')
+
+    if (!idValidation.valid) {
+      return res.status(idValidation.status).json({ error: idValidation.error })
+    }
+
+    const prediction = await fetchPredictedWaitTime(id)
+
+    return res.json({
+      predictedWaitTime: prediction.predictedWaitMinutes,
+      predictionBasedOnRows: prediction.basedOnRows,
+      predictionFallbackUsed: prediction.fallbackUsed,
+      predictionStrategy: prediction.strategy,
+      predictionMessage: prediction.message,
+    })
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: 'Failed to fetch predicted wait time' })
+  }
+})
+
 // GET /api/clinics
 app.get('/api/clinics', async (req, res) => {
   try {
@@ -519,6 +600,39 @@ app.get('/api/clinics/:id', async (req, res) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to fetch clinic' })
+  }
+})
+// GET /api/queue/active/:patientId — find a patient's active queue entry
+app.get('/api/queue/active/:patientId', async (req, res) => {
+  try {
+    const { patientId } = req.params
+
+    const idValidation = validateRequiredUuid(patientId, 'patient ID')
+
+    if (!idValidation.valid) {
+      return res.status(idValidation.status).json({ error: idValidation.error })
+    }
+
+    const { data: entries, error } = await supabase
+      .from('queue_entries')
+      .select('id, clinic_id, patient_id, position, status, joined_at, called_at, completed_at')
+      .eq('patient_id', patientId)
+      .in('status', ['Waiting', 'Called', 'In Consultation'])
+      .order('joined_at', { ascending: false })
+      .limit(1)
+
+    if (error) throw error
+
+    const entry = entries?.[0]
+
+    if (!entry) {
+      return res.status(404).json({ error: 'No active queue entry found for this patient' })
+    }
+
+    return res.json({ entry })
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: 'Failed to fetch active queue entry' })
   }
 })
 
@@ -669,6 +783,11 @@ if (!idValidation.valid) {
       staffCount,
     })
 
+    const prediction = await fetchPredictedWaitTime(
+      clinicId,
+      queuePosition.patientsAhead
+    )
+
     return res.json({
       position: queuePosition.position,
       patientsAhead: queuePosition.patientsAhead,
@@ -676,6 +795,11 @@ if (!idValidation.valid) {
       staffCount,
       estimatedWaitTime: waitEstimate.estimatedWaitTime,
       message: waitEstimate.message,
+      predictedWaitTime: prediction.predictedWaitMinutes,
+      predictionBasedOnRows: prediction.basedOnRows,
+      predictionFallbackUsed: prediction.fallbackUsed,
+      predictionStrategy: prediction.strategy,
+      predictionMessage: prediction.message,
     })
   } catch (err) {
     console.error(err)
@@ -1096,20 +1220,27 @@ if (!idValidation.valid) {
     }
 
     // Fetch all active queue entries for this patient across all clinics
+    if (!confirmed) {
+      return res.status(400).json({ error: 'Queue join must be confirmed by the patient' })
+    }
+
     const { data: activeQueues, error: activeError } = await supabase
       .from('queue_entries')
-      .select('patient_id, status, clinic_id')
+      .select('id, clinic_id, patient_id, position, status, joined_at')
       .eq('patient_id', patient_id)
-      .neq('status', 'Complete')
+      .in('status', ['Waiting', 'Called', 'In Consultation'])
+      .order('joined_at', { ascending: false })
+      .limit(1)
 
     if (activeError) throw activeError
 
-    // Use validation helper — checks confirmed and no active queue
-    if (!validateQueueJoin(patient_id, activeQueues, confirmed)) {
-      if (!confirmed) {
-        return res.status(400).json({ error: 'Queue join must be confirmed by the patient' })
-      }
-      return res.status(409).json({ error: 'Patient already has an active queue entry' })
+    const existingEntry = activeQueues?.[0]
+
+    if (existingEntry) {
+      return res.status(409).json({
+        error: 'Patient already has an active queue entry',
+        existingEntry,
+      })
     }
 
     const oldQueue = await tryFetchActiveQueueSnapshot(clinicId)
