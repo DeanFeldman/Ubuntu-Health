@@ -31,6 +31,14 @@ function makeBuilder(table) {
       return this
     }),
 
+    gte: jest.fn(function () {
+      return this
+    }),
+
+    lte: jest.fn(function () {
+      return this
+    }),
+
     in: jest.fn(function () {
       return this
     }),
