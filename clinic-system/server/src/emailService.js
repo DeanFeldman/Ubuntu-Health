@@ -21,7 +21,7 @@ function buildAppointmentConfirmationEmail({ patientName, clinicName, date, time
   const subject = `Appointment Confirmation — ${displayClinic}`
 
   const text = `
-Hi  ${displayName},
+Hi ${displayName},
 
 Your appointment has been confirmed.
 
