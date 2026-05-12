@@ -1091,6 +1091,16 @@ export default function AdminDashboard() {
           Clinic details
           <span className="admin-nav-count">{clinics.length}</span>
         </button>
+
+        <button
+          type="button"
+          className={`admin-nav-btn ${
+            activeSection === 'analytics' ? 'admin-nav-btn--active' : ''
+          }`}
+          onClick={() => setActiveSection('analytics')}
+        >
+          Analytics
+        </button>
       </aside>
 
       {/* The content area of the admin dashboard, which conditionally renders different sections based on the activeSection state. */}
@@ -1205,6 +1215,19 @@ export default function AdminDashboard() {
         )}
 
         {/* The section for managing clinic details, which includes selecting a clinic, viewing and editing its details, and managing staff assignments. */}
+        {activeSection === 'analytics' && (
+          <section className="admin-stack" aria-labelledby="analytics-heading">
+            <header className="admin-panel-header" style={{ border: 'none', paddingLeft: 0, paddingRight: 0 }}>
+              <section>
+                <h2 id="analytics-heading">Analytics</h2>
+                <p className="admin-section-intro">
+                  View reports and export data across all clinics.
+                </p>
+              </section>
+            </header>
+          </section>
+        )}
+
         {activeSection === 'clinics' && (
           <section className="admin-stack">
             <section className="admin-panel" aria-labelledby="staff-assignment-heading">
@@ -1558,5 +1581,4 @@ export default function AdminDashboard() {
     </section>
   </section>
 )
-
 }
