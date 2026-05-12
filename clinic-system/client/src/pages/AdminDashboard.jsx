@@ -639,7 +639,81 @@ function buildOperatingHoursPayload(operatingHoursForm) {
   }, {})
 }
 
-// This is the main component for the admin dashboard page. 
+// This function builds the query string for the no-show report API call based on the selected filters.
+function buildNoShowReportUrl(apiBase, clinicId, startDate, endDate) {
+  const params = new URLSearchParams()
+  if (clinicId) params.set('clinic_id', clinicId)
+  if (startDate) params.set('start_date', startDate)
+  if (endDate) params.set('end_date', endDate)
+  const qs = params.toString()
+  return `${apiBase}/api/reports/no-shows${qs ? `?${qs}` : ''}`
+}
+
+// This function generates and triggers a CSV download from the no-show report data.
+function exportNoShowCsv(report) {
+  const { filters, summary } = report
+  const rows = [
+    ['No-Show Report'],
+    ['Clinic', filters.clinic_name || 'All clinics'],
+    ['Date range', filters.date_range_label || 'All time'],
+    [],
+    ['Metric', 'Value'],
+    ['Total scheduled appointments', summary.scheduled_appointments ?? ''],
+    ['Total completed appointments', summary.completed_appointments ?? ''],
+    ['Total cancelled appointments', summary.cancelled_appointments ?? ''],
+    ['Total no-show appointments', summary.no_show_appointments ?? ''],
+    ['No-show rate', `${summary.no_show_rate_percent ?? 0}%`],
+  ]
+  const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'no-show-report.csv'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+// This function generates and triggers a plain-text PDF-style download from the no-show report data using the browser print dialog.
+function exportNoShowPdf(report) {
+  const { filters, summary } = report
+  const clinicLabel = filters.clinic_name || 'All clinics'
+  const dateLabel = filters.date_range_label || 'All time'
+  const html = `
+    <html>
+      <head>
+        <title>No-Show Report</title>
+        <style>
+          body { font-family: sans-serif; padding: 40px; color: #111; }
+          h1 { font-size: 1.4rem; margin-bottom: 4px; }
+          .meta { color: #666; font-size: 0.9rem; margin-bottom: 24px; }
+          table { border-collapse: collapse; width: 100%; max-width: 480px; }
+          th, td { border: 1px solid #ddd; padding: 10px 14px; text-align: left; font-size: 0.9rem; }
+          th { background: #f5f5f5; font-weight: 700; }
+        </style>
+      </head>
+      <body>
+        <h1>No-Show Report</h1>
+        <p class="meta">Clinic: ${clinicLabel} &nbsp;|&nbsp; Date range: ${dateLabel}</p>
+        <table>
+          <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+          <tbody>
+            <tr><td>Total scheduled appointments</td><td>${summary.scheduled_appointments ?? ''}</td></tr>
+            <tr><td>Total completed appointments</td><td>${summary.completed_appointments ?? ''}</td></tr>
+            <tr><td>Total cancelled appointments</td><td>${summary.cancelled_appointments ?? ''}</td></tr>
+            <tr><td>Total no-show appointments</td><td>${summary.no_show_appointments ?? ''}</td></tr>
+            <tr><td>No-show rate</td><td>${summary.no_show_rate_percent ?? 0}%</td></tr>
+          </tbody>
+        </table>
+      </body>
+    </html>`
+  const win = window.open('', '_blank')
+  win.document.write(html)
+  win.document.close()
+  win.print()
+}
+
+
 export default function AdminDashboard() {
   // Get the current user from the authentication context and the API base URL from our config helper
   const { user } = useAuth()
@@ -668,8 +742,45 @@ export default function AdminDashboard() {
 
   const [activeSection, setActiveSection] = useState('overview')
 
+  // No-show report state
+  const [noShowClinicId, setNoShowClinicId] = useState('')
+  const [noShowStartDate, setNoShowStartDate] = useState('')
+  const [noShowEndDate, setNoShowEndDate] = useState('')
+  const [noShowReport, setNoShowReport] = useState(null)
+  const [loadingNoShow, setLoadingNoShow] = useState(false)
+  const [noShowError, setNoShowError] = useState('')
+
   const selectedClinicStaff = staffUsers.filter((staffUser) => staffUser.clinic_id === selectedClinicId)
   const unassignedStaffUsers = staffUsers.filter((staffUser) => !staffUser.clinic_id)
+
+  // This effect fetches the no-show report whenever the analytics section is active and filters change.
+  useEffect(() => {
+    if (activeSection !== 'analytics') return
+
+    async function fetchNoShowReport() {
+      try {
+        setLoadingNoShow(true)
+        setNoShowError('')
+
+        const url = buildNoShowReportUrl(API_BASE_URL, noShowClinicId, noShowStartDate, noShowEndDate)
+        const response = await fetch(url, { headers: { Accept: 'application/json' } })
+        const body = await readApiResponse(response)
+
+        if (!response.ok) {
+          throw new Error(body.error || 'Failed to load no-show report')
+        }
+
+        setNoShowReport(body)
+      } catch (err) {
+        setNoShowError(err.message || 'Failed to load no-show report')
+        setNoShowReport(null)
+      } finally {
+        setLoadingNoShow(false)
+      }
+    }
+
+    fetchNoShowReport()
+  }, [activeSection, API_BASE_URL, noShowClinicId, noShowStartDate, noShowEndDate])
 
   // This effect runs when the component mounts and whenever the user's ID changes.
   useEffect(() => {
@@ -1225,6 +1336,137 @@ export default function AdminDashboard() {
                 </p>
               </section>
             </header>
+
+            {/* No-show report panel */}
+            <section className="admin-panel" aria-labelledby="no-show-heading">
+              <header className="admin-panel-header">
+                <section>
+                  <h2 id="no-show-heading">No-show report</h2>
+                  <p className="admin-section-intro">
+                    Review appointment attendance across clinics and date ranges.
+                  </p>
+                </section>
+
+                {noShowReport && (
+                  <section style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn-secondary"
+                      onClick={() => exportNoShowCsv(noShowReport)}
+                    >
+                      Export CSV
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn-secondary"
+                      onClick={() => exportNoShowPdf(noShowReport)}
+                    >
+                      Export PDF
+                    </button>
+                  </section>
+                )}
+              </header>
+
+              {/* Filters */}
+              <section className="admin-message" style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end' }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '180px' }}>
+                  Clinic
+                  <select
+                    value={noShowClinicId}
+                    onChange={(e) => setNoShowClinicId(e.target.value)}
+                  >
+                    <option value="">All clinics</option>
+                    {clinics.map((clinic) => (
+                      <option key={clinic.id} value={clinic.id}>{clinic.name}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  Start date
+                  <input
+                    type="date"
+                    value={noShowStartDate}
+                    onChange={(e) => setNoShowStartDate(e.target.value)}
+                  />
+                </label>
+
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  End date
+                  <input
+                    type="date"
+                    value={noShowEndDate}
+                    onChange={(e) => setNoShowEndDate(e.target.value)}
+                  />
+                </label>
+              </section>
+
+              {/* Loading state */}
+              {loadingNoShow && (
+                <p className="admin-message">Loading no-show report...</p>
+              )}
+
+              {/* Error state */}
+              {!loadingNoShow && noShowError && (
+                <p className="admin-message admin-error" role="alert">{noShowError}</p>
+              )}
+
+              {/* Empty state */}
+              {!loadingNoShow && !noShowError && noShowReport && noShowReport.summary?.scheduled_appointments === 0 && (
+                <section className="admin-empty">
+                  <strong>No data found.</strong>
+                  <p>No appointments match the selected clinic and date range.</p>
+                </section>
+              )}
+
+              {/* Report results */}
+              {!loadingNoShow && !noShowError && noShowReport && noShowReport.summary?.scheduled_appointments > 0 && (
+                <section className="admin-message">
+                  {/* Selected filters summary */}
+                  <section className="admin-selected-banner" style={{ marginTop: 0, marginBottom: '20px' }}>
+                    <section>
+                      <strong>Clinic</strong>
+                      <p>{noShowReport.filters?.clinic_name || 'All clinics'}</p>
+                    </section>
+                    <section>
+                      <strong>Date range</strong>
+                      <p>{noShowReport.filters?.date_range_label || 'All time'}</p>
+                    </section>
+                  </section>
+
+                  {/* Stats grid */}
+                  <section className="admin-overview" style={{ marginBottom: 0 }}>
+                    <article className="admin-overview-card">
+                      <span>Scheduled</span>
+                      <strong>{noShowReport.summary.scheduled_appointments}</strong>
+                      <p>Total appointments scheduled.</p>
+                    </article>
+                    <article className="admin-overview-card">
+                      <span>Completed</span>
+                      <strong>{noShowReport.summary.completed_appointments}</strong>
+                      <p>Appointments attended.</p>
+                    </article>
+                    {noShowReport.summary.cancelled_appointments > 0 && (
+                      <article className="admin-overview-card">
+                        <span>Cancelled</span>
+                        <strong>{noShowReport.summary.cancelled_appointments}</strong>
+                        <p>Appointments cancelled.</p>
+                      </article>
+                    )}
+                    <article className="admin-overview-card">
+                      <span>No-shows</span>
+                      <strong>{noShowReport.summary.no_show_appointments}</strong>
+                      <p>Patients who did not attend.</p>
+                    </article>
+                    <article className="admin-overview-card">
+                      <span>No-show rate</span>
+                      <strong>{noShowReport.summary.no_show_rate_percent}%</strong>
+                      <p>Percentage of no-shows.</p>
+                    </article>
+                  </section>
+                </section>
+              )}
+            </section>
           </section>
         )}
 
@@ -1581,4 +1823,5 @@ export default function AdminDashboard() {
     </section>
   </section>
 )
+
 }
