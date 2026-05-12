@@ -3028,6 +3028,8 @@ if (!slotCapacityValidation.valid) {
       })
     }
 
+    try {
+
     // Fetch patient email and name for reschedule email
     let rescheduleEmailAddress = null
     let reschedulePatientName = null
@@ -3074,6 +3076,10 @@ if (!slotCapacityValidation.valid) {
       oldDate: oldSlotDatetime ? oldSlotDatetime.slice(0, 10) : null,
       oldTime: oldSlotDatetime ? getTimeFromAppointmentDatetime(oldSlotDatetime) : null,
     }).catch(err => console.error('Reschedule email send failed silently:', err))
+
+    } catch (emailErr) {
+      console.error('Failed to prepare reschedule email, skipping:', emailErr)
+    }
 
     return res.json(
       buildRescheduleResponse({
@@ -3137,6 +3143,10 @@ app.patch('/api/appointments/:id/cancel', async (req, res) => {
       capacity: staffCount,
     })
 
+    try{
+
+    
+
     // Fetch patient email and name for cancellation email
     let cancelEmailAddress = null
     let cancelPatientName = null
@@ -3189,13 +3199,15 @@ app.patch('/api/appointments/:id/cancel', async (req, res) => {
 
     // Fire and forget — email failure must not affect cancellation response
     sendAppointmentCancellationEmail({
-      to: cancelEmailAddress,
-      patientName: cancelPatientName,
-      clinicName: cancelClinic?.name || null,
-      date: cancelDate,
-      time: cancelTime,
-    }).catch(err => console.error('Cancellation email send failed silently:', err))
-
+    to: cancelEmailAddress,
+    patientName: cancelPatientName,
+    clinicName: cancelClinic?.name || null,
+    date: cancelDate,
+    time: cancelTime,
+  }).catch(err => console.error('Cancellation email send failed silently:', err))
+} catch (emailErr) {
+  console.error('Failed to prepare cancellation email, skipping:', emailErr)
+}
     return res.json(
       buildCancelResponse({
         appointment: data,
