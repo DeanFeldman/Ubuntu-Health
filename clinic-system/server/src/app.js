@@ -3,7 +3,11 @@ const cors = require('cors')
 const path = require('path')
 const { createClient } = require('@supabase/supabase-js')
 require('dotenv').config()
-const { sendAppointmentConfirmationEmail } = require('./emailService')
+const {
+  sendAppointmentConfirmationEmail,
+  sendAppointmentCancellationEmail,
+  sendAppointmentRescheduleEmail,
+} = require('./emailService')
 const app = express()
 const DEFAULT_ESTIMATED_WAIT_APPOINTMENT_DURATION = 15
 const ESTIMATED_WAIT_FALLBACK_MESSAGE = 'Estimated wait time may be inaccurate'
@@ -3024,14 +3028,61 @@ if (!slotCapacityValidation.valid) {
       })
     }
 
+    // Fetch patient email and name for reschedule email
+    let rescheduleEmailAddress = null
+    let reschedulePatientName = null
+
+    const { data: reschedulePatientUser } = await supabase
+      .from('users')
+      .select('email, full_name')
+      .eq('id', appointment.patient_id)
+      .maybeSingle()
+
+    if (reschedulePatientUser) {
+      rescheduleEmailAddress = reschedulePatientUser.email
+      reschedulePatientName = reschedulePatientUser.full_name
+    } else {
+      const { data: reschedulePatientRecord } = await supabase
+        .from('patients')
+        .select('email, full_name')
+        .eq('id', appointment.patient_id)
+        .maybeSingle()
+
+      rescheduleEmailAddress = reschedulePatientRecord?.email || null
+      reschedulePatientName = reschedulePatientRecord?.full_name || null
+    }
+
+    // Fetch old slot datetime
+    let oldSlotDatetime = null
+    if (oldSlotId) {
+      const { data: oldSlotRecord } = await supabase
+        .from('slots')
+        .select('slot_datetime')
+        .eq('id', oldSlotId)
+        .maybeSingle()
+
+      oldSlotDatetime = oldSlotRecord?.slot_datetime || null
+    }
+
+    // Fire and forget — email failure must not affect reschedule response
+    sendAppointmentRescheduleEmail({
+      to: rescheduleEmailAddress,
+      patientName: reschedulePatientName,
+      clinicName: clinic.name,
+      newDate: date,
+      newTime: requestedTime,
+      oldDate: oldSlotDatetime ? oldSlotDatetime.slice(0, 10) : null,
+      oldTime: oldSlotDatetime ? getTimeFromAppointmentDatetime(oldSlotDatetime) : null,
+    }).catch(err => console.error('Reschedule email send failed silently:', err))
+
     return res.json(
-  buildRescheduleResponse({
-    appointment,
-    updatedAppointment: data,
-    oldSlotId,
-    newSlot,
-  })
-)
+      buildRescheduleResponse({
+        appointment,
+        updatedAppointment: data,
+        oldSlotId,
+        newSlot,
+      })
+    )
   } catch (err) {
     console.error('Failed to reschedule appointment:', err)
     return res.status(500).json({ error: 'Failed to reschedule appointment' })
@@ -3085,6 +3136,65 @@ app.patch('/api/appointments/:id/cancel', async (req, res) => {
       slotId: appointment.slot_id,
       capacity: staffCount,
     })
+
+    // Fetch patient email and name for cancellation email
+    let cancelEmailAddress = null
+    let cancelPatientName = null
+
+    const { data: cancelPatientUser } = await supabase
+      .from('users')
+      .select('email, full_name')
+      .eq('id', data.patient_id)
+      .maybeSingle()
+
+    if (cancelPatientUser) {
+      cancelEmailAddress = cancelPatientUser.email
+      cancelPatientName = cancelPatientUser.full_name
+    } else {
+      const { data: cancelPatientRecord } = await supabase
+        .from('patients')
+        .select('email, full_name')
+        .eq('id', data.patient_id)
+        .maybeSingle()
+
+      cancelEmailAddress = cancelPatientRecord?.email || null
+      cancelPatientName = cancelPatientRecord?.full_name || null
+    }
+
+    // Fetch slot datetime for email content
+    let cancelSlotDatetime = null
+    if (data.slot_id) {
+      const { data: cancelSlot } = await supabase
+        .from('slots')
+        .select('slot_datetime')
+        .eq('id', data.slot_id)
+        .maybeSingle()
+
+      cancelSlotDatetime = cancelSlot?.slot_datetime || null
+    }
+
+    const cancelDate = cancelSlotDatetime
+      ? cancelSlotDatetime.slice(0, 10)
+      : null
+    const cancelTime = cancelSlotDatetime
+      ? getTimeFromAppointmentDatetime(cancelSlotDatetime)
+      : null
+
+    // Fetch clinic name
+    const { data: cancelClinic } = await supabase
+      .from('clinics')
+      .select('name')
+      .eq('id', data.clinic_id)
+      .maybeSingle()
+
+    // Fire and forget — email failure must not affect cancellation response
+    sendAppointmentCancellationEmail({
+      to: cancelEmailAddress,
+      patientName: cancelPatientName,
+      clinicName: cancelClinic?.name || null,
+      date: cancelDate,
+      time: cancelTime,
+    }).catch(err => console.error('Cancellation email send failed silently:', err))
 
     return res.json(
       buildCancelResponse({
