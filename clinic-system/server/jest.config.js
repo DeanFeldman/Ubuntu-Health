@@ -3,6 +3,9 @@ module.exports = {
 
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
 
+  silent: true,
+  verbose: false,
+
   collectCoverage: true,
 
   coverageDirectory: 'coverage',
@@ -17,5 +20,5 @@ module.exports = {
     '!src/index.js'
   ],
 
- coverageReporters: ['text', 'lcov', 'html', 'json-summary']
+  coverageReporters: ['text', 'lcov', 'html', 'json-summary']
 }

@@ -411,23 +411,31 @@ describe('queueNotificationService', () => {
       ).rejects.toThrow('Queue notification service is not configured')
     })
 
-    test('throws when database insert fails', async () => {
-      const { supabase } = createMockSupabase({
-        data: null,
-        error: new Error('DB error'),
-      })
+  test('throws when database insert fails', async () => {
+  const consoleErrorSpy = jest
+    .spyOn(console, 'error')
+    .mockImplementation(() => {})
 
-      configureQueueNotificationService(supabase)
-
-      await expect(
-        createNotification({
-          queue_entry_id: 'entry-1',
-          patient_id: 'patient-1',
-          clinic_id: 'clinic-1',
-          type: 'POSITION_1',
-          position: 1,
-        })
-      ).rejects.toThrow('DB error')
+  try {
+    const { supabase } = createMockSupabase({
+      data: null,
+      error: new Error('DB error'),
     })
-  })
+
+    configureQueueNotificationService(supabase)
+
+    await expect(
+      createNotification({
+        queue_entry_id: 'entry-1',
+        patient_id: 'patient-1',
+        clinic_id: 'clinic-1',
+        type: 'POSITION_1',
+        position: 1,
+      })
+    ).rejects.toThrow('DB error')
+  } finally {
+    consoleErrorSpy.mockRestore()
+  }
+})
+})
 })
