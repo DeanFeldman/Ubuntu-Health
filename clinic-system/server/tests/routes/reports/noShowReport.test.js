@@ -233,6 +233,111 @@ describe('no-show report', () => {
     )
   })
 
+  test('applies start_date only and labels the open-ended range', async () => {
+    scenario.thenable.appointments = [
+      {
+        data: [
+          appointment({ id: 'no-show', status: 'No-show' }),
+        ],
+        error: null,
+      },
+    ]
+
+    const res = await request(app).get(
+      '/api/reports/no-shows?start_date=2026-05-01'
+    )
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body.filters).toEqual({
+      clinic_id: null,
+      clinic_name: 'All clinics',
+      start_date: '2026-05-01',
+      end_date: null,
+      date_range_label: 'From 2026-05-01',
+    })
+
+    const appointmentBuilder = createdBuilders[0]
+    expect(appointmentBuilder.gte).toHaveBeenCalledWith(
+      'slots.slot_datetime',
+      '2026-05-01T00:00:00.000Z'
+    )
+    expect(appointmentBuilder.lte).not.toHaveBeenCalled()
+  })
+
+  test('applies end_date only and labels the open-ended range', async () => {
+    scenario.thenable.appointments = [
+      {
+        data: [
+          appointment({ id: 'completed', status: 'Completed' }),
+        ],
+        error: null,
+      },
+    ]
+
+    const res = await request(app).get(
+      '/api/reports/no-shows?end_date=2026-05-11'
+    )
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body.filters).toEqual({
+      clinic_id: null,
+      clinic_name: 'All clinics',
+      start_date: null,
+      end_date: '2026-05-11',
+      date_range_label: 'Up to 2026-05-11',
+    })
+
+    const appointmentBuilder = createdBuilders[0]
+    expect(appointmentBuilder.gte).not.toHaveBeenCalled()
+    expect(appointmentBuilder.lte).toHaveBeenCalledWith(
+      'slots.slot_datetime',
+      '2026-05-11T23:59:59.999Z'
+    )
+  })
+
+  test('returns selected clinic row with zero counts when no appointments match', async () => {
+    scenario.maybeSingle.clinics = [
+      {
+        data: {
+          id: validClinicId,
+          name: 'Ubuntu Clinic',
+        },
+        error: null,
+      },
+    ]
+
+    scenario.thenable.appointments = [
+      {
+        data: [],
+        error: null,
+      },
+    ]
+
+    const res = await request(app).get(
+      `/api/reports/no-shows?clinic_id=${validClinicId}`
+    )
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body.summary).toEqual({
+      scheduled_appointments: 0,
+      completed_appointments: 0,
+      cancelled_appointments: 0,
+      no_show_appointments: 0,
+      no_show_rate_percent: 0,
+    })
+    expect(res.body.by_clinic).toEqual([
+      {
+        clinic_id: validClinicId,
+        clinic_name: 'Ubuntu Clinic',
+        scheduled_appointments: 0,
+        completed_appointments: 0,
+        cancelled_appointments: 0,
+        no_show_appointments: 0,
+        no_show_rate_percent: 0,
+      },
+    ])
+  })
+
   test('returns 400 for invalid clinic id format', async () => {
     const res = await request(app).get(
       `/api/reports/no-shows?clinic_id=${invalidId}`
