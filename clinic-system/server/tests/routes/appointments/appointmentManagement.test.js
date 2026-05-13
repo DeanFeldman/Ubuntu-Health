@@ -13,6 +13,7 @@ const FUTURE_MONDAY = '2099-05-11'
 let app
 let scenario
 let createdBuilders
+let sendAppointmentCancellationEmail
 
 beforeEach(() => {
   const mockContext = setupMockApp()
@@ -20,6 +21,8 @@ beforeEach(() => {
   app = mockContext.app
   scenario = mockContext.scenario
   createdBuilders = mockContext.createdBuilders
+  sendAppointmentCancellationEmail =
+    mockContext.sendAppointmentCancellationEmail
 })
 
 describe('GET /api/appointments/patient/:patientId', () => {
@@ -1156,6 +1159,207 @@ describe('PATCH /api/appointments/:id/cancel', () => {
       status: 'Cancelled',
     })
   })
+  test('triggers cancellation email after successful appointment cancellation', async () => {
+  scenario.maybeSingle.appointments = [
+    {
+      data: {
+        id: validAppointmentId,
+        clinic_id: validClinicId,
+        patient_id: validPatientId,
+        slot_id: validSlotId,
+        status: 'Confirmed',
+      },
+      error: null,
+    },
+  ]
+
+  scenario.single.appointments = [
+    {
+      data: {
+        id: validAppointmentId,
+        clinic_id: validClinicId,
+        patient_id: validPatientId,
+        slot_id: validSlotId,
+        status: 'Cancelled',
+      },
+      error: null,
+    },
+  ]
+
+  scenario.thenable.users = [
+    {
+      count: 1,
+      error: null,
+    },
+  ]
+
+  scenario.thenable.appointments = [
+    {
+      count: 0,
+      error: null,
+    },
+  ]
+
+  scenario.thenable.slots = [
+    {
+      data: null,
+      error: null,
+    },
+  ]
+
+  scenario.maybeSingle.users = [
+    {
+      data: {
+        email: 'patient@example.com',
+        full_name: 'Jane Patient',
+      },
+      error: null,
+    },
+  ]
+
+  scenario.maybeSingle.slots = [
+    {
+      data: {
+        id: validSlotId,
+        slot_datetime: `${FUTURE_MONDAY}T07:45:00.000Z`,
+      },
+      error: null,
+    },
+  ]
+
+  scenario.maybeSingle.clinics = [
+    {
+      data: {
+        id: validClinicId,
+        name: 'Ubuntu Clinic',
+      },
+      error: null,
+    },
+  ]
+
+  const res = await request(app).patch(
+    `/api/appointments/${validAppointmentId}/cancel`
+  )
+
+  expect(res.statusCode).toBe(200)
+
+  expect(sendAppointmentCancellationEmail).toHaveBeenCalledTimes(1)
+  expect(sendAppointmentCancellationEmail).toHaveBeenCalledWith({
+    to: 'patient@example.com',
+    patientName: 'Jane Patient',
+    clinicName: 'Ubuntu Clinic',
+    date: FUTURE_MONDAY,
+    time: '09:45',
+  })
+})
+
+test('does not trigger cancellation email when appointment cancellation fails', async () => {
+  scenario.maybeSingle.appointments = [
+    {
+      data: null,
+      error: null,
+    },
+  ]
+
+  const res = await request(app).patch(
+    `/api/appointments/${validAppointmentId}/cancel`
+  )
+
+  expect(res.statusCode).toBe(404)
+  expect(res.body).toEqual({ error: 'Appointment not found' })
+  expect(sendAppointmentCancellationEmail).not.toHaveBeenCalled()
+})
+
+test('still cancels appointment when cancellation email fails', async () => {
+  sendAppointmentCancellationEmail.mockRejectedValueOnce(
+    new Error('SMTP cancellation failed')
+  )
+
+  scenario.maybeSingle.appointments = [
+    {
+      data: {
+        id: validAppointmentId,
+        clinic_id: validClinicId,
+        patient_id: validPatientId,
+        slot_id: validSlotId,
+        status: 'Confirmed',
+      },
+      error: null,
+    },
+  ]
+
+  scenario.single.appointments = [
+    {
+      data: {
+        id: validAppointmentId,
+        clinic_id: validClinicId,
+        patient_id: validPatientId,
+        slot_id: validSlotId,
+        status: 'Cancelled',
+      },
+      error: null,
+    },
+  ]
+
+  scenario.thenable.users = [
+    {
+      count: 1,
+      error: null,
+    },
+  ]
+
+  scenario.thenable.appointments = [
+    {
+      count: 0,
+      error: null,
+    },
+  ]
+
+  scenario.thenable.slots = [
+    {
+      data: null,
+      error: null,
+    },
+  ]
+
+  scenario.maybeSingle.users = [
+    {
+      data: {
+        email: 'patient@example.com',
+        full_name: 'Jane Patient',
+      },
+      error: null,
+    },
+  ]
+
+  scenario.maybeSingle.slots = [
+    {
+      data: {
+        id: validSlotId,
+        slot_datetime: `${FUTURE_MONDAY}T07:45:00.000Z`,
+      },
+      error: null,
+    },
+  ]
+
+  scenario.maybeSingle.clinics = [
+    {
+      data: {
+        id: validClinicId,
+        name: 'Ubuntu Clinic',
+      },
+      error: null,
+    },
+  ]
+
+  const res = await request(app).patch(
+    `/api/appointments/${validAppointmentId}/cancel`
+  )
+
+  expect(res.statusCode).toBe(200)
+  expect(res.body.message).toBe('Appointment cancelled successfully')
+  expect(sendAppointmentCancellationEmail).toHaveBeenCalledTimes(1)
+})
 
   test('releases appointment slot when cancellation succeeds', async () => {
     scenario.maybeSingle.appointments = [
