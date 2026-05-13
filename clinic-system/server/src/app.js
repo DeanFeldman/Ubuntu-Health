@@ -261,6 +261,13 @@ function getTimeFromAppointmentDatetime(slotDatetime) {
   const parsedDate = new Date(slotDatetime)
   if (Number.isNaN(parsedDate.getTime())) return null
 
+ // slot_datetime is stored as local SAST time without timezone indicator
+  // so extract time directly from the string to avoid double-conversion
+  if (typeof slotDatetime === 'string' && slotDatetime.includes('T')) {
+    const timePart = slotDatetime.split('T')[1].slice(0, 5)
+    return timePart
+  }
+
   return parsedDate.toLocaleTimeString('en-ZA', {
     timeZone: 'Africa/Johannesburg',
     hour: '2-digit',
