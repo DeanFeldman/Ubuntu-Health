@@ -63,6 +63,10 @@ const {
   canRescheduleAppointment,
 } = require('./appointmentStatusValidation')
 const {
+  validateCustomReportType,
+  validateCustomReportStatus,
+} = require('./customReportValidation')
+const {
   validateCancelRequest,
   validateAppointmentCanBeCancelled,
   buildCancelResponse,
@@ -464,6 +468,137 @@ function buildAverageWaitTimeReport({
       queue_records_used: byTimeOfDay[timeOfDay].count,
     })),
   }
+}
+
+function getRelatedObject(value) {
+  if (Array.isArray(value)) return value[0] || null
+  return value || null
+}
+
+function getRecordClinicName(record, selectedClinic = null) {
+  const clinic = getRelatedObject(record?.clinics || record?.clinic)
+
+  if (clinic?.name) return clinic.name
+  if (selectedClinic && record?.clinic_id === selectedClinic.id) {
+    return selectedClinic.name
+  }
+
+  return 'Unknown clinic'
+}
+
+function getRecordPatientName(record, patientNamesById = {}) {
+  return patientNamesById[record?.patient_id] || 'Unknown patient'
+}
+
+function getAppointmentSlotDatetime(appointment) {
+  const slot = getRelatedObject(appointment?.slots || appointment?.slot)
+  return slot?.slot_datetime || appointment?.slot_datetime || null
+}
+
+function buildCustomAppointmentRecord({
+  appointment,
+  patientNamesById,
+  selectedClinic,
+}) {
+  const slotDatetime = getAppointmentSlotDatetime(appointment)
+
+  return {
+    id: appointment.id,
+    patient_name: getRecordPatientName(appointment, patientNamesById),
+    clinic_id: appointment.clinic_id || null,
+    clinic_name: getRecordClinicName(appointment, selectedClinic),
+    appointment_date: slotDatetime
+      ? slotDatetime.slice(0, 10)
+      : appointment.appointment_date || null,
+    appointment_time: slotDatetime
+      ? getTimeFromAppointmentDatetime(slotDatetime)
+      : appointment.appointment_time || null,
+    appointment_status: appointment.status || null,
+    service: appointment.service || null,
+  }
+}
+
+function buildCustomQueueRecord({
+  entry,
+  patientNamesById,
+  selectedClinic,
+}) {
+  return {
+    id: entry.id,
+    patient_name: getRecordPatientName(entry, patientNamesById),
+    clinic_id: entry.clinic_id || null,
+    clinic_name: getRecordClinicName(entry, selectedClinic),
+    queue_position: entry.position ?? null,
+    queue_status: entry.status || null,
+    joined_at: entry.joined_at || null,
+    completed_at: entry.completed_at || null,
+    updated_at: entry.completed_at || entry.called_at || null,
+  }
+}
+
+async function fetchPatientNamesById(patientIds = []) {
+  const uniquePatientIds = [...new Set(patientIds.filter(Boolean))]
+
+  if (uniquePatientIds.length === 0) return {}
+
+  const { data: users, error: usersError } = await supabase
+    .from('users')
+    .select('id, full_name')
+    .in('id', uniquePatientIds)
+
+  if (usersError) throw usersError
+
+  const { data: patients, error: patientsError } = await supabase
+    .from('patients')
+    .select('id, full_name')
+    .in('id', uniquePatientIds)
+
+  if (patientsError) throw patientsError
+
+  const patientNamesById = {}
+
+  for (const patient of patients || []) {
+    if (patient?.id && patient.full_name) {
+      patientNamesById[patient.id] = patient.full_name
+    }
+  }
+
+  for (const user of users || []) {
+    if (user?.id && user.full_name) {
+      patientNamesById[user.id] = user.full_name
+    }
+  }
+
+  return patientNamesById
+}
+
+async function buildCustomReportRecords({
+  reportType,
+  records,
+  selectedClinic,
+}) {
+  const safeRecords = Array.isArray(records) ? records : []
+  const patientNamesById = await fetchPatientNamesById(
+    safeRecords.map((record) => record.patient_id)
+  )
+
+  if (reportType === 'appointments') {
+    return safeRecords.map((appointment) =>
+      buildCustomAppointmentRecord({
+        appointment,
+        patientNamesById,
+        selectedClinic,
+      })
+    )
+  }
+
+  return safeRecords.map((entry) =>
+    buildCustomQueueRecord({
+      entry,
+      patientNamesById,
+      selectedClinic,
+    })
+  )
 }
 
 async function fetchWaitingQueuePosition(clinicId, patientId) {
@@ -923,6 +1058,167 @@ app.get('/api/reports/no-shows', async (req, res) => {
     console.error('Failed to fetch no-show report:', err)
     return res.status(500).json({
       error: 'Failed to fetch no-show report',
+    })
+  }
+})
+
+// GET /api/reports/custom
+app.get('/api/reports/custom', async (req, res) => {
+  try {
+    const reportTypeValidation = validateCustomReportType(req.query.report_type)
+
+    if (!reportTypeValidation.valid) {
+      return res
+        .status(reportTypeValidation.status)
+        .json({ error: reportTypeValidation.error })
+    }
+
+    const reportType = reportTypeValidation.reportType
+    const rawClinicId = req.query.clinic_id
+    const clinicId =
+      rawClinicId === undefined || rawClinicId === null
+        ? null
+        : String(rawClinicId).trim()
+    const shouldFilterClinic =
+      clinicId && clinicId.toLowerCase() !== 'all'
+
+    if (shouldFilterClinic && !isValidUuid(clinicId)) {
+      return res.status(400).json({ error: 'Invalid clinic ID format' })
+    }
+
+    const startDateValidation = validateReportDate(
+      req.query.start_date,
+      'start_date'
+    )
+    if (!startDateValidation.valid) {
+      return res.status(400).json({ error: startDateValidation.error })
+    }
+
+    const endDateValidation = validateReportDate(req.query.end_date, 'end_date')
+    if (!endDateValidation.valid) {
+      return res.status(400).json({ error: endDateValidation.error })
+    }
+
+    const startDate = startDateValidation.value
+    const endDate = endDateValidation.value
+
+    if (startDate && endDate && startDate > endDate) {
+      return res.status(400).json({
+        error: 'start_date must be before or equal to end_date',
+      })
+    }
+
+    const statusValidation = validateCustomReportStatus(
+      reportType,
+      req.query.status
+    )
+
+    if (!statusValidation.valid) {
+      return res
+        .status(statusValidation.status)
+        .json({ error: statusValidation.error })
+    }
+
+    const selectedStatus = statusValidation.status
+    let selectedClinic = null
+
+    if (shouldFilterClinic) {
+      const { data: clinic, error: clinicError } = await supabase
+        .from('clinics')
+        .select('id, name')
+        .eq('id', clinicId)
+        .maybeSingle()
+
+      if (clinicError) throw clinicError
+      if (!clinic) return res.status(404).json({ error: 'Clinic not found' })
+
+      selectedClinic = clinic
+    }
+
+    let reportQuery
+
+    if (reportType === 'appointments') {
+      const shouldFilterDate = Boolean(startDate || endDate)
+      const slotSelect = shouldFilterDate
+        ? 'slots!inner(id, slot_datetime)'
+        : 'slots(id, slot_datetime)'
+
+      reportQuery = supabase
+        .from('appointments')
+        .select(
+          `id, patient_id, clinic_id, slot_id, appointment_date, appointment_time, status, service, ${slotSelect}, clinics(id, name)`
+        )
+
+      if (shouldFilterClinic) {
+        reportQuery = reportQuery.eq('clinic_id', clinicId)
+      }
+
+      if (startDate) {
+        reportQuery = reportQuery.gte(
+          'slots.slot_datetime',
+          `${startDate}T00:00:00.000Z`
+        )
+      }
+
+      if (endDate) {
+        reportQuery = reportQuery.lte(
+          'slots.slot_datetime',
+          `${endDate}T23:59:59.999Z`
+        )
+      }
+    } else {
+      reportQuery = supabase
+        .from('queue_entries')
+        .select(
+          'id, clinic_id, patient_id, position, status, joined_at, called_at, completed_at, clinics(id, name)'
+        )
+        .order('joined_at', { ascending: true })
+
+      if (shouldFilterClinic) {
+        reportQuery = reportQuery.eq('clinic_id', clinicId)
+      }
+
+      if (startDate) {
+        reportQuery = reportQuery.gte('joined_at', `${startDate}T00:00:00.000Z`)
+      }
+
+      if (endDate) {
+        reportQuery = reportQuery.lte('joined_at', `${endDate}T23:59:59.999Z`)
+      }
+    }
+
+    if (selectedStatus) {
+      reportQuery = reportQuery.eq('status', selectedStatus)
+    }
+
+    const { data: records, error: reportError } = await reportQuery
+
+    if (reportError) throw reportError
+
+    const customRecords = await buildCustomReportRecords({
+      reportType,
+      records: records || [],
+      selectedClinic,
+    })
+
+    return res.json({
+      report_type: reportType,
+      filters: {
+        clinic_id: selectedClinic ? selectedClinic.id : null,
+        clinic_name: selectedClinic?.name || 'All clinics',
+        start_date: startDate,
+        end_date: endDate,
+        date_range_label: buildDateRangeLabel(startDate, endDate),
+        status: selectedStatus,
+        status_label: selectedStatus || 'All statuses',
+      },
+      total_records: customRecords.length,
+      records: customRecords,
+    })
+  } catch (err) {
+    console.error('Failed to fetch custom report:', err)
+    return res.status(500).json({
+      error: 'Failed to fetch custom report',
     })
   }
 })
