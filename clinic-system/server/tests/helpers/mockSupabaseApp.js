@@ -172,14 +172,18 @@ function setupMockApp({ mockQueueNotificationService = true } = {}) {
     sendAppointmentConfirmationEmail: jest.fn(() =>
       Promise.resolve({ sent: true })
     ),
+    sendAppointmentCancellationEmail: jest.fn(() =>
+      Promise.resolve({ sent: true })
+    ),
   }))
 
   app = require('../../src/app')
 
-  const sendAppointmentConfirmationEmail =
-    require('../../src/emailService').sendAppointmentConfirmationEmail
+  const {sendAppointmentConfirmationEmail, sendAppointmentCancellationEmail} =
+    require('../../src/emailService')
 
   sendAppointmentConfirmationEmail.mockClear()
+  sendAppointmentCancellationEmail.mockClear()
 
   return {
     app,
@@ -187,6 +191,7 @@ function setupMockApp({ mockQueueNotificationService = true } = {}) {
     scenario,
     createdBuilders,
     sendAppointmentConfirmationEmail,
+    sendAppointmentCancellationEmail,
   }
 }
 
