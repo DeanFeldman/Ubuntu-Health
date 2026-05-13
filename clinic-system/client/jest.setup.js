@@ -1,3 +1,1 @@
-beforeAll(() => {
-  jest.spyOn(console, 'error').mockImplementation(() => {})
-})
+import '@testing-library/jest-dom'
