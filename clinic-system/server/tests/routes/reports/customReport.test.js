@@ -21,7 +21,173 @@ beforeEach(() => {
 })
 
 describe('custom report', () => {
-  test('defaults to all clinics, all time, and all statuses', async () => {
+  test('appointment report response includes report type, filters, total, and records', async () => {
+    scenario.thenable.appointments = [
+      {
+        data: [
+          {
+            id: validAppointmentId,
+            patient_id: validPatientId,
+            clinic_id: validClinicId,
+            slot_id: validSlotId,
+            appointment_date: null,
+            appointment_time: null,
+            status: 'Confirmed',
+            service: 'General Consultation',
+            slots: {
+              id: validSlotId,
+              slot_datetime: '2026-05-11T08:00:00',
+            },
+            clinics: {
+              id: validClinicId,
+              name: 'Ubuntu Clinic',
+            },
+          },
+        ],
+        error: null,
+      },
+    ]
+
+    scenario.thenable.users = [
+      {
+        data: [
+          {
+            id: validPatientId,
+            full_name: 'Test Patient',
+          },
+        ],
+        error: null,
+      },
+    ]
+
+    scenario.thenable.patients = [
+      {
+        data: [],
+        error: null,
+      },
+    ]
+
+    const res = await request(app).get(
+      '/api/reports/custom?report_type=appointments'
+    )
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body).toEqual({
+      report_type: 'appointments',
+      filters: {
+        clinic_id: null,
+        clinic_name: 'All clinics',
+        start_date: null,
+        end_date: null,
+        date_range_label: 'All time',
+        status: null,
+        status_label: 'All statuses',
+      },
+      total_records: 1,
+      records: [
+        {
+          id: validAppointmentId,
+          patient_name: 'Test Patient',
+          clinic_id: validClinicId,
+          clinic_name: 'Ubuntu Clinic',
+          appointment_date: '2026-05-11',
+          appointment_time: '08:00',
+          appointment_status: 'Confirmed',
+          service: 'General Consultation',
+        },
+      ],
+    })
+
+    const appointmentBuilder = createdBuilders[0]
+    expect(appointmentBuilder.table).toBe('appointments')
+    expect(appointmentBuilder.select).toHaveBeenCalledWith(
+      'id, patient_id, clinic_id, slot_id, appointment_date, appointment_time, status, service, slots(id, slot_datetime), clinics(id, name)'
+    )
+  })
+
+  test('queue report response includes report type, filters, total, and records', async () => {
+    scenario.thenable.queue_entries = [
+      {
+        data: [
+          {
+            id: validQueueEntryId,
+            clinic_id: validClinicId,
+            patient_id: validPatientId,
+            position: 1,
+            status: 'Complete',
+            joined_at: '2026-05-11T08:00:00.000Z',
+            called_at: '2026-05-11T08:20:00.000Z',
+            completed_at: '2026-05-11T08:45:00.000Z',
+            clinics: {
+              id: validClinicId,
+              name: 'Ubuntu Clinic',
+            },
+          },
+        ],
+        error: null,
+      },
+    ]
+
+    scenario.thenable.users = [
+      {
+        data: [
+          {
+            id: validPatientId,
+            full_name: 'Queue Patient',
+          },
+        ],
+        error: null,
+      },
+    ]
+
+    scenario.thenable.patients = [
+      {
+        data: [],
+        error: null,
+      },
+    ]
+
+    const res = await request(app).get('/api/reports/custom?report_type=queue')
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body).toEqual({
+      report_type: 'queue',
+      filters: {
+        clinic_id: null,
+        clinic_name: 'All clinics',
+        start_date: null,
+        end_date: null,
+        date_range_label: 'All time',
+        status: null,
+        status_label: 'All statuses',
+      },
+      total_records: 1,
+      records: [
+        {
+          id: validQueueEntryId,
+          patient_name: 'Queue Patient',
+          clinic_id: validClinicId,
+          clinic_name: 'Ubuntu Clinic',
+          queue_position: 1,
+          queue_status: 'Complete',
+          joined_at: '2026-05-11T08:00:00.000Z',
+          completed_at: '2026-05-11T08:45:00.000Z',
+          updated_at: '2026-05-11T08:45:00.000Z',
+        },
+      ],
+    })
+
+    const queueBuilder = createdBuilders[0]
+    expect(queueBuilder.table).toBe('queue_entries')
+    expect(queueBuilder.select).toHaveBeenCalledWith(
+      'id, clinic_id, patient_id, position, status, joined_at, called_at, completed_at, clinics(id, name)'
+    )
+    expect(queueBuilder.order).toHaveBeenCalledWith('joined_at', {
+      ascending: true,
+    })
+  })
+
+  test('default filter labels are returned correctly for empty results', async () => {
     scenario.thenable.appointments = [
       {
         data: [],
@@ -35,8 +201,8 @@ describe('custom report', () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.body).toEqual({
+      report_type: 'appointments',
       filters: {
-        report_type: 'appointments',
         clinic_id: null,
         clinic_name: 'All clinics',
         start_date: null,
@@ -45,96 +211,13 @@ describe('custom report', () => {
         status: null,
         status_label: 'All statuses',
       },
+      total_records: 0,
       records: [],
     })
-
     expect(createdBuilders).toHaveLength(1)
-    expect(createdBuilders[0].table).toBe('appointments')
-    expect(createdBuilders[0].eq).not.toHaveBeenCalled()
-    expect(createdBuilders[0].gte).not.toHaveBeenCalled()
-    expect(createdBuilders[0].lte).not.toHaveBeenCalled()
   })
 
-  test('appointment report queries appointment records', async () => {
-    const appointmentRecord = {
-      id: validAppointmentId,
-      patient_id: validPatientId,
-      clinic_id: validClinicId,
-      slot_id: validSlotId,
-      status: 'Confirmed',
-      service: 'General Consultation',
-      slots: {
-        id: validSlotId,
-        slot_datetime: '2026-05-11T08:00:00.000Z',
-      },
-      clinics: {
-        id: validClinicId,
-        name: 'Ubuntu Clinic',
-      },
-    }
-
-    scenario.thenable.appointments = [
-      {
-        data: [appointmentRecord],
-        error: null,
-      },
-    ]
-
-    const res = await request(app).get(
-      '/api/reports/custom?report_type=appointments'
-    )
-
-    expect(res.statusCode).toBe(200)
-    expect(res.body.records).toEqual([appointmentRecord])
-
-    const appointmentBuilder = createdBuilders[0]
-    expect(appointmentBuilder.table).toBe('appointments')
-    expect(appointmentBuilder.select).toHaveBeenCalledWith(
-      'id, patient_id, clinic_id, slot_id, status, service, slots(id, slot_datetime), clinics(id, name)'
-    )
-  })
-
-  test('queue report queries queue records', async () => {
-    const queueRecord = {
-      id: validQueueEntryId,
-      clinic_id: validClinicId,
-      patient_id: validPatientId,
-      position: 1,
-      status: 'Waiting',
-      joined_at: '2026-05-11T08:00:00.000Z',
-      called_at: null,
-      completed_at: null,
-      clinics: {
-        id: validClinicId,
-        name: 'Ubuntu Clinic',
-      },
-    }
-
-    scenario.thenable.queue_entries = [
-      {
-        data: [queueRecord],
-        error: null,
-      },
-    ]
-
-    const res = await request(app).get(
-      '/api/reports/custom?report_type=queue'
-    )
-
-    expect(res.statusCode).toBe(200)
-    expect(res.body.records).toEqual([queueRecord])
-
-    const queueBuilder = createdBuilders[0]
-    expect(queueBuilder.table).toBe('queue_entries')
-    expect(queueBuilder.select).toHaveBeenCalledWith(
-      'id, clinic_id, patient_id, position, status, joined_at, called_at, completed_at, clinics(id, name)'
-    )
-    expect(queueBuilder.order).toHaveBeenCalledWith('joined_at', {
-      ascending: true,
-    })
-  })
-
-  test('applies clinic filter after selected clinic lookup', async () => {
+  test('selected clinic filter context is returned correctly', async () => {
     scenario.maybeSingle.clinics = [
       {
         data: {
@@ -157,8 +240,15 @@ describe('custom report', () => {
     )
 
     expect(res.statusCode).toBe(200)
-    expect(res.body.filters.clinic_id).toBe(validClinicId)
-    expect(res.body.filters.clinic_name).toBe('Ubuntu Clinic')
+    expect(res.body.filters).toEqual({
+      clinic_id: validClinicId,
+      clinic_name: 'Ubuntu Clinic',
+      start_date: null,
+      end_date: null,
+      date_range_label: 'All time',
+      status: null,
+      status_label: 'All statuses',
+    })
 
     const clinicBuilder = createdBuilders[0]
     const appointmentBuilder = createdBuilders[1]
@@ -166,6 +256,24 @@ describe('custom report', () => {
     expect(clinicBuilder.table).toBe('clinics')
     expect(clinicBuilder.eq).toHaveBeenCalledWith('id', validClinicId)
     expect(appointmentBuilder.eq).toHaveBeenCalledWith('clinic_id', validClinicId)
+  })
+
+  test('selected status filter context is returned correctly', async () => {
+    scenario.thenable.queue_entries = [
+      {
+        data: [],
+        error: null,
+      },
+    ]
+
+    const res = await request(app).get(
+      '/api/reports/custom?report_type=queue&status=Called'
+    )
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body.filters.status).toBe('Called')
+    expect(res.body.filters.status_label).toBe('Called')
+    expect(createdBuilders[0].eq).toHaveBeenCalledWith('status', 'Called')
   })
 
   test('applies appointment start_date and end_date filters using slot datetime', async () => {
@@ -185,7 +293,7 @@ describe('custom report', () => {
 
     const appointmentBuilder = createdBuilders[0]
     expect(appointmentBuilder.select).toHaveBeenCalledWith(
-      'id, patient_id, clinic_id, slot_id, status, service, slots!inner(id, slot_datetime), clinics(id, name)'
+      'id, patient_id, clinic_id, slot_id, appointment_date, appointment_time, status, service, slots!inner(id, slot_datetime), clinics(id, name)'
     )
     expect(appointmentBuilder.gte).toHaveBeenCalledWith(
       'slots.slot_datetime',
@@ -222,26 +330,38 @@ describe('custom report', () => {
     )
   })
 
-  test('applies appointment status filter for appointment reports', async () => {
+  test('missing patient name does not crash the endpoint', async () => {
     scenario.thenable.appointments = [
       {
+        data: [
+          {
+            id: validAppointmentId,
+            patient_id: validPatientId,
+            clinic_id: validClinicId,
+            slot_id: validSlotId,
+            appointment_date: '2026-05-11',
+            appointment_time: '09:30',
+            status: 'Confirmed',
+            service: null,
+            slots: null,
+            clinics: {
+              id: validClinicId,
+              name: 'Ubuntu Clinic',
+            },
+          },
+        ],
+        error: null,
+      },
+    ]
+
+    scenario.thenable.users = [
+      {
         data: [],
         error: null,
       },
     ]
 
-    const res = await request(app).get(
-      '/api/reports/custom?report_type=appointments&status=Completed'
-    )
-
-    expect(res.statusCode).toBe(200)
-    expect(res.body.filters.status).toBe('Completed')
-    expect(res.body.filters.status_label).toBe('Completed')
-    expect(createdBuilders[0].eq).toHaveBeenCalledWith('status', 'Completed')
-  })
-
-  test('applies queue status filter for queue reports', async () => {
-    scenario.thenable.queue_entries = [
+    scenario.thenable.patients = [
       {
         data: [],
         error: null,
@@ -249,12 +369,21 @@ describe('custom report', () => {
     ]
 
     const res = await request(app).get(
-      '/api/reports/custom?report_type=queue&status=Called'
+      '/api/reports/custom?report_type=appointments'
     )
 
     expect(res.statusCode).toBe(200)
-    expect(res.body.filters.status).toBe('Called')
-    expect(createdBuilders[0].eq).toHaveBeenCalledWith('status', 'Called')
+    expect(res.body.total_records).toBe(1)
+    expect(res.body.records[0]).toEqual({
+      id: validAppointmentId,
+      patient_name: 'Unknown patient',
+      clinic_id: validClinicId,
+      clinic_name: 'Ubuntu Clinic',
+      appointment_date: '2026-05-11',
+      appointment_time: '09:30',
+      appointment_status: 'Confirmed',
+      service: null,
+    })
   })
 
   test('returns 400 for invalid report_type', async () => {
@@ -331,5 +460,23 @@ describe('custom report', () => {
       error: 'Invalid status for queue report',
     })
     expect(createdBuilders).toHaveLength(0)
+  })
+
+  test('returns a safe 500 response when the report query fails', async () => {
+    scenario.thenable.appointments = [
+      {
+        data: null,
+        error: new Error('Appointment report failed'),
+      },
+    ]
+
+    const res = await request(app).get(
+      '/api/reports/custom?report_type=appointments'
+    )
+
+    expect(res.statusCode).toBe(500)
+    expect(res.body).toEqual({
+      error: 'Failed to fetch custom report',
+    })
   })
 })

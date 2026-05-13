@@ -470,6 +470,137 @@ function buildAverageWaitTimeReport({
   }
 }
 
+function getRelatedObject(value) {
+  if (Array.isArray(value)) return value[0] || null
+  return value || null
+}
+
+function getRecordClinicName(record, selectedClinic = null) {
+  const clinic = getRelatedObject(record?.clinics || record?.clinic)
+
+  if (clinic?.name) return clinic.name
+  if (selectedClinic && record?.clinic_id === selectedClinic.id) {
+    return selectedClinic.name
+  }
+
+  return 'Unknown clinic'
+}
+
+function getRecordPatientName(record, patientNamesById = {}) {
+  return patientNamesById[record?.patient_id] || 'Unknown patient'
+}
+
+function getAppointmentSlotDatetime(appointment) {
+  const slot = getRelatedObject(appointment?.slots || appointment?.slot)
+  return slot?.slot_datetime || appointment?.slot_datetime || null
+}
+
+function buildCustomAppointmentRecord({
+  appointment,
+  patientNamesById,
+  selectedClinic,
+}) {
+  const slotDatetime = getAppointmentSlotDatetime(appointment)
+
+  return {
+    id: appointment.id,
+    patient_name: getRecordPatientName(appointment, patientNamesById),
+    clinic_id: appointment.clinic_id || null,
+    clinic_name: getRecordClinicName(appointment, selectedClinic),
+    appointment_date: slotDatetime
+      ? slotDatetime.slice(0, 10)
+      : appointment.appointment_date || null,
+    appointment_time: slotDatetime
+      ? getTimeFromAppointmentDatetime(slotDatetime)
+      : appointment.appointment_time || null,
+    appointment_status: appointment.status || null,
+    service: appointment.service || null,
+  }
+}
+
+function buildCustomQueueRecord({
+  entry,
+  patientNamesById,
+  selectedClinic,
+}) {
+  return {
+    id: entry.id,
+    patient_name: getRecordPatientName(entry, patientNamesById),
+    clinic_id: entry.clinic_id || null,
+    clinic_name: getRecordClinicName(entry, selectedClinic),
+    queue_position: entry.position ?? null,
+    queue_status: entry.status || null,
+    joined_at: entry.joined_at || null,
+    completed_at: entry.completed_at || null,
+    updated_at: entry.completed_at || entry.called_at || null,
+  }
+}
+
+async function fetchPatientNamesById(patientIds = []) {
+  const uniquePatientIds = [...new Set(patientIds.filter(Boolean))]
+
+  if (uniquePatientIds.length === 0) return {}
+
+  const { data: users, error: usersError } = await supabase
+    .from('users')
+    .select('id, full_name')
+    .in('id', uniquePatientIds)
+
+  if (usersError) throw usersError
+
+  const { data: patients, error: patientsError } = await supabase
+    .from('patients')
+    .select('id, full_name')
+    .in('id', uniquePatientIds)
+
+  if (patientsError) throw patientsError
+
+  const patientNamesById = {}
+
+  for (const patient of patients || []) {
+    if (patient?.id && patient.full_name) {
+      patientNamesById[patient.id] = patient.full_name
+    }
+  }
+
+  for (const user of users || []) {
+    if (user?.id && user.full_name) {
+      patientNamesById[user.id] = user.full_name
+    }
+  }
+
+  return patientNamesById
+}
+
+async function buildCustomReportRecords({
+  reportType,
+  records,
+  selectedClinic,
+}) {
+  const safeRecords = Array.isArray(records) ? records : []
+  const patientNamesById = await fetchPatientNamesById(
+    safeRecords.map((record) => record.patient_id)
+  )
+
+  if (reportType === 'appointments') {
+    return safeRecords.map((appointment) =>
+      buildCustomAppointmentRecord({
+        appointment,
+        patientNamesById,
+        selectedClinic,
+      })
+    )
+  }
+
+  return safeRecords.map((entry) =>
+    buildCustomQueueRecord({
+      entry,
+      patientNamesById,
+      selectedClinic,
+    })
+  )
+}
+
 async function fetchWaitingQueuePosition(clinicId, patientId) {
   const { data, error } = await supabase
     .from('queue_entries')
@@ -1015,7 +1146,7 @@ app.get('/api/reports/custom', async (req, res) => {
       reportQuery = supabase
         .from('appointments')
         .select(
-          `id, patient_id, clinic_id, slot_id, status, service, ${slotSelect}, clinics(id, name)`
+          `id, patient_id, clinic_id, slot_id, appointment_date, appointment_time, status, service, ${slotSelect}, clinics(id, name)`
         )
 
       if (shouldFilterClinic) {
@@ -1064,9 +1195,15 @@ app.get('/api/reports/custom', async (req, res) => {
 
     if (reportError) throw reportError
 
+    const customRecords = await buildCustomReportRecords({
+      reportType,
+      records: records || [],
+      selectedClinic,
+    })
+
     return res.json({
+      report_type: reportType,
       filters: {
-        report_type: reportType,
         clinic_id: selectedClinic ? selectedClinic.id : null,
         clinic_name: selectedClinic?.name || 'All clinics',
         start_date: startDate,
@@ -1075,7 +1212,8 @@ app.get('/api/reports/custom', async (req, res) => {
         status: selectedStatus,
         status_label: selectedStatus || 'All statuses',
       },
-      records: records || [],
+      total_records: customRecords.length,
+      records: customRecords,
     })
   } catch (err) {
     console.error('Failed to fetch custom report:', err)
