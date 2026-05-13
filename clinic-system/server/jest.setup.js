@@ -1,3 +1,1 @@
-beforeAll(() => {
-  jest.spyOn(console, 'error').mockImplementation(() => {})
-})
+process.env.DOTENV_CONFIG_QUIET = 'true'
