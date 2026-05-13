@@ -14,8 +14,41 @@ jest.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }))
 
-function mockFetch({ clinics = [], error = false } = {}) {
-  global.fetch = jest.fn(() => {
+function mockFetch({
+  clinics = [],
+  error = false,
+  predictions = {},
+  predictionError = false,
+} = {}) {
+  global.fetch = jest.fn((url) => {
+    const urlText = String(url)
+
+    if (urlText.includes('/api/clinics/') && urlText.includes('/predicted-wait-time')) {
+      if (predictionError) {
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          json: async () => ({}),
+        })
+      }
+
+      const clinicId = urlText.split('/api/clinics/')[1].split('/predicted-wait-time')[0]
+      const prediction = predictions[clinicId]
+
+      if (!prediction) {
+        return Promise.resolve({
+          ok: false,
+          status: 404,
+          json: async () => ({}),
+        })
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: async () => prediction,
+      })
+    }
+
     if (error) {
       return Promise.resolve({
         ok: false,
@@ -365,4 +398,71 @@ expect(mockNavigate).toHaveBeenCalledWith('/booking', {
 
     expect(await screen.findByText(/Failed to load clinics/i)).toBeInTheDocument()
   })
+  test('displays predicted wait time on clinic card when prediction is available', async () => {
+  mockFetch({
+    clinics: [baseClinic],
+    predictions: {
+      'clinic-1': {
+        predictedWaitTime: 18,
+        predictionMessage: null,
+        predictionBasedOnRows: 5,
+      },
+    },
+  })
+
+  render(<PatientDashboard />)
+
+  expect(await screen.findByText('Test Clinic')).toBeInTheDocument()
+  expect(await screen.findByText('Predicted wait: 18 min')).toBeInTheDocument()
+
+  expect(fetch).toHaveBeenCalledWith(
+    expect.stringContaining('/api/clinics/clinic-1/predicted-wait-time')
+  )
+})
+
+test('shows predicted wait unavailable when prediction request fails', async () => {
+  mockFetch({
+    clinics: [baseClinic],
+    predictionError: true,
+  })
+
+  render(<PatientDashboard />)
+
+  expect(await screen.findByText('Test Clinic')).toBeInTheDocument()
+  expect(await screen.findByText('Predicted wait unavailable')).toBeInTheDocument()
+})
+
+test('loads predictions for multiple visible clinic cards', async () => {
+  mockFetch({
+    clinics: [
+      baseClinic,
+      {
+        ...baseClinic,
+        id: 'clinic-2',
+        name: 'Second Clinic',
+        municipality: 'Bellville',
+      },
+    ],
+    predictions: {
+      'clinic-1': {
+        predictedWaitTime: 12,
+        predictionMessage: null,
+        predictionBasedOnRows: 4,
+      },
+      'clinic-2': {
+        predictedWaitTime: 25,
+        predictionMessage: null,
+        predictionBasedOnRows: 7,
+      },
+    },
+  })
+
+  render(<PatientDashboard />)
+
+  expect(await screen.findByText('Test Clinic')).toBeInTheDocument()
+  expect(await screen.findByText('Second Clinic')).toBeInTheDocument()
+
+  expect(await screen.findByText('Predicted wait: 12 min')).toBeInTheDocument()
+  expect(await screen.findByText('Predicted wait: 25 min')).toBeInTheDocument()
+})
 })
