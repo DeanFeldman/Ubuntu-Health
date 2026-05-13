@@ -499,6 +499,11 @@ function getTimeFromAppointmentDatetime(slotDatetime) {
     return slotDatetime
   }
 
+  // If stored without timezone indicator, it's already SAST — extract directly
+  if (typeof slotDatetime === 'string' && slotDatetime.includes('T') && !slotDatetime.endsWith('Z') && !slotDatetime.includes('+')) {
+    return slotDatetime.split('T')[1].slice(0, 5)
+  }
+
   const parsedDate = new Date(slotDatetime)
   if (Number.isNaN(parsedDate.getTime())) return null
 
