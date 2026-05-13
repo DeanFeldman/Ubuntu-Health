@@ -50,7 +50,9 @@ function makeBuilder(table) {
     ilike: jest.fn(function () {
       return this
     }),
-
+    not: jest.fn(function () {
+      return this
+    }),
     order: jest.fn(function () {
       return this
     }),
