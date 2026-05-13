@@ -713,6 +713,113 @@ function exportNoShowPdf(report) {
   win.print()
 }
 
+// This function formats a raw minutes value into a human-readable string (e.g. "1h 23m" or "45m").
+function formatWaitMinutes(minutes) {
+  if (minutes === null || minutes === undefined) return 'N/A'
+  const mins = Math.round(minutes)
+  if (mins < 60) return `${mins}m`
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return m > 0 ? `${h}h ${m}m` : `${h}h`
+}
+
+// This function builds the query string for the average wait time API call based on the selected filters.
+function buildWaitTimeReportUrl(apiBase, clinicId, startDate, endDate) {
+  const params = new URLSearchParams()
+  if (clinicId) params.set('clinic_id', clinicId)
+  if (startDate) params.set('start_date', startDate)
+  if (endDate) params.set('end_date', endDate)
+  const qs = params.toString()
+  return `${apiBase}/api/reports/average-wait-time${qs ? `?${qs}` : ''}`
+}
+
+// This function generates and triggers a CSV download from the average wait time report data.
+function exportWaitTimeCsv(report) {
+  const { filters, summary, by_clinic, by_time_of_day } = report
+  const rows = [
+    ['Average Wait Time Report'],
+    ['Clinic', filters.clinic_name || 'All clinics'],
+    ['Date range', filters.date_range_label || 'All time'],
+    [],
+    ['Summary'],
+    ['Overall average wait time', formatWaitMinutes(summary.overall_average_wait_time_minutes)],
+    ['Queue records used', summary.queue_records_used ?? ''],
+    [],
+    ['By clinic'],
+    ['Clinic', 'Average wait time', 'Queue records used'],
+    ...(by_clinic || []).map((c) => [c.clinic_name, formatWaitMinutes(c.average_wait_time_minutes), c.queue_records_used]),
+    [],
+    ['By time of day'],
+    ['Time of day', 'Average wait time', 'Queue records used'],
+    ...(by_time_of_day || []).map((t) => [t.time_of_day, formatWaitMinutes(t.average_wait_time_minutes), t.queue_records_used]),
+  ]
+  const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'average-wait-time-report.csv'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+// This function generates and triggers a PDF-style download from the average wait time report data using the browser print dialog.
+function exportWaitTimePdf(report) {
+  const { filters, summary, by_clinic, by_time_of_day } = report
+  const clinicLabel = filters.clinic_name || 'All clinics'
+  const dateLabel = filters.date_range_label || 'All time'
+
+  const clinicRows = (by_clinic || [])
+    .map((c) => `<tr><td>${c.clinic_name}</td><td>${formatWaitMinutes(c.average_wait_time_minutes)}</td><td>${c.queue_records_used}</td></tr>`)
+    .join('')
+
+  const timeRows = (by_time_of_day || [])
+    .map((t) => `<tr><td>${t.time_of_day}</td><td>${formatWaitMinutes(t.average_wait_time_minutes)}</td><td>${t.queue_records_used}</td></tr>`)
+    .join('')
+
+  const html = `
+    <html>
+      <head>
+        <title>Average Wait Time Report</title>
+        <style>
+          body { font-family: sans-serif; padding: 40px; color: #111; }
+          h1 { font-size: 1.4rem; margin-bottom: 4px; }
+          h2 { font-size: 1rem; margin: 24px 0 8px; }
+          .meta { color: #666; font-size: 0.9rem; margin-bottom: 24px; }
+          table { border-collapse: collapse; width: 100%; max-width: 560px; margin-bottom: 24px; }
+          th, td { border: 1px solid #ddd; padding: 10px 14px; text-align: left; font-size: 0.9rem; }
+          th { background: #f5f5f5; font-weight: 700; }
+        </style>
+      </head>
+      <body>
+        <h1>Average Wait Time Report</h1>
+        <p class="meta">Clinic: ${clinicLabel} &nbsp;|&nbsp; Date range: ${dateLabel}</p>
+        <h2>Summary</h2>
+        <table>
+          <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+          <tbody>
+            <tr><td>Overall average wait time</td><td>${formatWaitMinutes(summary.overall_average_wait_time_minutes)}</td></tr>
+            <tr><td>Queue records used</td><td>${summary.queue_records_used ?? ''}</td></tr>
+          </tbody>
+        </table>
+        <h2>By clinic</h2>
+        <table>
+          <thead><tr><th>Clinic</th><th>Average wait time</th><th>Records used</th></tr></thead>
+          <tbody>${clinicRows}</tbody>
+        </table>
+        <h2>By time of day</h2>
+        <table>
+          <thead><tr><th>Time of day</th><th>Average wait time</th><th>Records used</th></tr></thead>
+          <tbody>${timeRows}</tbody>
+        </table>
+      </body>
+    </html>`
+  const win2 = window.open('', '_blank')
+  win2.document.write(html)
+  win2.document.close()
+  win2.print()
+}
+
 
 export default function AdminDashboard() {
   // Get the current user from the authentication context and the API base URL from our config helper
@@ -750,6 +857,14 @@ export default function AdminDashboard() {
   const [loadingNoShow, setLoadingNoShow] = useState(false)
   const [noShowError, setNoShowError] = useState('')
 
+  // Average wait time report state
+  const [waitTimeClinicId, setWaitTimeClinicId] = useState('')
+  const [waitTimeStartDate, setWaitTimeStartDate] = useState('')
+  const [waitTimeEndDate, setWaitTimeEndDate] = useState('')
+  const [waitTimeReport, setWaitTimeReport] = useState(null)
+  const [loadingWaitTime, setLoadingWaitTime] = useState(false)
+  const [waitTimeError, setWaitTimeError] = useState('')
+
   const selectedClinicStaff = staffUsers.filter((staffUser) => staffUser.clinic_id === selectedClinicId)
   const unassignedStaffUsers = staffUsers.filter((staffUser) => !staffUser.clinic_id)
 
@@ -781,6 +896,35 @@ export default function AdminDashboard() {
 
     fetchNoShowReport()
   }, [activeSection, API_BASE_URL, noShowClinicId, noShowStartDate, noShowEndDate])
+
+  // This effect fetches the average wait time report whenever the analytics section is active and filters change.
+  useEffect(() => {
+    if (activeSection !== 'analytics') return
+
+    async function fetchWaitTimeReport() {
+      try {
+        setLoadingWaitTime(true)
+        setWaitTimeError('')
+
+        const url = buildWaitTimeReportUrl(API_BASE_URL, waitTimeClinicId, waitTimeStartDate, waitTimeEndDate)
+        const response = await fetch(url, { headers: { Accept: 'application/json' } })
+        const body = await readApiResponse(response)
+
+        if (!response.ok) {
+          throw new Error(body.error || 'Failed to load average wait time report')
+        }
+
+        setWaitTimeReport(body)
+      } catch (err) {
+        setWaitTimeError(err.message || 'Failed to load average wait time report')
+        setWaitTimeReport(null)
+      } finally {
+        setLoadingWaitTime(false)
+      }
+    }
+
+    fetchWaitTimeReport()
+  }, [activeSection, API_BASE_URL, waitTimeClinicId, waitTimeStartDate, waitTimeEndDate])
 
   // This effect runs when the component mounts and whenever the user's ID changes.
   useEffect(() => {
@@ -1464,6 +1608,170 @@ export default function AdminDashboard() {
                       <p>Percentage of no-shows.</p>
                     </article>
                   </section>
+                </section>
+              )}
+            </section>
+
+            {/* Average wait time report panel */}
+            <section className="admin-panel" aria-labelledby="wait-time-heading">
+              <header className="admin-panel-header">
+                <section>
+                  <h2 id="wait-time-heading">Average wait time report</h2>
+                  <p className="admin-section-intro">
+                    Review patient queue wait times across clinics and date ranges.
+                  </p>
+                </section>
+
+                {waitTimeReport && (
+                  <section style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn-secondary"
+                      onClick={() => exportWaitTimeCsv(waitTimeReport)}
+                    >
+                      Export CSV
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn-secondary"
+                      onClick={() => exportWaitTimePdf(waitTimeReport)}
+                    >
+                      Export PDF
+                    </button>
+                  </section>
+                )}
+              </header>
+
+              {/* Filters */}
+              <section className="admin-message" style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end' }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '180px' }}>
+                  Clinic
+                  <select
+                    value={waitTimeClinicId}
+                    onChange={(e) => setWaitTimeClinicId(e.target.value)}
+                  >
+                    <option value="">All clinics</option>
+                    {clinics.map((clinic) => (
+                      <option key={clinic.id} value={clinic.id}>{clinic.name}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  Start date
+                  <input
+                    type="date"
+                    value={waitTimeStartDate}
+                    onChange={(e) => setWaitTimeStartDate(e.target.value)}
+                  />
+                </label>
+
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  End date
+                  <input
+                    type="date"
+                    value={waitTimeEndDate}
+                    onChange={(e) => setWaitTimeEndDate(e.target.value)}
+                  />
+                </label>
+              </section>
+
+              {/* Loading state */}
+              {loadingWaitTime && (
+                <p className="admin-message">Loading average wait time report...</p>
+              )}
+
+              {/* Error state */}
+              {!loadingWaitTime && waitTimeError && (
+                <p className="admin-message admin-error" role="alert">{waitTimeError}</p>
+              )}
+
+              {/* Empty state */}
+              {!loadingWaitTime && !waitTimeError && waitTimeReport && waitTimeReport.summary?.queue_records_used === 0 && (
+                <section className="admin-empty">
+                  <strong>No data found.</strong>
+                  <p>No queue records match the selected clinic and date range.</p>
+                </section>
+              )}
+
+              {/* Report results */}
+              {!loadingWaitTime && !waitTimeError && waitTimeReport && waitTimeReport.summary?.queue_records_used > 0 && (
+                <section className="admin-message">
+                  {/* Selected filters summary */}
+                  <section className="admin-selected-banner" style={{ marginTop: 0, marginBottom: '20px' }}>
+                    <section>
+                      <strong>Clinic</strong>
+                      <p>{waitTimeReport.filters?.clinic_name || 'All clinics'}</p>
+                    </section>
+                    <section>
+                      <strong>Date range</strong>
+                      <p>{waitTimeReport.filters?.date_range_label || 'All time'}</p>
+                    </section>
+                  </section>
+
+                  {/* Summary stats */}
+                  <section className="admin-overview" style={{ marginBottom: '24px' }}>
+                    <article className="admin-overview-card">
+                      <span>Overall average wait time</span>
+                      <strong>{formatWaitMinutes(waitTimeReport.summary.overall_average_wait_time_minutes)}</strong>
+                      <p>Across all selected records.</p>
+                    </article>
+                    <article className="admin-overview-card">
+                      <span>Queue records used</span>
+                      <strong>{waitTimeReport.summary.queue_records_used}</strong>
+                      <p>Records included in this calculation.</p>
+                    </article>
+                  </section>
+
+                  {/* By clinic table */}
+                  {waitTimeReport.by_clinic?.length > 0 && (
+                    <section style={{ marginBottom: '24px' }}>
+                      <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '8px' }}>By clinic</h3>
+                      <table className="admin-table">
+                        <thead>
+                          <tr>
+                            <th>Clinic</th>
+                            <th>Average wait time</th>
+                            <th>Records used</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {waitTimeReport.by_clinic.map((c) => (
+                            <tr key={c.clinic_id}>
+                              <td>{c.clinic_name}</td>
+                              <td>{formatWaitMinutes(c.average_wait_time_minutes)}</td>
+                              <td>{c.queue_records_used}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </section>
+                  )}
+
+                  {/* By time of day table */}
+                  {waitTimeReport.by_time_of_day?.length > 0 && (
+                    <section>
+                      <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '8px' }}>By time of day</h3>
+                      <table className="admin-table">
+                        <thead>
+                          <tr>
+                            <th>Time of day</th>
+                            <th>Average wait time</th>
+                            <th>Records used</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {waitTimeReport.by_time_of_day.map((t) => (
+                            <tr key={t.time_of_day}>
+                              <td>{t.time_of_day}</td>
+                              <td>{formatWaitMinutes(t.average_wait_time_minutes)}</td>
+                              <td>{t.queue_records_used}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </section>
+                  )}
                 </section>
               )}
             </section>
