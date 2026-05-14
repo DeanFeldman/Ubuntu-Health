@@ -231,4 +231,132 @@ describe('noShowReportCalculation', () => {
       },
     ])
   })
+  test('handles non-array input safely', () => {
+  const result = calculateNoShowReport(null)
+
+  expect(result).toEqual({
+    summary: {
+      scheduled_appointments: 0,
+      completed_appointments: 0,
+      cancelled_appointments: 0,
+      no_show_appointments: 0,
+      no_show_rate_percent: 0,
+    },
+    by_clinic: [],
+  })
+})
+
+test('trims status values before counting appointments', () => {
+  const result = calculateNoShowReport([
+    appointment({ id: 'trimmed-no-show', status: ' No-show ' }),
+    appointment({ id: 'trimmed-completed', status: ' Completed ' }),
+    appointment({ id: 'blank-status', status: '   ' }),
+  ])
+
+  expect(result.summary).toEqual({
+    scheduled_appointments: 2,
+    completed_appointments: 1,
+    cancelled_appointments: 0,
+    no_show_appointments: 1,
+    no_show_rate_percent: 50,
+  })
+})
+
+test('reads clinic details from appointment.clinic object', () => {
+  const result = calculateNoShowReport([
+    {
+      id: 'clinic-object-appointment',
+      status: 'No-show',
+      clinic: {
+        id: secondClinicId,
+        name: 'Clinic Object Name',
+      },
+    },
+  ])
+
+  expect(result.by_clinic).toEqual([
+    {
+      clinic_id: secondClinicId,
+      clinic_name: 'Clinic Object Name',
+      scheduled_appointments: 1,
+      completed_appointments: 0,
+      cancelled_appointments: 0,
+      no_show_appointments: 1,
+      no_show_rate_percent: 100,
+    },
+  ])
+})
+
+test('uses clinic id from joined clinic object when flat clinic_id is missing', () => {
+  const result = calculateNoShowReport([
+    {
+      id: 'joined-clinic-without-flat-id',
+      status: 'Completed',
+      clinics: {
+        id: secondClinicId,
+        name: 'Hope Clinic',
+      },
+    },
+  ])
+
+  expect(result.by_clinic[0].clinic_id).toBe(secondClinicId)
+  expect(result.by_clinic[0].clinic_name).toBe('Hope Clinic')
+})
+
+  const result = calculateNoShowReport([
+    {
+      id: 'clinic-object-without-flat-id',
+      status: 'Completed',
+      clinic: {
+        id: secondClinicId,
+        name: 'Clinic Object Name',
+      },
+    },
+  ])
+
+  expect(result.by_clinic).toEqual([
+    {
+      clinic_id: secondClinicId,
+      clinic_name: 'Clinic Object Name',
+      scheduled_appointments: 1,
+      completed_appointments: 1,
+      cancelled_appointments: 0,
+      no_show_appointments: 0,
+      no_show_rate_percent: 0,
+    },
+  ])
+  test('uses empty appointment list when no argument is provided', () => {
+  const result = calculateNoShowReport()
+
+  expect(result).toEqual({
+    summary: {
+      scheduled_appointments: 0,
+      completed_appointments: 0,
+      cancelled_appointments: 0,
+      no_show_appointments: 0,
+      no_show_rate_percent: 0,
+    },
+    by_clinic: [],
+  })
+})
+test('sorts safely when clinic name is missing from one grouped row', () => {
+  const result = calculateNoShowReport([
+    {
+      id: 'unknown-clinic',
+      clinic_id: 'clinic-without-name',
+      status: 'No-show',
+    },
+    {
+      id: 'named-clinic',
+      clinic_id: secondClinicId,
+      clinic_name: 'Hope Clinic',
+      status: 'Completed',
+    },
+  ])
+
+  expect(result.by_clinic.map((clinic) => clinic.clinic_name)).toEqual([
+    'Hope Clinic',
+    'Unknown clinic',
+  ])
+})
 })
