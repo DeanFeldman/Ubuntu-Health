@@ -8,7 +8,23 @@ const invalidId = 'invalid-id'
 let app
 let scenario
 let createdBuilders
+let consoleErrorSpy
 
+beforeEach(() => {
+  consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+
+  const mockContext = setupMockApp({
+    mockQueueNotificationService: false,
+  })
+
+  app = mockContext.app
+  scenario = mockContext.scenario
+  createdBuilders = mockContext.createdBuilders
+})
+
+afterEach(() => {
+  consoleErrorSpy.mockRestore()
+})
 beforeEach(() => {
   const mockContext = setupMockApp({
     mockQueueNotificationService: false,
@@ -612,4 +628,155 @@ describe('average wait time report', () => {
       error: 'Failed to fetch average wait time report',
     })
   })
+  test('returns 500 when selected clinic lookup fails', async () => {
+  scenario.maybeSingle.clinics = [
+    {
+      data: null,
+      error: new Error('Clinic lookup failed'),
+    },
+  ]
+
+  const res = await request(app).get(
+    `/api/reports/average-wait-time?clinic_id=${validClinicId}`
+  )
+
+  expect(res.statusCode).toBe(500)
+  expect(res.body).toEqual({
+    error: 'Failed to fetch average wait time report',
+  })
+})
+
+test('returns 500 when all-clinic clinic-name lookup fails', async () => {
+  scenario.thenable.queue_entries = [
+    {
+      data: [
+        {
+          id: 'queue-entry-1',
+          clinic_id: validClinicId,
+          joined_at: '2026-05-11T08:00:00.000Z',
+          called_at: '2026-05-11T08:30:00.000Z',
+        },
+      ],
+      error: null,
+    },
+  ]
+
+  scenario.thenable.clinics = [
+    {
+      data: null,
+      error: new Error('Clinic name lookup failed'),
+    },
+  ]
+
+  const res = await request(app).get('/api/reports/average-wait-time')
+
+  expect(res.statusCode).toBe(500)
+  expect(res.body).toEqual({
+    error: 'Failed to fetch average wait time report',
+  })
+})
+
+test('trims clinic and date query values before applying filters', async () => {
+  scenario.maybeSingle.clinics = [
+    {
+      data: {
+        id: validClinicId,
+        name: 'Ubuntu Clinic',
+      },
+      error: null,
+    },
+  ]
+
+  scenario.thenable.queue_entries = [
+    {
+      data: [
+        {
+          id: 'trimmed-query-entry',
+          clinic_id: validClinicId,
+          joined_at: '2026-05-11T08:00:00.000Z',
+          called_at: '2026-05-11T08:20:00.000Z',
+        },
+      ],
+      error: null,
+    },
+  ]
+
+  const res = await request(app).get(
+    `/api/reports/average-wait-time?clinic_id=%20${validClinicId}%20&start_date=%202026-05-10%20&end_date=%202026-05-11%20`
+  )
+
+  expect(res.statusCode).toBe(200)
+  expect(res.body.filters).toEqual({
+    clinic_id: validClinicId,
+    clinic_name: 'Ubuntu Clinic',
+    start_date: '2026-05-10',
+    end_date: '2026-05-11',
+    date_range_label: '2026-05-10 to 2026-05-11',
+  })
+
+  const clinicLookupBuilder = createdBuilders[0]
+  const queueBuilder = createdBuilders[1]
+
+  expect(clinicLookupBuilder.eq).toHaveBeenCalledWith('id', validClinicId)
+  expect(queueBuilder.eq).toHaveBeenCalledWith('clinic_id', validClinicId)
+  expect(queueBuilder.gte).toHaveBeenCalledWith(
+    'joined_at',
+    '2026-05-10T00:00:00.000Z'
+  )
+  expect(queueBuilder.lte).toHaveBeenCalledWith(
+    'joined_at',
+    '2026-05-11T23:59:59.999Z'
+  )
+})
+
+test('excludes records where called_at is before joined_at', async () => {
+  scenario.thenable.queue_entries = [
+    {
+      data: [
+        {
+          id: 'valid-entry',
+          clinic_id: validClinicId,
+          joined_at: '2026-05-11T08:00:00.000Z',
+          called_at: '2026-05-11T08:30:00.000Z',
+        },
+        {
+          id: 'negative-wait-entry',
+          clinic_id: validClinicId,
+          joined_at: '2026-05-11T09:00:00.000Z',
+          called_at: '2026-05-11T08:45:00.000Z',
+        },
+      ],
+      error: null,
+    },
+  ]
+
+  scenario.thenable.clinics = [
+    {
+      data: [
+        {
+          id: validClinicId,
+          name: 'Ubuntu Clinic',
+        },
+      ],
+      error: null,
+    },
+  ]
+
+  const res = await request(app).get('/api/reports/average-wait-time')
+
+  expect(res.statusCode).toBe(200)
+  expect(res.body.summary).toEqual({
+    overall_average_wait_time_minutes: 30,
+    queue_records_used: 1,
+  })
+
+  expect(res.body.by_clinic).toEqual([
+    {
+      clinic_id: validClinicId,
+      clinic_name: 'Ubuntu Clinic',
+      average_wait_time_minutes: 30,
+      queue_records_used: 1,
+    },
+  ])
+})
 })
