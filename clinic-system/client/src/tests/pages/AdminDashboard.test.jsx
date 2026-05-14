@@ -130,7 +130,52 @@ function makeWaitTimeReport() {
     by_time_of_day: [],
   }
 }
-
+function makePopulatedWaitTimeReport(overrides = {}) {
+  return {
+    filters: {
+      clinic_id: null,
+      clinic_name: 'All clinics',
+      start_date: null,
+      end_date: null,
+      date_range_label: 'All time',
+    },
+    summary: {
+      overall_average_wait_time_minutes: 42,
+      queue_records_used: 5,
+    },
+    by_clinic: [
+      {
+        clinic_id: clinicId,
+        clinic_name: 'Hillbrow Clinic',
+        average_wait_time_minutes: 42,
+        queue_records_used: 5,
+      },
+    ],
+    by_time_of_day: [
+      {
+        time_of_day: 'Morning',
+        average_wait_time_minutes: 30,
+        queue_records_used: 2,
+      },
+      {
+        time_of_day: 'Afternoon',
+        average_wait_time_minutes: 55,
+        queue_records_used: 3,
+      },
+      {
+        time_of_day: 'Evening',
+        average_wait_time_minutes: null,
+        queue_records_used: 0,
+      },
+      {
+        time_of_day: 'Night',
+        average_wait_time_minutes: null,
+        queue_records_used: 0,
+      },
+    ],
+    ...overrides,
+  }
+}
 function mockFetch({
   roleRequests = [],
   roleError = null,
@@ -139,6 +184,7 @@ function mockFetch({
   noShowReport = makeNoShowReport(),
   noShowError = null,
   waitTimeReport = makeWaitTimeReport(),
+  waitTimeError = null,
   clinicsError = null,
   usersError = null,
   approveOk = true,
@@ -169,6 +215,13 @@ function mockFetch({
 }
 
 if (urlString.includes('/api/reports/average-wait-time')) {
+  if (waitTimeError) {
+    return Promise.resolve({
+      ok: false,
+      text: async () => JSON.stringify({ error: waitTimeError }),
+    })
+  }
+
   return Promise.resolve({
     ok: true,
     text: async () => JSON.stringify(waitTimeReport),
@@ -1177,6 +1230,228 @@ describe('AdminDashboard', () => {
     expect(close).toHaveBeenCalled()
     expect(print).toHaveBeenCalled()
   })
+  test('displays returned average wait time report values in analytics section', async () => {
+  mockFetch({
+    waitTimeReport: makePopulatedWaitTimeReport({
+      summary: {
+        overall_average_wait_time_minutes: 75,
+        queue_records_used: 4,
+      },
+      by_clinic: [
+        {
+          clinic_id: clinicId,
+          clinic_name: 'Hillbrow Clinic',
+          average_wait_time_minutes: 75,
+          queue_records_used: 4,
+        },
+      ],
+      by_time_of_day: [
+        {
+          time_of_day: 'Morning',
+          average_wait_time_minutes: 45,
+          queue_records_used: 2,
+        },
+        {
+          time_of_day: 'Afternoon',
+          average_wait_time_minutes: 105,
+          queue_records_used: 2,
+        },
+        {
+          time_of_day: 'Evening',
+          average_wait_time_minutes: null,
+          queue_records_used: 0,
+        },
+        {
+          time_of_day: 'Night',
+          average_wait_time_minutes: null,
+          queue_records_used: 0,
+        },
+      ],
+    }),
+  })
+
+  render(<AdminDashboard />)
+  await openAnalyticsSection()
+
+  expect(
+    await screen.findByRole('heading', { name: /average wait time report/i })
+  ).toBeInTheDocument()
+
+  expect(screen.getAllByText('All clinics').length).toBeGreaterThan(0)
+  expect(screen.getAllByText('All time').length).toBeGreaterThan(0)
+
+  expect(screen.getByText('Overall average wait time')).toBeInTheDocument()
+  expect(screen.getByText('Queue records used')).toBeInTheDocument()
+  expect(screen.getAllByText('1h 15m').length).toBeGreaterThan(0)
+  expect(screen.getAllByText('4').length).toBeGreaterThan(0)
+
+  expect(screen.getByText('By clinic')).toBeInTheDocument()
+  expect(screen.getAllByText('Hillbrow Clinic').length).toBeGreaterThan(0)
+
+  expect(screen.getByText('By time of day')).toBeInTheDocument()
+  expect(screen.getAllByText('Morning').length).toBeGreaterThan(0)
+  expect(screen.getAllByText('Afternoon').length).toBeGreaterThan(0)
+  expect(screen.getAllByText('45m').length).toBeGreaterThan(0)
+  expect(screen.getAllByText('1h 45m').length).toBeGreaterThan(0)
+})
+
+test('fetches average wait time report again when clinic and date filters change', async () => {
+  const user = userEvent.setup()
+
+  mockFetch({
+    waitTimeReport: makePopulatedWaitTimeReport(),
+  })
+
+  render(<AdminDashboard />)
+  await openAnalyticsSection()
+
+  const clinicSelects = await screen.findAllByLabelText('Clinic')
+  const waitTimeClinicSelect = clinicSelects[1]
+
+  const startDateInputs = screen.getAllByLabelText('Start date')
+  const endDateInputs = screen.getAllByLabelText('End date')
+
+  await user.selectOptions(waitTimeClinicSelect, clinicId)
+  await user.type(startDateInputs[1], '2026-05-01')
+  await user.type(endDateInputs[1], '2026-05-11')
+
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining(
+        `/api/reports/average-wait-time?clinic_id=${clinicId}&start_date=2026-05-01&end_date=2026-05-11`
+      ),
+      expect.objectContaining({
+        headers: { Accept: 'application/json' },
+      })
+    )
+  })
+})
+
+test('shows average wait time empty state when no queue records match', async () => {
+  mockFetch({
+    waitTimeReport: makeWaitTimeReport(),
+  })
+
+  render(<AdminDashboard />)
+  await openAnalyticsSection()
+
+  expect(
+    await screen.findByText('No queue records match the selected clinic and date range.')
+  ).toBeInTheDocument()
+})
+
+test('shows average wait time report error when report request fails', async () => {
+  mockFetch({
+    waitTimeError: 'Failed to fetch average wait time report',
+  })
+
+  render(<AdminDashboard />)
+  await openAnalyticsSection()
+
+  expect(
+    await screen.findByText('Failed to fetch average wait time report')
+  ).toBeInTheDocument()
+})
+
+test('exports displayed average wait time report data as CSV', async () => {
+  const user = userEvent.setup()
+  const createObjectURL = jest.fn(() => 'blob:mock-wait-url')
+  const revokeObjectURL = jest.fn()
+  const click = jest.fn()
+
+  global.URL.createObjectURL = createObjectURL
+  global.URL.revokeObjectURL = revokeObjectURL
+
+  jest.spyOn(document, 'createElement').mockImplementation((tagName) => {
+    const element = document.createElementNS('http://www.w3.org/1999/xhtml', tagName)
+
+    if (tagName === 'a') {
+      element.click = click
+    }
+
+    return element
+  })
+
+  mockFetch({
+    waitTimeReport: makePopulatedWaitTimeReport({
+      filters: {
+        clinic_id: clinicId,
+        clinic_name: 'Hillbrow Clinic',
+        start_date: '2026-05-01',
+        end_date: '2026-05-11',
+        date_range_label: '2026-05-01 to 2026-05-11',
+      },
+      summary: {
+        overall_average_wait_time_minutes: 75,
+        queue_records_used: 4,
+      },
+    }),
+  })
+
+  render(<AdminDashboard />)
+  await openAnalyticsSection()
+
+  const csvButtons = await screen.findAllByRole('button', { name: 'Export CSV' })
+  await user.click(csvButtons[1])
+
+  expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob))
+  expect(click).toHaveBeenCalled()
+  expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-wait-url')
+})
+
+test('exports displayed average wait time report data as PDF', async () => {
+  const user = userEvent.setup()
+  const write = jest.fn()
+  const close = jest.fn()
+  const print = jest.fn()
+
+  window.open = jest.fn(() => ({
+    document: {
+      write,
+      close,
+    },
+    print,
+  }))
+
+  mockFetch({
+    waitTimeReport: makePopulatedWaitTimeReport({
+      filters: {
+        clinic_id: clinicId,
+        clinic_name: 'Hillbrow Clinic',
+        start_date: '2026-05-01',
+        end_date: '2026-05-11',
+        date_range_label: '2026-05-01 to 2026-05-11',
+      },
+      summary: {
+        overall_average_wait_time_minutes: 75,
+        queue_records_used: 4,
+      },
+    }),
+  })
+
+  render(<AdminDashboard />)
+  await openAnalyticsSection()
+
+  const pdfButtons = await screen.findAllByRole('button', { name: 'Export PDF' })
+  await user.click(pdfButtons[1])
+
+  expect(window.open).toHaveBeenCalledWith('', '_blank')
+  expect(write).toHaveBeenCalledWith(
+    expect.stringContaining('Average Wait Time Report')
+  )
+  expect(write).toHaveBeenCalledWith(expect.stringContaining('Hillbrow Clinic'))
+  expect(write).toHaveBeenCalledWith(
+    expect.stringContaining('2026-05-01 to 2026-05-11')
+  )
+  expect(write).toHaveBeenCalledWith(
+    expect.stringContaining('Overall average wait time')
+  )
+  expect(write).toHaveBeenCalledWith(expect.stringContaining('1h 15m'))
+  expect(write).toHaveBeenCalledWith(expect.stringContaining('By clinic'))
+  expect(write).toHaveBeenCalledWith(expect.stringContaining('By time of day'))
+  expect(close).toHaveBeenCalled()
+  expect(print).toHaveBeenCalled()
+})
   test('does not fetch dashboard data when there is no logged-in user id', () => {
     useAuth.mockReturnValue({ user: null })
     global.fetch = jest.fn()

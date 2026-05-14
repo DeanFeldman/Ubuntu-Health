@@ -1,8 +1,20 @@
+const testArgs = process.argv.slice(2)
+
+const isTargetedTestRun = testArgs.some((arg) => {
+  return (
+    (!arg.startsWith('-') && !arg.includes('node_modules')) ||
+    arg.startsWith('--testPathPattern') ||
+    arg.startsWith('--testMatch') ||
+    arg.startsWith('--runTestsByPath')
+  )
+})
 module.exports = {
   testEnvironment: 'jsdom',
   setupFilesAfterEnv: ['<rootDir>/src/tests/setup.js'],
-  silent: true,
-  verbose: false,
+
+  silent: !isTargetedTestRun,
+  verbose: isTargetedTestRun,
+
   moduleFileExtensions: ['js', 'jsx'],
   transform: {
     '^.+\\.(js|jsx)$': 'babel-jest',
