@@ -82,12 +82,63 @@ function makeRoleRequest(overrides = {}) {
     ...overrides,
   }
 }
+function makeNoShowReport(overrides = {}) {
+  return {
+    filters: {
+      clinic_id: null,
+      clinic_name: 'All clinics',
+      start_date: null,
+      end_date: null,
+      date_range_label: 'All time',
+    },
+    summary: {
+      scheduled_appointments: 10,
+      completed_appointments: 6,
+      cancelled_appointments: 1,
+      no_show_appointments: 3,
+      no_show_rate_percent: 30,
+    },
+    by_clinic: [
+      {
+        clinic_id: clinicId,
+        clinic_name: 'Hillbrow Clinic',
+        scheduled_appointments: 10,
+        completed_appointments: 6,
+        cancelled_appointments: 1,
+        no_show_appointments: 3,
+        no_show_rate_percent: 30,
+      },
+    ],
+    ...overrides,
+  }
+}
+
+function makeWaitTimeReport() {
+  return {
+    filters: {
+      clinic_id: null,
+      clinic_name: 'All clinics',
+      start_date: null,
+      end_date: null,
+      date_range_label: 'All time',
+    },
+    summary: {
+      overall_average_wait_time_minutes: null,
+      queue_records_used: 0,
+    },
+    by_clinic: [],
+    by_time_of_day: [],
+  }
+}
 
 function mockFetch({
   roleRequests = [],
   roleError = null,
   clinics = makeClinics(),
   users = makeUsers(),
+  noShowReport = makeNoShowReport(),
+  noShowError = null,
+  waitTimeReport = makeWaitTimeReport(),
   clinicsError = null,
   usersError = null,
   approveOk = true,
@@ -103,6 +154,26 @@ function mockFetch({
   global.fetch = jest.fn((url, options = {}) => {
     const method = options.method || 'GET'
     const urlString = String(url)
+    if (urlString.includes('/api/reports/no-shows')) {
+  if (noShowError) {
+    return Promise.resolve({
+      ok: false,
+      text: async () => JSON.stringify({ error: noShowError }),
+    })
+  }
+
+  return Promise.resolve({
+    ok: true,
+    text: async () => JSON.stringify(noShowReport),
+  })
+}
+
+if (urlString.includes('/api/reports/average-wait-time')) {
+  return Promise.resolve({
+    ok: true,
+    text: async () => JSON.stringify(waitTimeReport),
+  })
+}
 
     if (
       urlString.includes('/role-requests?') &&
@@ -183,6 +254,7 @@ function mockFetch({
               : { error: assignError }
           ),
       })
+      
     }
 
     if (
@@ -237,6 +309,11 @@ async function openRoleRequestsSection() {
 async function openClinicDetailsSection() {
   const user = userEvent.setup()
   await user.click(await screen.findByRole('button', { name: /clinic details/i }))
+  return user
+}
+async function openAnalyticsSection() {
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('button', { name: /analytics/i }))
   return user
 }
 
@@ -897,7 +974,209 @@ describe('AdminDashboard', () => {
       )
     ).toBe(true)
   })
+   test('displays returned no-show report values in analytics section', async () => {
+    mockFetch({
+      noShowReport: makeNoShowReport({
+        filters: {
+          clinic_id: null,
+          clinic_name: 'All clinics',
+          start_date: null,
+          end_date: null,
+          date_range_label: 'All time',
+        },
+        summary: {
+          scheduled_appointments: 12,
+          completed_appointments: 8,
+          cancelled_appointments: 1,
+          no_show_appointments: 3,
+          no_show_rate_percent: 25,
+        },
+      }),
+    })
 
+    render(<AdminDashboard />)
+    await openAnalyticsSection()
+
+    expect(await screen.findByRole('heading', { name: /no-show report/i })).toBeInTheDocument()
+
+    expect(screen.getAllByText('All clinics').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('All time').length).toBeGreaterThan(0)
+
+    expect(screen.getByText('Scheduled')).toBeInTheDocument()
+    expect(screen.getByText('Completed')).toBeInTheDocument()
+    expect(screen.getByText('Cancelled')).toBeInTheDocument()
+    expect(screen.getByText('No-shows')).toBeInTheDocument()
+    expect(screen.getByText('No-show rate')).toBeInTheDocument()
+
+    expect(screen.getByText('12')).toBeInTheDocument()
+    expect(screen.getByText('8')).toBeInTheDocument()
+    expect(screen.getByText('3')).toBeInTheDocument()
+    expect(screen.getByText('25%')).toBeInTheDocument()
+  })
+
+  test('fetches no-show report again when clinic and date filters change', async () => {
+    const user = userEvent.setup()
+
+    mockFetch()
+
+    render(<AdminDashboard />)
+    await openAnalyticsSection()
+
+    const clinicSelects = await screen.findAllByLabelText('Clinic')
+    const noShowClinicSelect = clinicSelects[0]
+
+    const startDateInputs = screen.getAllByLabelText('Start date')
+    const endDateInputs = screen.getAllByLabelText('End date')
+
+    await user.selectOptions(noShowClinicSelect, clinicId)
+    await user.type(startDateInputs[0], '2026-05-01')
+    await user.type(endDateInputs[0], '2026-05-11')
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `/api/reports/no-shows?clinic_id=${clinicId}&start_date=2026-05-01&end_date=2026-05-11`
+        ),
+        expect.objectContaining({
+          headers: { Accept: 'application/json' },
+        })
+      )
+    })
+  })
+
+  test('shows no-show report empty state when no appointments match', async () => {
+    mockFetch({
+      noShowReport: makeNoShowReport({
+        summary: {
+          scheduled_appointments: 0,
+          completed_appointments: 0,
+          cancelled_appointments: 0,
+          no_show_appointments: 0,
+          no_show_rate_percent: 0,
+        },
+        by_clinic: [],
+      }),
+    })
+
+    render(<AdminDashboard />)
+    await openAnalyticsSection()
+
+    const noDataMessages = await screen.findAllByText('No data found.')
+    expect(noDataMessages.length).toBeGreaterThan(0)
+
+    expect(
+      screen.getByText('No appointments match the selected clinic and date range.')
+      ).toBeInTheDocument()
+  })
+
+  test('shows no-show report error when report request fails', async () => {
+    mockFetch({
+      noShowError: 'Failed to fetch no-show report',
+    })
+
+    render(<AdminDashboard />)
+    await openAnalyticsSection()
+
+    expect(await screen.findByText('Failed to fetch no-show report')).toBeInTheDocument()
+  })
+
+  test('exports displayed no-show report data as CSV', async () => {
+    const user = userEvent.setup()
+    const createObjectURL = jest.fn(() => 'blob:mock-url')
+    const revokeObjectURL = jest.fn()
+    const click = jest.fn()
+
+    global.URL.createObjectURL = createObjectURL
+    global.URL.revokeObjectURL = revokeObjectURL
+
+    jest.spyOn(document, 'createElement').mockImplementation((tagName) => {
+      const element = document.createElementNS('http://www.w3.org/1999/xhtml', tagName)
+
+      if (tagName === 'a') {
+        element.click = click
+      }
+
+      return element
+    })
+
+    mockFetch({
+      noShowReport: makeNoShowReport({
+        filters: {
+          clinic_id: clinicId,
+          clinic_name: 'Hillbrow Clinic',
+          start_date: '2026-05-01',
+          end_date: '2026-05-11',
+          date_range_label: '2026-05-01 to 2026-05-11',
+        },
+        summary: {
+          scheduled_appointments: 10,
+          completed_appointments: 6,
+          cancelled_appointments: 1,
+          no_show_appointments: 3,
+          no_show_rate_percent: 30,
+        },
+      }),
+    })
+
+    render(<AdminDashboard />)
+    await openAnalyticsSection()
+
+    const csvButtons = await screen.findAllByRole('button', { name: 'Export CSV' })
+    await user.click(csvButtons[0])
+
+    expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob))
+    expect(click).toHaveBeenCalled()
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-url')
+  })
+
+  test('exports displayed no-show report data as PDF', async () => {
+    const user = userEvent.setup()
+    const write = jest.fn()
+    const close = jest.fn()
+    const print = jest.fn()
+
+    window.open = jest.fn(() => ({
+      document: {
+        write,
+        close,
+      },
+      print,
+    }))
+
+    mockFetch({
+      noShowReport: makeNoShowReport({
+        filters: {
+          clinic_id: clinicId,
+          clinic_name: 'Hillbrow Clinic',
+          start_date: '2026-05-01',
+          end_date: '2026-05-11',
+          date_range_label: '2026-05-01 to 2026-05-11',
+        },
+        summary: {
+          scheduled_appointments: 10,
+          completed_appointments: 6,
+          cancelled_appointments: 1,
+          no_show_appointments: 3,
+          no_show_rate_percent: 30,
+        },
+      }),
+    })
+
+    render(<AdminDashboard />)
+    await openAnalyticsSection()
+
+    const pdfButtons = await screen.findAllByRole('button', { name: 'Export PDF' })
+    await user.click(pdfButtons[0])
+
+    expect(window.open).toHaveBeenCalledWith('', '_blank')
+    expect(write).toHaveBeenCalledWith(expect.stringContaining('No-Show Report'))
+    expect(write).toHaveBeenCalledWith(expect.stringContaining('Hillbrow Clinic'))
+    expect(write).toHaveBeenCalledWith(expect.stringContaining('2026-05-01 to 2026-05-11'))
+    expect(write).toHaveBeenCalledWith(expect.stringContaining('Total no-show appointments'))
+    expect(write).toHaveBeenCalledWith(expect.stringContaining('30%'))
+    expect(close).toHaveBeenCalled()
+    expect(print).toHaveBeenCalled()
+  })
   test('does not fetch dashboard data when there is no logged-in user id', () => {
     useAuth.mockReturnValue({ user: null })
     global.fetch = jest.fn()
