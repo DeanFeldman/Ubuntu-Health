@@ -12,12 +12,32 @@ let app
 let scenario
 let createdBuilders
 
+let consoleErrorSpy
+
 beforeEach(() => {
+  consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation((message, ...args) => {
+    const text = String(message)
+
+    const expectedRouteErrors = [
+      'Failed to fetch custom report:',
+    ]
+
+    if (expectedRouteErrors.some((expected) => text.includes(expected))) {
+      return
+    }
+
+    process.stderr.write(`${text} ${args.map(String).join(' ')}\n`)
+  })
+
   const mockContext = setupMockApp()
 
   app = mockContext.app
   scenario = mockContext.scenario
   createdBuilders = mockContext.createdBuilders
+})
+
+afterEach(() => {
+  consoleErrorSpy.mockRestore()
 })
 
 describe('custom report', () => {
@@ -479,4 +499,211 @@ describe('custom report', () => {
       error: 'Failed to fetch custom report',
     })
   })
+  test('normalizes report_type, status, and date query values before filtering', async () => {
+  scenario.thenable.queue_entries = [
+    {
+      data: [],
+      error: null,
+    },
+  ]
+
+  const res = await request(app).get(
+    '/api/reports/custom?report_type=%20QUEUE%20&status=%20Waiting%20&start_date=%202026-05-01%20&end_date=%202026-05-11%20'
+  )
+
+  expect(res.statusCode).toBe(200)
+
+  expect(res.body.report_type).toBe('queue')
+  expect(res.body.filters).toEqual({
+    clinic_id: null,
+    clinic_name: 'All clinics',
+    start_date: '2026-05-01',
+    end_date: '2026-05-11',
+    date_range_label: '2026-05-01 to 2026-05-11',
+    status: 'Waiting',
+    status_label: 'Waiting',
+  })
+
+  const queueBuilder = createdBuilders[0]
+
+  expect(queueBuilder.eq).toHaveBeenCalledWith('status', 'Waiting')
+  expect(queueBuilder.gte).toHaveBeenCalledWith(
+    'joined_at',
+    '2026-05-01T00:00:00.000Z'
+  )
+  expect(queueBuilder.lte).toHaveBeenCalledWith(
+    'joined_at',
+    '2026-05-11T23:59:59.999Z'
+  )
+})
+
+test('treats status=all as no status filter', async () => {
+  scenario.thenable.appointments = [
+    {
+      data: [],
+      error: null,
+    },
+  ]
+
+  const res = await request(app).get(
+    '/api/reports/custom?report_type=appointments&status=all'
+  )
+
+  expect(res.statusCode).toBe(200)
+  expect(res.body.filters.status).toBeNull()
+  expect(res.body.filters.status_label).toBe('All statuses')
+
+  const appointmentBuilder = createdBuilders[0]
+  expect(appointmentBuilder.eq).not.toHaveBeenCalledWith('status', 'all')
+})
+
+test('uses patient table fallback when user name is missing', async () => {
+  scenario.thenable.appointments = [
+    {
+      data: [
+        {
+          id: validAppointmentId,
+          patient_id: validPatientId,
+          clinic_id: validClinicId,
+          slot_id: validSlotId,
+          appointment_date: '2026-05-11',
+          appointment_time: '09:30',
+          status: 'Confirmed',
+          service: 'General Consultation',
+          slots: null,
+          clinics: {
+            id: validClinicId,
+            name: 'Ubuntu Clinic',
+          },
+        },
+      ],
+      error: null,
+    },
+  ]
+
+  scenario.thenable.users = [
+    {
+      data: [],
+      error: null,
+    },
+  ]
+
+  scenario.thenable.patients = [
+    {
+      data: [
+        {
+          id: validPatientId,
+          full_name: 'Fallback Patient',
+        },
+      ],
+      error: null,
+    },
+  ]
+
+  const res = await request(app).get(
+    '/api/reports/custom?report_type=appointments'
+  )
+
+  expect(res.statusCode).toBe(200)
+  expect(res.body.records[0].patient_name).toBe('Fallback Patient')
+})
+
+test('queue report uses called_at as updated_at when completed_at is missing', async () => {
+  scenario.thenable.queue_entries = [
+    {
+      data: [
+        {
+          id: validQueueEntryId,
+          clinic_id: validClinicId,
+          patient_id: validPatientId,
+          position: 2,
+          status: 'Called',
+          joined_at: '2026-05-11T08:00:00.000Z',
+          called_at: '2026-05-11T08:20:00.000Z',
+          completed_at: null,
+          clinics: {
+            id: validClinicId,
+            name: 'Ubuntu Clinic',
+          },
+        },
+      ],
+      error: null,
+    },
+  ]
+
+  scenario.thenable.users = [
+    {
+      data: [
+        {
+          id: validPatientId,
+          full_name: 'Queue Patient',
+        },
+      ],
+      error: null,
+    },
+  ]
+
+  scenario.thenable.patients = [
+    {
+      data: [],
+      error: null,
+    },
+  ]
+
+  const res = await request(app).get('/api/reports/custom?report_type=queue')
+
+  expect(res.statusCode).toBe(200)
+  expect(res.body.records[0]).toEqual({
+    id: validQueueEntryId,
+    patient_name: 'Queue Patient',
+    clinic_id: validClinicId,
+    clinic_name: 'Ubuntu Clinic',
+    queue_position: 2,
+    queue_status: 'Called',
+    joined_at: '2026-05-11T08:00:00.000Z',
+    completed_at: null,
+    updated_at: '2026-05-11T08:20:00.000Z',
+  })
+})
+
+test('returns a safe 500 response when patient lookup fails', async () => {
+  scenario.thenable.appointments = [
+    {
+      data: [
+        {
+          id: validAppointmentId,
+          patient_id: validPatientId,
+          clinic_id: validClinicId,
+          slot_id: validSlotId,
+          appointment_date: '2026-05-11',
+          appointment_time: '09:30',
+          status: 'Confirmed',
+          service: 'General Consultation',
+          slots: null,
+          clinics: {
+            id: validClinicId,
+            name: 'Ubuntu Clinic',
+          },
+        },
+      ],
+      error: null,
+    },
+  ]
+
+  scenario.thenable.users = [
+    {
+      data: null,
+      error: new Error('User lookup failed'),
+    },
+  ]
+
+  const res = await request(app).get(
+    '/api/reports/custom?report_type=appointments'
+  )
+
+  expect(res.statusCode).toBe(500)
+  expect(res.body).toEqual({
+    error: 'Failed to fetch custom report',
+  })
+})
 })
