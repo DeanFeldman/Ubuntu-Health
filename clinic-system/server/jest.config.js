@@ -1,10 +1,19 @@
+const testArgs = process.argv.slice(2)
+const isTargetedTestRun = testArgs.some((arg) => {
+  return (
+    (!arg.startsWith('-') && !arg.includes('node_modules')) ||
+    arg.startsWith('--testPathPattern') ||
+    arg.startsWith('--testMatch') ||
+    arg.startsWith('--runTestsByPath')
+  )
+})
 module.exports = {
   testEnvironment: 'node',
 
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
 
-  silent: true,
-  verbose: false,
+  silent: !isTargetedTestRun,
+  verbose: isTargetedTestRun,
 
   collectCoverage: true,
 
@@ -16,8 +25,7 @@ module.exports = {
     '!src/**/*.test.js',
     '!src/tests/**',
     '!src/**/__tests__/**',
-
-    '!src/index.js'
+    '!src/index.js',
   ],
 
   coverageReporters: ['text', 'lcov', 'html', 'json-summary']
