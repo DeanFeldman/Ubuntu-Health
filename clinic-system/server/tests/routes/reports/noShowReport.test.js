@@ -446,4 +446,72 @@ describe('no-show report', () => {
       by_clinic: [],
     })
   })
+  test('returns 500 when selected clinic lookup fails', async () => {
+  scenario.maybeSingle.clinics = [
+    {
+      data: null,
+      error: new Error('Clinic lookup failed'),
+    },
+  ]
+
+  const res = await request(app).get(
+    `/api/reports/no-shows?clinic_id=${validClinicId}`
+  )
+
+  expect(res.statusCode).toBe(500)
+  expect(res.body).toEqual({
+    error: 'Failed to fetch no-show report',
+  })
+})
+test('trims clinic and date query values before applying filters', async () => {
+  scenario.maybeSingle.clinics = [
+    {
+      data: {
+        id: validClinicId,
+        name: 'Ubuntu Clinic',
+      },
+      error: null,
+    },
+  ]
+
+  scenario.thenable.appointments = [
+    {
+      data: [
+        appointment({
+          id: 'trimmed-filter-no-show',
+          status: 'No-show',
+        }),
+      ],
+      error: null,
+    },
+  ]
+
+  const res = await request(app).get(
+    `/api/reports/no-shows?clinic_id=%20${validClinicId}%20&start_date=%202026-05-01%20&end_date=%202026-05-11%20`
+  )
+
+  expect(res.statusCode).toBe(200)
+
+  expect(res.body.filters).toEqual({
+    clinic_id: validClinicId,
+    clinic_name: 'Ubuntu Clinic',
+    start_date: '2026-05-01',
+    end_date: '2026-05-11',
+    date_range_label: '2026-05-01 to 2026-05-11',
+  })
+
+  const clinicLookupBuilder = createdBuilders[0]
+  const appointmentBuilder = createdBuilders[1]
+
+  expect(clinicLookupBuilder.eq).toHaveBeenCalledWith('id', validClinicId)
+  expect(appointmentBuilder.eq).toHaveBeenCalledWith('clinic_id', validClinicId)
+  expect(appointmentBuilder.gte).toHaveBeenCalledWith(
+    'slots.slot_datetime',
+    '2026-05-01T00:00:00.000Z'
+  )
+  expect(appointmentBuilder.lte).toHaveBeenCalledWith(
+    'slots.slot_datetime',
+    '2026-05-11T23:59:59.999Z'
+  )
+})
 })
