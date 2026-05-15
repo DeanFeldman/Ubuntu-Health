@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import AdminDashboard from '../../pages/AdminDashboard'
 import { useAuth } from '../../context/AuthContext'
@@ -1056,8 +1056,11 @@ describe('AdminDashboard', () => {
     expect(screen.getAllByText('All time').length).toBeGreaterThan(0)
 
     expect(screen.getByText('Scheduled')).toBeInTheDocument()
-    expect(screen.getByText('Completed')).toBeInTheDocument()
-    expect(screen.getByText('Cancelled')).toBeInTheDocument()
+
+    const noShowPanel = screen.getByRole('region', { name: /no-show report/i })
+    expect(within(noShowPanel).getByText('Completed')).toBeInTheDocument()
+    expect(within(noShowPanel).getByText('Cancelled')).toBeInTheDocument()
+
     expect(screen.getByText('No-shows')).toBeInTheDocument()
     expect(screen.getByText('No-show rate')).toBeInTheDocument()
 
