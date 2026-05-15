@@ -820,6 +820,126 @@ function exportWaitTimePdf(report) {
   win2.print()
 }
 
+// Status options for the custom report builder, keyed by report type.
+const CUSTOM_REPORT_STATUSES = {
+  appointments: ['Confirmed', 'Completed', 'No-show', 'Cancelled'],
+  queue: ['Waiting', 'Called', 'In Consultation', 'Complete'],
+}
+
+// Column definitions for each report type, used in the results table and exports.
+const APPOINTMENT_COLUMNS = [
+  { key: 'patient_name', label: 'Patient' },
+  { key: 'clinic_name', label: 'Clinic' },
+  { key: 'appointment_date', label: 'Date' },
+  { key: 'appointment_time', label: 'Time' },
+  { key: 'appointment_status', label: 'Status' },
+  { key: 'service', label: 'Service' },
+]
+
+const QUEUE_COLUMNS = [
+  { key: 'patient_name', label: 'Patient' },
+  { key: 'clinic_name', label: 'Clinic' },
+  { key: 'queue_position', label: 'Position' },
+  { key: 'queue_status', label: 'Status' },
+  { key: 'joined_at', label: 'Joined at' },
+  { key: 'completed_at', label: 'Completed at' },
+]
+
+// This function formats an ISO datetime string to a readable local date-time, or returns the raw value if it is not a valid date.
+function formatDateTime(value) {
+  if (!value) return ''
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return value
+  return d.toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+// This function generates and triggers a CSV download from the custom report data.
+function exportCustomCsv(report) {
+  const { filters, records, total_records, report_type } = report
+  const columns = report_type === 'appointments' ? APPOINTMENT_COLUMNS : QUEUE_COLUMNS
+
+  const rows = [
+    ['Custom Report'],
+    ['Report type', report_type === 'appointments' ? 'Appointments' : 'Queue entries'],
+    ['Clinic', filters.clinic_name || 'All clinics'],
+    ['Date range', filters.date_range_label || 'All time'],
+    ['Status', filters.status_label || 'All statuses'],
+    ['Total records', total_records ?? 0],
+    [],
+    columns.map((c) => c.label),
+    ...(records || []).map((row) =>
+      columns.map((c) => {
+        const val = row[c.key]
+        if (c.key === 'joined_at' || c.key === 'completed_at') return formatDateTime(val)
+        return val ?? ''
+      })
+    ),
+  ]
+
+  const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `custom-report-${report_type}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+// This function generates and triggers a PDF-style download from the custom report data using the browser print dialog.
+function exportCustomPdf(report) {
+  const { filters, records, total_records, report_type } = report
+  const columns = report_type === 'appointments' ? APPOINTMENT_COLUMNS : QUEUE_COLUMNS
+  const typeLabel = report_type === 'appointments' ? 'Appointments' : 'Queue entries'
+
+  const headerCells = columns.map((c) => `<th>${c.label}</th>`).join('')
+  const bodyRows = (records || [])
+    .map((row) => {
+      const cells = columns
+        .map((c) => {
+          const val = row[c.key]
+          const display = (c.key === 'joined_at' || c.key === 'completed_at') ? formatDateTime(val) : (val ?? '')
+          return `<td>${display}</td>`
+        })
+        .join('')
+      return `<tr>${cells}</tr>`
+    })
+    .join('')
+
+  const html = `
+    <html>
+      <head>
+        <title>Custom Report – ${typeLabel}</title>
+        <style>
+          body { font-family: sans-serif; padding: 40px; color: #111; }
+          h1 { font-size: 1.4rem; margin-bottom: 4px; }
+          .meta { color: #666; font-size: 0.85rem; margin-bottom: 24px; line-height: 1.6; }
+          table { border-collapse: collapse; width: 100%; margin-bottom: 24px; font-size: 0.8rem; }
+          th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+          th { background: #f5f5f5; font-weight: 700; }
+        </style>
+      </head>
+      <body>
+        <h1>Custom Report – ${typeLabel}</h1>
+        <p class="meta">
+          Clinic: ${filters.clinic_name || 'All clinics'}<br>
+          Date range: ${filters.date_range_label || 'All time'}<br>
+          Status: ${filters.status_label || 'All statuses'}<br>
+          Total records: ${total_records ?? 0}
+        </p>
+        <table>
+          <thead><tr>${headerCells}</tr></thead>
+          <tbody>${bodyRows}</tbody>
+        </table>
+      </body>
+    </html>`
+
+  const win3 = window.open('', '_blank')
+  win3.document.write(html)
+  win3.document.close()
+  win3.print()
+}
+
 
 export default function AdminDashboard() {
   // Get the current user from the authentication context and the API base URL from our config helper
@@ -864,6 +984,16 @@ export default function AdminDashboard() {
   const [waitTimeReport, setWaitTimeReport] = useState(null)
   const [loadingWaitTime, setLoadingWaitTime] = useState(false)
   const [waitTimeError, setWaitTimeError] = useState('')
+
+  // Custom report state
+  const [customReportType, setCustomReportType] = useState('appointments')
+  const [customClinicId, setCustomClinicId] = useState('')
+  const [customStartDate, setCustomStartDate] = useState('')
+  const [customEndDate, setCustomEndDate] = useState('')
+  const [customStatus, setCustomStatus] = useState('')
+  const [customReport, setCustomReport] = useState(null)
+  const [loadingCustom, setLoadingCustom] = useState(false)
+  const [customError, setCustomError] = useState('')
 
   const selectedClinicStaff = staffUsers.filter((staffUser) => staffUser.clinic_id === selectedClinicId)
   const unassignedStaffUsers = staffUsers.filter((staffUser) => !staffUser.clinic_id)
@@ -925,6 +1055,12 @@ export default function AdminDashboard() {
 
     fetchWaitTimeReport()
   }, [activeSection, API_BASE_URL, waitTimeClinicId, waitTimeStartDate, waitTimeEndDate])
+
+  // This effect resets the status filter when the report type changes, since statuses differ between appointments and queue entries.
+  useEffect(() => {
+    setCustomStatus('')
+    setCustomReport(null)
+  }, [customReportType])
 
   // This effect runs when the component mounts and whenever the user's ID changes.
   useEffect(() => {
@@ -1296,6 +1432,36 @@ export default function AdminDashboard() {
       setAssignmentError(err.message || 'Failed to unassign staff from clinic')
     } finally {
       setAssigningStaff(false)
+    }
+  }
+
+  // FIX: This function is called when the admin explicitly clicks "Run report" in the custom report builder.
+  // Previously this ran automatically on mount, causing a fetch failure before any filters or clinic data were ready.
+  async function runCustomReport() {
+    try {
+      setLoadingCustom(true)
+      setCustomError('')
+
+      const params = new URLSearchParams({ report_type: customReportType })
+      if (customClinicId) params.set('clinic_id', customClinicId)
+      if (customStartDate) params.set('start_date', customStartDate)
+      if (customEndDate) params.set('end_date', customEndDate)
+      if (customStatus) params.set('status', customStatus)
+
+      const url = `${API_BASE_URL}/api/reports/custom?${params.toString()}`
+      const response = await fetch(url, { headers: { Accept: 'application/json' } })
+      const body = await readApiResponse(response)
+
+      if (!response.ok) {
+        throw new Error(body.error || 'Failed to load custom report')
+      }
+
+      setCustomReport(body)
+    } catch (err) {
+      setCustomError(err.message || 'Failed to load custom report')
+      setCustomReport(null)
+    } finally {
+      setLoadingCustom(false)
     }
   }
 
@@ -1772,6 +1938,198 @@ export default function AdminDashboard() {
                       </table>
                     </section>
                   )}
+                </section>
+              )}
+            </section>
+
+            {/* Custom report builder panel */}
+            <section className="admin-panel" aria-labelledby="custom-report-heading">
+              <header className="admin-panel-header">
+                <section>
+                  <h2 id="custom-report-heading">Custom report builder</h2>
+                  <p className="admin-section-intro">
+                    Select a report type and apply filters to build a custom data export.
+                  </p>
+                </section>
+
+                {customReport && customReport.total_records > 0 && (
+                  <section style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn-secondary"
+                      onClick={() => exportCustomCsv(customReport)}
+                    >
+                      Export CSV
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn-secondary"
+                      onClick={() => exportCustomPdf(customReport)}
+                    >
+                      Export PDF
+                    </button>
+                  </section>
+                )}
+              </header>
+
+              {/* Filters */}
+              <section className="admin-message" style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end' }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '180px' }}>
+                  Report type
+                  <select
+                    value={customReportType}
+                    onChange={(e) => setCustomReportType(e.target.value)}
+                  >
+                    <option value="appointments">Appointments</option>
+                    <option value="queue">Queue entries</option>
+                  </select>
+                </label>
+
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '180px' }}>
+                  Clinic
+                  <select
+                    value={customClinicId}
+                    onChange={(e) => setCustomClinicId(e.target.value)}
+                  >
+                    <option value="">All clinics</option>
+                    {clinics.map((clinic) => (
+                      <option key={clinic.id} value={clinic.id}>{clinic.name}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  Start date
+                  <input
+                    type="date"
+                    value={customStartDate}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
+                  />
+                </label>
+
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  End date
+                  <input
+                    type="date"
+                    value={customEndDate}
+                    onChange={(e) => setCustomEndDate(e.target.value)}
+                  />
+                </label>
+
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '180px' }}>
+                  Status
+                  <select
+                    value={customStatus}
+                    onChange={(e) => setCustomStatus(e.target.value)}
+                  >
+                    <option value="">All statuses</option>
+                    {CUSTOM_REPORT_STATUSES[customReportType].map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </label>
+
+                {/* FIX: "Run report" button replaces the auto-fetch useEffect that was firing on mount before data was ready */}
+                <button
+                  type="button"
+                  className="admin-btn admin-btn-approve"
+                  onClick={runCustomReport}
+                  disabled={loadingCustom}
+                  style={{ alignSelf: 'flex-end' }}
+                >
+                  {loadingCustom ? 'Loading...' : 'Run report'}
+                </button>
+              </section>
+
+              {/* Loading state */}
+              {loadingCustom && (
+                <p className="admin-message">Loading report...</p>
+              )}
+
+              {/* Error state */}
+              {!loadingCustom && customError && (
+                <p className="admin-message admin-error" role="alert">{customError}</p>
+              )}
+
+              {/* Empty state */}
+              {!loadingCustom && !customError && customReport && customReport.total_records === 0 && (
+                <section className="admin-empty">
+                  <strong>No records found.</strong>
+                  <p>No {customReportType === 'appointments' ? 'appointments' : 'queue entries'} match the selected filters.</p>
+                </section>
+              )}
+
+              {/* Results */}
+              {!loadingCustom && !customError && customReport && customReport.total_records > 0 && (
+                <section className="admin-message">
+                  {/* Filter summary banner */}
+                  <section className="admin-selected-banner" style={{ marginTop: 0, marginBottom: '16px' }}>
+                    <section>
+                      <strong>Report type</strong>
+                      <p>{customReport.report_type === 'appointments' ? 'Appointments' : 'Queue entries'}</p>
+                    </section>
+                    <section>
+                      <strong>Clinic</strong>
+                      <p>{customReport.filters?.clinic_name || 'All clinics'}</p>
+                    </section>
+                    <section>
+                      <strong>Date range</strong>
+                      <p>{customReport.filters?.date_range_label || 'All time'}</p>
+                    </section>
+                    <section>
+                      <strong>Status</strong>
+                      <p>{customReport.filters?.status_label || 'All statuses'}</p>
+                    </section>
+                    <section>
+                      <strong>Total records</strong>
+                      <p>{customReport.total_records}</p>
+                    </section>
+                  </section>
+
+                  {/* Results table */}
+                  <section style={{ overflowX: 'auto' }}>
+                    {customReport.report_type === 'appointments' ? (
+                      <table className="admin-table">
+                        <thead>
+                          <tr>
+                            {APPOINTMENT_COLUMNS.map((c) => <th key={c.key}>{c.label}</th>)}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {customReport.records.map((row) => (
+                            <tr key={row.id}>
+                              <td>{row.patient_name}</td>
+                              <td>{row.clinic_name}</td>
+                              <td>{row.appointment_date}</td>
+                              <td>{row.appointment_time}</td>
+                              <td>{row.appointment_status}</td>
+                              <td>{row.service}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <table className="admin-table">
+                        <thead>
+                          <tr>
+                            {QUEUE_COLUMNS.map((c) => <th key={c.key}>{c.label}</th>)}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {customReport.records.map((row) => (
+                            <tr key={row.id}>
+                              <td>{row.patient_name}</td>
+                              <td>{row.clinic_name}</td>
+                              <td>{row.queue_position}</td>
+                              <td>{row.queue_status}</td>
+                              <td>{formatDateTime(row.joined_at)}</td>
+                              <td>{formatDateTime(row.completed_at)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </section>
                 </section>
               )}
             </section>
