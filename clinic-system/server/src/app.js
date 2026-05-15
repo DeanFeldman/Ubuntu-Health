@@ -403,7 +403,20 @@ async function fetchPatientNamesById(patientIds = []) {
 
   if (usersError) throw usersError
 
+  const { data: patients, error: patientsError } = await supabase
+    .from('patients')
+    .select('id, full_name')
+    .in('id', uniquePatientIds)
+
+  if (patientsError) throw patientsError
+
   const patientNamesById = {}
+
+  for (const patient of patients || []) {
+    if (patient?.id && patient.full_name) {
+      patientNamesById[patient.id] = patient.full_name
+    }
+  }
 
   for (const user of users || []) {
     if (user?.id && user.full_name) {
