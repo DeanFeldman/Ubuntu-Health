@@ -37,8 +37,6 @@ describe('custom report integration flow', () => {
             patient_id: validPatientId,
             clinic_id: validClinicId,
             slot_id: validSlotId,
-            appointment_date: null,
-            appointment_time: null,
             status: 'Confirmed',
             service: 'General Consultation',
             slots: {
