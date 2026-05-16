@@ -252,4 +252,147 @@ test('hides popup after timeout', async () => {
     screen.getAllByText('You are now 2nd in the queue')
   ).toHaveLength(1)
 })
+test('shows fallback message for unknown notification type and unavailable time', async () => {
+  global.fetch.mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      notifications: [
+        {
+          id: 'notif-unknown',
+          type: 'UNKNOWN_TYPE',
+          created_at: null,
+        },
+      ],
+    }),
+  })
+
+  render(<QueueNotifications queueEntry={{ id: 'queue-unknown' }} />)
+
+  expect(await screen.findAllByText('Queue update available')).toHaveLength(2)
+  expect(screen.getAllByText('Time unavailable')).toHaveLength(2)
+})
+
+test('does not create browser notification when permission is denied', async () => {
+  global.Notification.permission = 'denied'
+
+  global.fetch.mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      notifications: [
+        {
+          id: 'notif-denied',
+          type: 'POSITION_1',
+          created_at: '2026-04-20T10:00:00',
+        },
+      ],
+    }),
+  })
+
+  render(<QueueNotifications queueEntry={{ id: 'queue-denied' }} />)
+
+  expect(await screen.findAllByText('You are next in line')).toHaveLength(2)
+  expect(global.Notification).not.toHaveBeenCalled()
+})
+
+test('does not create browser notification when Notification API is unsupported', async () => {
+  delete global.Notification
+
+  global.fetch.mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      notifications: [
+        {
+          id: 'notif-no-api',
+          type: 'POSITION_1',
+          created_at: '2026-04-20T10:00:00',
+        },
+      ],
+    }),
+  })
+
+  render(<QueueNotifications queueEntry={{ id: 'queue-no-api' }} />)
+
+  expect(await screen.findAllByText('You are next in line')).toHaveLength(2)
+})
+
+test('requests notification permission when permission is default', async () => {
+  global.Notification.permission = 'default'
+  global.Notification.requestPermission = jest.fn().mockResolvedValue('granted')
+
+  global.fetch.mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      notifications: [],
+    }),
+  })
+
+  render(<QueueNotifications queueEntry={{ id: 'queue-permission' }} />)
+
+  await screen.findByText('No queue notifications yet.')
+
+  expect(global.Notification.requestPermission).toHaveBeenCalled()
+})
+
+test('handles failed notification permission request safely', async () => {
+  global.Notification.permission = 'default'
+  global.Notification.requestPermission = jest
+    .fn()
+    .mockRejectedValue(new Error('Permission failed'))
+
+  global.fetch.mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      notifications: [],
+    }),
+  })
+
+  render(<QueueNotifications queueEntry={{ id: 'queue-permission-fail' }} />)
+
+  expect(await screen.findByText('No queue notifications yet.')).toBeInTheDocument()
+})
+
+test('shows default fetch error when error response body is not valid json', async () => {
+  global.fetch.mockResolvedValue({
+    ok: false,
+    json: async () => {
+      throw new Error('invalid json')
+    },
+  })
+
+  render(<QueueNotifications queueEntry={{ id: 'queue-json-error' }} />)
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Could not load queue notifications.'
+  )
+})
+
+test('resets notifications when queue entry changes', async () => {
+  global.fetch
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        notifications: [
+          {
+            id: 'notif-old',
+            type: 'POSITION_1',
+            created_at: '2026-04-20T10:00:00',
+          },
+        ],
+      }),
+    })
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        notifications: [],
+      }),
+    })
+
+  const { rerender } = render(<QueueNotifications queueEntry={{ id: 'queue-old' }} />)
+
+  expect(await screen.findAllByText('You are next in line')).toHaveLength(2)
+
+  rerender(<QueueNotifications queueEntry={{ id: 'queue-new' }} />)
+
+  expect(await screen.findByText('No queue notifications yet.')).toBeInTheDocument()
+})
 })

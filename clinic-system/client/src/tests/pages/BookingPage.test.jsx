@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import BookingPage from '../../pages/BookingPage'
 import { useAuth } from '../../context/AuthContext'
@@ -655,4 +655,96 @@ describe('BookingPage', () => {
     expect(dateInput).toHaveAttribute('min')
     expect(dateInput.getAttribute('min')).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
+  test('uses patient clinic fallback navigation when no fromPath is provided', async () => {
+  renderPage({
+    auth: patientAuth,
+    locationState: {
+      clinic,
+      bookingMode: 'patient',
+    },
+  })
+
+  await userEvent.click(screen.getByRole('button', { name: /^← Back$/i }))
+
+  expect(mockNavigate).toHaveBeenCalledWith('/clinic')
+})
+
+
+test('closes confirmation popup when overlay is clicked', async () => {
+  renderPage()
+
+  await completeStaffExistingPatientBookingForm()
+  const dialog = await openConfirmationDialog()
+
+  fireEvent.click(dialog)
+
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+})
+
+test('keeps confirmation popup open when dialog content is clicked', async () => {
+  renderPage()
+
+  await completeStaffExistingPatientBookingForm()
+  const dialog = await openConfirmationDialog()
+
+  fireEvent.click(within(dialog).getByText('Confirm Appointment'))
+
+  expect(screen.getByRole('dialog')).toBeInTheDocument()
+})
+
+test('shows default slot error when slot response is not ok and has no error message', async () => {
+  setupFetchMock({
+    slotsOk: false,
+    slotsError: undefined,
+  })
+
+  renderPage()
+
+  await chooseDate('2099-05-10')
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Failed to load slots')
+})
+
+test('shows default booking failure when appointment response is not ok and has no error message', async () => {
+  setupFetchMock({
+    appointmentOk: false,
+    appointmentError: undefined,
+  })
+
+  renderPage()
+
+  await completeStaffExistingPatientBookingForm()
+  await openConfirmationDialog()
+  await userEvent.click(screen.getByRole('button', { name: /^Confirm$/i }))
+
+  expect(
+    (await screen.findAllByText(/Booking failed\./i)).length
+  ).toBeGreaterThan(0)
+})
+
+test('uses default create patient failure message when new patient creation response has no error', async () => {
+  setupFetchMock({
+    createPatientOk: false,
+    createPatientError: undefined,
+  })
+
+  renderPage()
+
+  await userEvent.click(
+    await screen.findByRole('button', { name: /\+ Add new patient instead/i })
+  )
+
+  await userEvent.type(screen.getByLabelText('Full name'), 'New Patient')
+  await userEvent.type(screen.getByLabelText('Email address'), 'new@example.com')
+  await chooseDate('2099-05-10')
+  await chooseSlot('9:00 AM')
+
+  await openConfirmationDialog()
+  await userEvent.click(screen.getByRole('button', { name: /^Confirm$/i }))
+
+  expect(
+    (await screen.findAllByText(/Failed to create patient\./i)).length
+  ).toBeGreaterThan(0)
+})
+
 })

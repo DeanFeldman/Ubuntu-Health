@@ -1792,4 +1792,201 @@ test('exports displayed custom appointment report data as PDF', async () => {
 
     expect(global.fetch).not.toHaveBeenCalled()
   })
+test('handles missing operating hours and service values when selecting clinic', async () => {
+  const user = userEvent.setup()
+
+  mockFetch({
+    clinics: makeClinics({
+      operating_hours: null,
+      services: null,
+      appointment_duration_minutes: null,
+    }),
+  })
+
+  render(<AdminDashboard />)
+  await openClinicDetailsSection()
+
+  await selectClinic(user)
+
+  await selectClinic(user)
+
+expect(await screen.findByPlaceholderText(
+  'Separate services with commas or new lines'
+)).toBeInTheDocument()
+
+expect(screen.getByPlaceholderText(
+  'Separate services with commas or new lines'
+)).toHaveValue('')
+
+  expect(document.querySelector('#appointment-duration')).toHaveValue(null)
+
+  expect(screen.getByLabelText(/monday opening time/i)).toHaveValue('07:30')
+  expect(screen.getByLabelText(/monday closing time/i)).toHaveValue('16:30')
+  expect(screen.getByLabelText(/saturday opening time/i)).toBeDisabled()
+})
+test('normalises operating hours when a day is missing from clinic data', async () => {
+  const user = userEvent.setup()
+
+  mockFetch({
+    clinics: makeClinics({
+      operating_hours: {
+        monday: { open: '09:00', close: '15:00' },
+      },
+    }),
+  })
+
+  render(<AdminDashboard />)
+  await openClinicDetailsSection()
+
+  await selectClinic(user)
+
+  expect(await screen.findByLabelText(/monday opening time/i)).toHaveValue('09:00')
+  expect(screen.getByLabelText(/monday closing time/i)).toHaveValue('15:00')
+
+  expect(screen.getByLabelText(/tuesday opening time/i)).toHaveValue('07:30')
+  expect(screen.getByLabelText(/tuesday closing time/i)).toHaveValue('16:30')
+})
+
+test('saves closed operating day as blank open and close values', async () => {
+  const user = userEvent.setup()
+
+  mockFetch()
+
+  render(<AdminDashboard />)
+  await openClinicDetailsSection()
+
+  await selectClinic(user)
+
+  const mondayClosed = screen.getAllByLabelText(/closed/i)[0]
+  await user.click(mondayClosed)
+
+  await user.click(screen.getByRole('button', { name: 'Save changes' }))
+
+  expect(await screen.findByText('Clinic updated successfully.')).toBeInTheDocument()
+
+  const patchCall = global.fetch.mock.calls.find(([url, options]) => {
+    return String(url).includes(`/api/clinics/${clinicId}`) && options?.method === 'PATCH'
+  })
+
+  const payload = JSON.parse(patchCall[1].body)
+
+  expect(payload.operating_hours.monday).toEqual({
+    open: '',
+    close: '',
+  })
+})
+
+test('exports displayed custom queue report data as CSV', async () => {
+  const user = userEvent.setup()
+  const createObjectURL = jest.fn(() => 'blob:mock-custom-queue-url')
+  const revokeObjectURL = jest.fn()
+  const click = jest.fn()
+
+  global.URL.createObjectURL = createObjectURL
+  global.URL.revokeObjectURL = revokeObjectURL
+
+  jest.spyOn(document, 'createElement').mockImplementation((tagName) => {
+    const element = document.createElementNS('http://www.w3.org/1999/xhtml', tagName)
+
+    if (tagName === 'a') {
+      element.click = click
+    }
+
+    return element
+  })
+
+  mockFetch({
+    customReport: makeCustomQueueReport({
+      records: [
+        {
+          id: 'queue-1',
+          patient_name: 'Queue Patient',
+          clinic_id: clinicId,
+          clinic_name: 'Hillbrow Clinic',
+          queue_position: 2,
+          queue_status: 'Complete',
+          joined_at: 'not-a-real-date',
+          completed_at: null,
+        },
+      ],
+    }),
+  })
+
+  render(<AdminDashboard />)
+  await openAnalyticsSection()
+
+  await user.selectOptions(screen.getByLabelText('Report type'), 'queue')
+  await user.click(screen.getByRole('button', { name: /run report/i }))
+
+  expect(await screen.findByText('Queue Patient')).toBeInTheDocument()
+
+  const csvButtons = await screen.findAllByRole('button', { name: 'Export CSV' })
+  await user.click(csvButtons[csvButtons.length - 1])
+
+  expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob))
+  expect(click).toHaveBeenCalled()
+  expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-custom-queue-url')
+})
+
+test('exports displayed custom queue report data as PDF', async () => {
+  const user = userEvent.setup()
+  const write = jest.fn()
+  const close = jest.fn()
+  const print = jest.fn()
+
+  window.open = jest.fn(() => ({
+    document: {
+      write,
+      close,
+    },
+    print,
+  }))
+
+  mockFetch({
+    customReport: makeCustomQueueReport({
+      filters: {
+        clinic_id: clinicId,
+        clinic_name: 'Hillbrow Clinic',
+        start_date: '2026-05-01',
+        end_date: '2026-05-11',
+        date_range_label: '2026-05-01 to 2026-05-11',
+        status: 'Complete',
+        status_label: 'Complete',
+      },
+      records: [
+        {
+          id: 'queue-1',
+          patient_name: 'Queue Patient',
+          clinic_id: clinicId,
+          clinic_name: 'Hillbrow Clinic',
+          queue_position: 2,
+          queue_status: 'Complete',
+          joined_at: 'not-a-real-date',
+          completed_at: null,
+        },
+      ],
+    }),
+  })
+
+  render(<AdminDashboard />)
+  await openAnalyticsSection()
+
+  await user.selectOptions(screen.getByLabelText('Report type'), 'queue')
+  await user.click(screen.getByRole('button', { name: /run report/i }))
+
+  expect(await screen.findByText('Queue Patient')).toBeInTheDocument()
+
+  const pdfButtons = await screen.findAllByRole('button', { name: 'Export PDF' })
+  await user.click(pdfButtons[pdfButtons.length - 1])
+
+  expect(window.open).toHaveBeenCalledWith('', '_blank')
+  expect(write).toHaveBeenCalledWith(
+    expect.stringContaining('Custom Report – Queue entries')
+  )
+  expect(write).toHaveBeenCalledWith(expect.stringContaining('Queue Patient'))
+  expect(write).toHaveBeenCalledWith(expect.stringContaining('not-a-real-date'))
+  expect(write).toHaveBeenCalledWith(expect.stringContaining('Complete'))
+  expect(close).toHaveBeenCalled()
+  expect(print).toHaveBeenCalled()
+})
 })
