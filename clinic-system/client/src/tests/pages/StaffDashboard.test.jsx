@@ -1638,4 +1638,150 @@ describe('StaffDashboard', () => {
         .toBeInTheDocument()
     })
   })
+  test('shows availability validation error when only one time is provided', async () => {
+  const user = userEvent.setup()
+
+  setupFetchMock({
+    availabilityRows: [
+      {
+        id: 'availability-1',
+        day_of_week: 0,
+        start_time: '09:00:00',
+        end_time: '15:00:00',
+        is_available: true,
+      },
+    ],
+  })
+
+  renderDashboard()
+  await openSection(/availability/i)
+
+  const mondayEnd = await screen.findByLabelText(/monday end time/i)
+
+  await user.clear(mondayEnd)
+  await user.click(screen.getByRole('button', { name: /save availability/i }))
+
+  expect(
+    await screen.findByText('Both start and end time are required.')
+  ).toBeInTheDocument()
+
+  expect(
+    await screen.findByText('Please fix availability errors first.')
+  ).toBeInTheDocument()
+})
+
+test('shows no availability changes message when there is nothing to save', async () => {
+  const user = userEvent.setup()
+
+  setupFetchMock({
+    clinicDetails: {
+      id: 'clinic-1',
+      name: 'Hillbrow Clinic',
+      operating_hours: {},
+    },
+    availabilityRows: [],
+  })
+
+  renderDashboard()
+  await openSection(/availability/i)
+
+  await user.click(await screen.findByRole('button', { name: /save availability/i }))
+
+  expect(
+    await screen.findByText('No availability changes to save.')
+  ).toBeInTheDocument()
+})
+
+test('creates availability rows when no existing availability id exists', async () => {
+  const user = userEvent.setup()
+
+  setupFetchMock({
+    availabilityRows: [],
+  })
+
+  renderDashboard()
+  await openSection(/availability/i)
+
+  await user.click(await screen.findByRole('button', { name: /save availability/i }))
+
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/api/staff/staff-1/availability',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          day_of_week: 0,
+          start_time: '08:00',
+          end_time: '17:00',
+          is_available: true,
+        }),
+      })
+    )
+  })
+
+  expect(await screen.findByText('Availability saved successfully.')).toBeInTheDocument()
+})
+
+test('continues saving availability when backend says row already exists', async () => {
+  const user = userEvent.setup()
+
+  setupFetchMock({
+    availabilityRows: [],
+    availabilitySaveOk: false,
+    availabilitySaveError: 'availability already exists',
+  })
+
+  renderDashboard()
+  await openSection(/availability/i)
+
+  await user.click(await screen.findByRole('button', { name: /save availability/i }))
+
+  expect(await screen.findByText('Availability saved successfully.')).toBeInTheDocument()
+})
+
+test('uses appointment fallback fields when patient object and slot datetime are missing', async () => {
+  setupFetchMock({
+    appointments: [
+      {
+        id: 'appointment-fallback',
+        patient_id: 'patient-fallback',
+        patient_name: 'Fallback Appointment Patient',
+        patient_email: 'fallback@example.com',
+        clinic_id: 'clinic-1',
+        status: 'Confirmed',
+        time: '08:30',
+        slot_datetime: null,
+      },
+    ],
+  })
+
+  renderDashboard()
+  await openSection(/appointments/i)
+
+  expect(await screen.findByText('Fallback Appointment Patient')).toBeInTheDocument()
+  expect(screen.getByText('fallback@example.com')).toBeInTheDocument()
+  expect(screen.getByText('08:30')).toBeInTheDocument()
+})
+
+test('uses patient id and dash email fallback when appointment patient details are missing', async () => {
+  setupFetchMock({
+    appointments: [
+      {
+        id: 'appointment-patient-id',
+        patient_id: 'patient-id-only',
+        clinic_id: 'clinic-1',
+        status: 'Confirmed',
+        time: '09:45',
+        slot_datetime: null,
+      },
+    ],
+  })
+
+  renderDashboard()
+  await openSection(/appointments/i)
+
+  expect(await screen.findByText('patient-id-only')).toBeInTheDocument()
+  expect(screen.getByText('—')).toBeInTheDocument()
+  expect(screen.getByText('09:45')).toBeInTheDocument()
+})
 })
