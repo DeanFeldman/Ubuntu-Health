@@ -70,7 +70,10 @@ const styles = `
   }
 
   .admin-header h1 {
-    margin-bottom: 8px;
+    font-size: 2.1rem;
+    font-weight: 800;
+    color: var(--uh-text);
+    margin: 0 0 8px;
   }
 
   .admin-header p {
@@ -110,6 +113,12 @@ const styles = `
     line-height: 1.1;
     margin-bottom: 6px;
   }
+  
+  .admin-page {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
 
   .admin-overview-card p {
     color: var(--uh-muted);
@@ -1045,8 +1054,8 @@ export default function AdminDashboard() {
   }
 
   // The return statement contains the JSX for rendering the admin dashboard UI, including the header, sidebar navigation, and main content area with conditional rendering based on the active section.
-  return (
-  <section>
+return (
+  <section className="admin-page">
     <style>{styles}</style>
 
     {/* The header section of the admin dashboard, with a title and description. */}

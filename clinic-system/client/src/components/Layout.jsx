@@ -35,6 +35,104 @@ const styles = `
   z-index: 10;
 }
 
+.uh-toast-wrap {
+  position: fixed;
+  top: 88px;
+  right: 24px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.uh-toast {
+  min-width: 280px;
+  max-width: 420px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.16);
+  animation: uh-toast-slide 0.22s ease-out;
+  pointer-events: auto;
+}
+
+.uh-toast-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.uh-toast-content strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.uh-toast-content span {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.uh-toast-success {
+  background: #DCFCE7;
+  color: #166534;
+  border: 1px solid #86EFAC;
+}
+
+.uh-toast-success .uh-toast-icon {
+  background: #16A34A;
+  color: white;
+}
+
+.uh-toast-error {
+  background: #FEE2E2;
+  color: #991B1B;
+  border: 1px solid #FCA5A5;
+}
+
+.uh-toast-error .uh-toast-icon {
+  background: #DC2626;
+  color: white;
+}
+
+@keyframes uh-toast-slide {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 520px) {
+  .uh-toast-wrap {
+    top: 110px;
+    right: 16px;
+    left: 16px;
+  }
+
+  .uh-toast {
+    min-width: 0;
+    max-width: none;
+    width: 100%;
+  }
+}
+
+
 .uh-navbar-inner {
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -230,8 +328,11 @@ export default function Layout() {
   const location = useLocation()
   const navigate = useNavigate()
 
+
+
   const [staffRequestClicked, setStaffRequestClicked] = useState(false)
   const [adminRequestClicked, setAdminRequestClicked] = useState(false)
+  const [toast, setToast] = useState(null)  
 
   const isLoginPage = location.pathname === '/login'
   const isQueuePage = location.pathname === '/queue'
@@ -247,31 +348,72 @@ export default function Layout() {
 
   const isFlowPage = isQueuePage || isBookingPage || isAppointmentsPage
 
-  const handleRequestStaffRole = async () => {
-    setStaffRequestClicked(true)
 
-    try {
-      await RoleRequest('Staff')
-    } catch (err) {
-      setStaffRequestClicked(false)
-    }
+  const showToast = (title, message, type = 'success') => {
+  setToast({ title, message, type })
+
+  setTimeout(() => {
+    setToast(null)
+  }, 3000)
+}
+const handleRequestStaffRole = async () => {
+  setStaffRequestClicked(true)
+
+  try {
+    await RoleRequest('Staff')
+    showToast(
+      'Request submitted',
+      'Your staff role request has been sent for admin approval.'
+    )
+  } catch (err) {
+    setStaffRequestClicked(false)
+    showToast(
+      'Request failed',
+      'Could not submit your staff role request. Please try again.',
+      'error'
+    )
   }
+}
 
-  const handleRequestAdminRole = async () => {
-    setAdminRequestClicked(true)
 
-    try {
-      await RoleRequest('Admin')
-    } catch (err) {
-      setAdminRequestClicked(false)
-    }
+const handleRequestAdminRole = async () => {
+  setAdminRequestClicked(true)
+
+  try {
+    await RoleRequest('Admin')
+    showToast(
+      'Request submitted',
+      'Your admin role request has been sent for admin approval.'
+    )
+  } catch (err) {
+    setAdminRequestClicked(false)
+    showToast(
+      'Request failed',
+      'Could not submit your admin role request. Please try again.',
+      'error'
+    )
   }
-
+}
 
   {/* The return statement of the Layout component conditionally renders the navigation bar based on whether the user is on the login page. */}
   return (
   <>
     <style>{styles}</style>
+
+      {toast && (
+        <section className="uh-toast-wrap" aria-live="polite">
+          <section className={`uh-toast uh-toast-${toast.type}`} role="status">
+            <span className="uh-toast-icon">
+              {toast.type === 'success' ? '✓' : '!'}
+            </span>
+
+            <section className="uh-toast-content">
+              <strong>{toast.title}</strong>
+              <span>{toast.message}</span>
+            </section>
+          </section>
+        </section>
+      )}
 
     {!isLoginPage && (
       <header className="uh-navbar">

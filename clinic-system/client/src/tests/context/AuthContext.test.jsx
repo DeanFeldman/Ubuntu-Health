@@ -79,9 +79,9 @@ function TestConsumer() {
       <div data-testid="user-id">{auth.user?.id ?? ''}</div>
       <button onClick={auth.loginWithGoogle}>Login</button>
       <button onClick={auth.logout}>Logout</button>
-      <button onClick={() => auth.RoleRequest('Staff')}>Request Staff</button>
-      <button onClick={() => auth.RoleRequest('Admin')}>Request Admin</button>
-      <button onClick={() => auth.RoleRequest('InvalidRole')}>Request Invalid</button>
+      <button onClick={() => auth.RoleRequest('Staff').catch(() => {})}>Request Staff</button>
+      <button onClick={() => auth.RoleRequest('Admin').catch(() => {})}>Request Admin</button>
+      <button onClick={() => auth.RoleRequest('InvalidRole').catch(() => {})}>Request Invalid</button>
     </div>
   )
 }
@@ -441,8 +441,11 @@ describe('AuthContext', () => {
     fireEvent.click(screen.getByText('Request Staff'))
 
     await waitFor(() => {
-      expect(window.alert).toHaveBeenCalledWith('Request submitted!')
+      expect(mockFrom).toHaveBeenCalledWith('role_requests')
     })
+
+    expect(window.alert).not.toHaveBeenCalled()
+
   })
 
   test('RoleRequest rejects an invalid requested role', async () => {
@@ -491,8 +494,11 @@ describe('AuthContext', () => {
     fireEvent.click(screen.getByText('Request Invalid'))
 
     await waitFor(() => {
-      expect(window.alert).toHaveBeenCalledWith('Invalid requested role')
+      expect(console.error).toHaveBeenCalled()
     })
+
+    expect(window.alert).not.toHaveBeenCalled()
+
   })
 
   test('RoleRequest rejects requesting the same role', async () => {
@@ -541,8 +547,10 @@ describe('AuthContext', () => {
     fireEvent.click(screen.getByText('Request Admin'))
 
     await waitFor(() => {
-      expect(window.alert).toHaveBeenCalledWith('You already have this role')
-    })
+        expect(console.error).toHaveBeenCalled()
+      })
+
+      expect(window.alert).not.toHaveBeenCalled()
   })
 
   test('RoleRequest rejects duplicate pending requests', async () => {
@@ -593,10 +601,11 @@ describe('AuthContext', () => {
     fireEvent.click(screen.getByText('Request Staff'))
 
     await waitFor(() => {
-      expect(window.alert).toHaveBeenCalledWith(
-        'A pending request for this role already exists'
-      )
+      expect(console.error).toHaveBeenCalled()
     })
+
+    expect(window.alert).not.toHaveBeenCalled()
+    
   })
 
   test('unsubscribes auth listener on unmount', async () => {
