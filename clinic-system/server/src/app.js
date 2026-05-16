@@ -364,10 +364,10 @@ function buildCustomAppointmentRecord({
     clinic_name: getRecordClinicName(appointment, selectedClinic),
     appointment_date: slotDatetime
       ? slotDatetime.slice(0, 10)
-      : appointment.appointment_date || null,
+      : null,
     appointment_time: slotDatetime
       ? getTimeFromAppointmentDatetime(slotDatetime)
-      : appointment.appointment_time || null,
+      : null,
     appointment_status: appointment.status || null,
     service: appointment.service || null,
   }
@@ -1001,7 +1001,7 @@ app.get('/api/reports/custom', async (req, res) => {
       reportQuery = supabase
         .from('appointments')
         .select(
-          `id, patient_id, clinic_id, slot_id, appointment_date, appointment_time, status, service, ${slotSelect}, clinics(id, name)`
+          `id, patient_id, clinic_id, slot_id, status, service, ${slotSelect}, clinics(id, name)`
         )
 
       if (shouldFilterClinic) {

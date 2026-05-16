@@ -41,7 +41,7 @@ afterEach(() => {
 })
 
 describe('custom report', () => {
-  test('appointment report response includes report type, filters, total, and records', async () => {
+  test('appointment report derives date and time from joined slot data', async () => {
     scenario.thenable.appointments = [
       {
         data: [
@@ -50,8 +50,6 @@ describe('custom report', () => {
             patient_id: validPatientId,
             clinic_id: validClinicId,
             slot_id: validSlotId,
-            appointment_date: null,
-            appointment_time: null,
             status: 'Confirmed',
             service: 'General Consultation',
             slots: {
@@ -121,7 +119,7 @@ describe('custom report', () => {
     const appointmentBuilder = createdBuilders[0]
     expect(appointmentBuilder.table).toBe('appointments')
     expect(appointmentBuilder.select).toHaveBeenCalledWith(
-      'id, patient_id, clinic_id, slot_id, appointment_date, appointment_time, status, service, slots(id, slot_datetime), clinics(id, name)'
+      'id, patient_id, clinic_id, slot_id, status, service, slots(id, slot_datetime), clinics(id, name)'
     )
   })
 
@@ -313,7 +311,7 @@ describe('custom report', () => {
 
     const appointmentBuilder = createdBuilders[0]
     expect(appointmentBuilder.select).toHaveBeenCalledWith(
-      'id, patient_id, clinic_id, slot_id, appointment_date, appointment_time, status, service, slots!inner(id, slot_datetime), clinics(id, name)'
+      'id, patient_id, clinic_id, slot_id, status, service, slots!inner(id, slot_datetime), clinics(id, name)'
     )
     expect(appointmentBuilder.gte).toHaveBeenCalledWith(
       'slots.slot_datetime',
@@ -359,11 +357,12 @@ describe('custom report', () => {
             patient_id: validPatientId,
             clinic_id: validClinicId,
             slot_id: validSlotId,
-            appointment_date: '2026-05-11',
-            appointment_time: '09:30',
             status: 'Confirmed',
             service: null,
-            slots: null,
+            slots: {
+              id: validSlotId,
+              slot_datetime: '2026-05-11T09:30:00',
+            },
             clinics: {
               id: validClinicId,
               name: 'Ubuntu Clinic',
@@ -566,11 +565,12 @@ test('uses patient table fallback when user name is missing', async () => {
           patient_id: validPatientId,
           clinic_id: validClinicId,
           slot_id: validSlotId,
-          appointment_date: '2026-05-11',
-          appointment_time: '09:30',
           status: 'Confirmed',
           service: 'General Consultation',
-          slots: null,
+          slots: {
+            id: validSlotId,
+            slot_datetime: '2026-05-11T09:30:00',
+          },
           clinics: {
             id: validClinicId,
             name: 'Ubuntu Clinic',
@@ -675,11 +675,12 @@ test('returns a safe 500 response when patient lookup fails', async () => {
           patient_id: validPatientId,
           clinic_id: validClinicId,
           slot_id: validSlotId,
-          appointment_date: '2026-05-11',
-          appointment_time: '09:30',
           status: 'Confirmed',
           service: 'General Consultation',
-          slots: null,
+          slots: {
+            id: validSlotId,
+            slot_datetime: '2026-05-11T09:30:00',
+          },
           clinics: {
             id: validClinicId,
             name: 'Ubuntu Clinic',
