@@ -986,4 +986,50 @@ describe('QueuePage join flow', () => {
       (await screen.findAllByText('Could not find your queue entry.')).length
     ).toBeGreaterThan(0)
   })
+  test('shows fallback clinic name when queue entry has no clinic name and clinic lookup fails', async () => {
+  setHistoryClinic({
+    id: 'clinic-123',
+    municipality: 'Cape Town',
+    district: 'Metro',
+  })
+
+  mockQueueFetchResponse({
+    queue: [
+      {
+        id: 'entry-1',
+        clinic_id: 'clinic-123',
+        patient_id: 'patient-123',
+        position: 1,
+        status: 'Waiting',
+        joined_at: '2026-04-16T10:00:00.000Z',
+      },
+    ],
+  })
+
+  mockWaitTimeFetchResponse({
+    estimatedWaitTime: 10,
+  })
+
+  fetch.mockResolvedValueOnce({
+    ok: false,
+    status: 500,
+    json: async () => ({ error: 'Clinic lookup failed' }),
+  })
+
+  render(<QueuePage />)
+
+  expect(await screen.findByText('Clinic')).toBeInTheDocument()
+})
+
+test('shows default queue fetch error when queue response is not ok and body has no error', async () => {
+  fetch.mockResolvedValueOnce({
+    ok: false,
+    status: 500,
+    json: async () => ({}),
+  })
+
+  render(<QueuePage />)
+
+  expect(await screen.findByText('Failed to load queue')).toBeInTheDocument()
+})
 })
