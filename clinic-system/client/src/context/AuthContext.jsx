@@ -214,11 +214,11 @@ async function loginWithGoogle() {
 
     if (error) throw error
 
-    alert('Request submitted!')
-  } catch (err) {
+    } catch (err) {
     console.error(err)
-    alert(err.message || 'Failed to submit role request')
+    throw err
   }
+
 }
   
   return (

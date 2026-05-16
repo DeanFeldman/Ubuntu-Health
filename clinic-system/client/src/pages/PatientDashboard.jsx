@@ -593,7 +593,7 @@ const fetchClinics = useCallback(async () => {
         {/* Clinic results */}
         <section className="uh-clinics-section" aria-label="Clinic results">
           <hgroup className="uh-section-header">
-            <h2>Nearby clinics</h2>
+            <h2>All clinics</h2>
             <p>Browse available facilities and book your next appointment.</p>
           </hgroup>
 

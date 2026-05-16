@@ -8,15 +8,17 @@ import { useNavigate } from 'react-router-dom'
 // The styles variable contains all the CSS styles for the StaffDashboard component, defined as a template literal string.
 const styles = `
   .sd-page {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 0 24px;
-  }
-  .sd-heading {
-    font-size: 1.25rem;
-    font-weight: 700;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }  
+
+  .sd-heading { 
+    font-size: 2.1rem;
+    font-weight: 800;
     color: var(--uh-text);
-    margin-bottom: 20px;
+    margin: 0 0 24px;
   }
 
   .sd-stats {
@@ -1823,7 +1825,7 @@ return (
     <style>{styles}</style>
 
     <section className="sd-page">
-      <h1 className="sd-heading">Staff dashboard</h1>
+      <h1 className="sd-heading">Staff Dashboard</h1>
 
       <section className="sd-layout">
         <aside className="sd-sidebar">
