@@ -176,6 +176,63 @@ function makePopulatedWaitTimeReport(overrides = {}) {
     ...overrides,
   }
 }
+function makeCustomAppointmentReport(overrides = {}) {
+  return {
+    report_type: 'appointments',
+    filters: {
+      clinic_id: null,
+      clinic_name: 'All clinics',
+      start_date: null,
+      end_date: null,
+      date_range_label: 'All time',
+      status: null,
+      status_label: 'All statuses',
+    },
+    total_records: 1,
+    records: [
+      {
+        id: 'appointment-1',
+        patient_name: 'Jane Patient',
+        clinic_id: clinicId,
+        clinic_name: 'Hillbrow Clinic',
+        appointment_date: '2026-05-11',
+        appointment_time: '10:00',
+        appointment_status: 'Confirmed',
+        service: 'General Consultation',
+      },
+    ],
+    ...overrides,
+  }
+}
+
+function makeCustomQueueReport(overrides = {}) {
+  return {
+    report_type: 'queue',
+    filters: {
+      clinic_id: null,
+      clinic_name: 'All clinics',
+      start_date: null,
+      end_date: null,
+      date_range_label: 'All time',
+      status: null,
+      status_label: 'All statuses',
+    },
+    total_records: 1,
+    records: [
+      {
+        id: 'queue-1',
+        patient_name: 'Queue Patient',
+        clinic_id: clinicId,
+        clinic_name: 'Hillbrow Clinic',
+        queue_position: 2,
+        queue_status: 'Complete',
+        joined_at: '2026-05-11T08:00:00.000Z',
+        completed_at: '2026-05-11T08:45:00.000Z',
+      },
+    ],
+    ...overrides,
+  }
+}
 function mockFetch({
   roleRequests = [],
   roleError = null,
@@ -183,6 +240,8 @@ function mockFetch({
   users = makeUsers(),
   noShowReport = makeNoShowReport(),
   noShowError = null,
+  customReport = makeCustomAppointmentReport(),
+  customReportError = null,
   waitTimeReport = makeWaitTimeReport(),
   waitTimeError = null,
   clinicsError = null,
@@ -213,7 +272,19 @@ function mockFetch({
     text: async () => JSON.stringify(noShowReport),
   })
 }
+if (urlString.includes('/api/reports/custom')) {
+  if (customReportError) {
+    return Promise.resolve({
+      ok: false,
+      text: async () => JSON.stringify({ error: customReportError }),
+    })
+  }
 
+  return Promise.resolve({
+    ok: true,
+    text: async () => JSON.stringify(customReport),
+  })
+}
 if (urlString.includes('/api/reports/average-wait-time')) {
   if (waitTimeError) {
     return Promise.resolve({
@@ -1452,6 +1523,264 @@ test('exports displayed average wait time report data as PDF', async () => {
   expect(write).toHaveBeenCalledWith(expect.stringContaining('1h 15m'))
   expect(write).toHaveBeenCalledWith(expect.stringContaining('By clinic'))
   expect(write).toHaveBeenCalledWith(expect.stringContaining('By time of day'))
+  expect(close).toHaveBeenCalled()
+  expect(print).toHaveBeenCalled()
+})
+test('displays custom appointment report records after running report', async () => {
+  const user = userEvent.setup()
+
+  mockFetch({
+    customReport: makeCustomAppointmentReport({
+      filters: {
+        clinic_id: clinicId,
+        clinic_name: 'Hillbrow Clinic',
+        start_date: '2026-05-01',
+        end_date: '2026-05-11',
+        date_range_label: '2026-05-01 to 2026-05-11',
+        status: 'Confirmed',
+        status_label: 'Confirmed',
+      },
+    }),
+  })
+
+  render(<AdminDashboard />)
+  await openAnalyticsSection()
+
+  expect(
+    await screen.findByRole('heading', { name: /custom report builder/i })
+  ).toBeInTheDocument()
+
+  await user.click(screen.getByRole('button', { name: /run report/i }))
+
+  expect(await screen.findByText('Jane Patient')).toBeInTheDocument()
+  expect(screen.getAllByText('Hillbrow Clinic').length).toBeGreaterThan(0)
+  expect(screen.getByText('2026-05-11')).toBeInTheDocument()
+  expect(screen.getByText('10:00')).toBeInTheDocument()
+  expect(screen.getAllByText('Confirmed').length).toBeGreaterThan(0)
+  expect(screen.getByText('General Consultation')).toBeInTheDocument()
+
+  expect(screen.getAllByText('Report type').length).toBeGreaterThan(0)
+  expect(screen.getAllByText('Total records').length).toBeGreaterThan(0)
+  expect(screen.getAllByText('Appointments').length).toBeGreaterThan(0)
+})
+
+test('displays custom queue report records after selecting queue report type', async () => {
+  const user = userEvent.setup()
+
+  mockFetch({
+    customReport: makeCustomQueueReport({
+      filters: {
+        clinic_id: clinicId,
+        clinic_name: 'Hillbrow Clinic',
+        start_date: '2026-05-01',
+        end_date: '2026-05-11',
+        date_range_label: '2026-05-01 to 2026-05-11',
+        status: 'Complete',
+        status_label: 'Complete',
+      },
+    }),
+  })
+
+  render(<AdminDashboard />)
+  await openAnalyticsSection()
+
+  await user.selectOptions(screen.getByLabelText('Report type'), 'queue')
+  await user.click(screen.getByRole('button', { name: /run report/i }))
+
+  expect(await screen.findByText('Queue Patient')).toBeInTheDocument()
+  expect(screen.getAllByText('Hillbrow Clinic').length).toBeGreaterThan(0)
+  expect(screen.getByText('2')).toBeInTheDocument()
+  expect(screen.getAllByText('Complete').length).toBeGreaterThan(0)
+  expect(screen.getAllByText('Queue entries').length).toBeGreaterThan(0)
+
+  expect(screen.getByText('Position')).toBeInTheDocument()
+  expect(screen.getByText('Joined at')).toBeInTheDocument()
+  expect(screen.getByText('Completed at')).toBeInTheDocument()
+})
+
+test('fetches custom report with selected filters when run report is clicked', async () => {
+  const user = userEvent.setup()
+
+  mockFetch({
+    customReport: makeCustomAppointmentReport(),
+  })
+
+  render(<AdminDashboard />)
+  await openAnalyticsSection()
+
+  const clinicSelects = await screen.findAllByLabelText('Clinic')
+  const customClinicSelect = clinicSelects[2]
+
+  const startDateInputs = screen.getAllByLabelText('Start date')
+  const endDateInputs = screen.getAllByLabelText('End date')
+
+  await user.selectOptions(screen.getByLabelText('Report type'), 'appointments')
+  await user.selectOptions(customClinicSelect, clinicId)
+  await user.type(startDateInputs[2], '2026-05-01')
+  await user.type(endDateInputs[2], '2026-05-11')
+  await user.selectOptions(screen.getByLabelText('Status'), 'Confirmed')
+
+  await user.click(screen.getByRole('button', { name: /run report/i }))
+
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining(
+        `/api/reports/custom?report_type=appointments&clinic_id=${clinicId}&start_date=2026-05-01&end_date=2026-05-11&status=Confirmed`
+      ),
+      expect.objectContaining({
+        headers: { Accept: 'application/json' },
+      })
+    )
+  })
+})
+
+test('updates custom status options when report type changes', async () => {
+  const user = userEvent.setup()
+
+  mockFetch()
+
+  render(<AdminDashboard />)
+  await openAnalyticsSection()
+
+  expect(screen.getByRole('option', { name: 'Confirmed' })).toBeInTheDocument()
+  expect(screen.queryByRole('option', { name: 'Called' })).not.toBeInTheDocument()
+
+  await user.selectOptions(screen.getByLabelText('Report type'), 'queue')
+
+  expect(screen.getByRole('option', { name: 'Called' })).toBeInTheDocument()
+  expect(screen.getByRole('option', { name: 'In Consultation' })).toBeInTheDocument()
+  expect(screen.queryByRole('option', { name: 'Confirmed' })).not.toBeInTheDocument()
+})
+
+test('shows custom report empty state when no records match', async () => {
+  const user = userEvent.setup()
+
+  mockFetch({
+    customReport: makeCustomAppointmentReport({
+      total_records: 0,
+      records: [],
+    }),
+  })
+
+  render(<AdminDashboard />)
+  await openAnalyticsSection()
+
+  await user.click(screen.getByRole('button', { name: /run report/i }))
+
+  expect(await screen.findByText('No records found.')).toBeInTheDocument()
+  expect(
+    screen.getByText('No appointments match the selected filters.')
+  ).toBeInTheDocument()
+})
+
+test('shows custom report error when request fails', async () => {
+  const user = userEvent.setup()
+
+  mockFetch({
+    customReportError: 'Failed to fetch custom report',
+  })
+
+  render(<AdminDashboard />)
+  await openAnalyticsSection()
+
+  await user.click(screen.getByRole('button', { name: /run report/i }))
+
+  expect(await screen.findByText('Failed to fetch custom report')).toBeInTheDocument()
+})
+
+test('exports displayed custom appointment report data as CSV', async () => {
+  const user = userEvent.setup()
+  const createObjectURL = jest.fn(() => 'blob:mock-custom-url')
+  const revokeObjectURL = jest.fn()
+  const click = jest.fn()
+
+  global.URL.createObjectURL = createObjectURL
+  global.URL.revokeObjectURL = revokeObjectURL
+
+  jest.spyOn(document, 'createElement').mockImplementation((tagName) => {
+    const element = document.createElementNS('http://www.w3.org/1999/xhtml', tagName)
+
+    if (tagName === 'a') {
+      element.click = click
+    }
+
+    return element
+  })
+
+  mockFetch({
+    customReport: makeCustomAppointmentReport({
+      filters: {
+        clinic_id: clinicId,
+        clinic_name: 'Hillbrow Clinic',
+        start_date: '2026-05-01',
+        end_date: '2026-05-11',
+        date_range_label: '2026-05-01 to 2026-05-11',
+        status: 'Confirmed',
+        status_label: 'Confirmed',
+      },
+    }),
+  })
+
+  render(<AdminDashboard />)
+  await openAnalyticsSection()
+
+  await user.click(screen.getByRole('button', { name: /run report/i }))
+
+  const csvButtons = await screen.findAllByRole('button', { name: 'Export CSV' })
+  await user.click(csvButtons[csvButtons.length - 1])
+
+  expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob))
+  expect(click).toHaveBeenCalled()
+  expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-custom-url')
+})
+
+test('exports displayed custom appointment report data as PDF', async () => {
+  const user = userEvent.setup()
+  const write = jest.fn()
+  const close = jest.fn()
+  const print = jest.fn()
+
+  window.open = jest.fn(() => ({
+    document: {
+      write,
+      close,
+    },
+    print,
+  }))
+
+  mockFetch({
+    customReport: makeCustomAppointmentReport({
+      filters: {
+        clinic_id: clinicId,
+        clinic_name: 'Hillbrow Clinic',
+        start_date: '2026-05-01',
+        end_date: '2026-05-11',
+        date_range_label: '2026-05-01 to 2026-05-11',
+        status: 'Confirmed',
+        status_label: 'Confirmed',
+      },
+    }),
+  })
+
+  render(<AdminDashboard />)
+  await openAnalyticsSection()
+
+  await user.click(screen.getByRole('button', { name: /run report/i }))
+
+  const pdfButtons = await screen.findAllByRole('button', { name: 'Export PDF' })
+  await user.click(pdfButtons[pdfButtons.length - 1])
+
+  expect(window.open).toHaveBeenCalledWith('', '_blank')
+  expect(write).toHaveBeenCalledWith(
+    expect.stringContaining('Custom Report – Appointments')
+  )
+  expect(write).toHaveBeenCalledWith(expect.stringContaining('Hillbrow Clinic'))
+  expect(write).toHaveBeenCalledWith(
+    expect.stringContaining('2026-05-01 to 2026-05-11')
+  )
+  expect(write).toHaveBeenCalledWith(expect.stringContaining('Confirmed'))
+  expect(write).toHaveBeenCalledWith(expect.stringContaining('Jane Patient'))
+  expect(write).toHaveBeenCalledWith(expect.stringContaining('General Consultation'))
   expect(close).toHaveBeenCalled()
   expect(print).toHaveBeenCalled()
 })
