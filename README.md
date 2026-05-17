@@ -198,7 +198,7 @@ npm test
 
 The final hosted application link is provided in the final submission links section and in the submitted Word document.
 
-Secrets are not stored in GitHub. Deployment environment variables must be configured in the deployment provider using the values from the submitted Word document.
+Secrets are not stored in GitHub. Deployment environment variables must be configured in the deployment provider using the values from the submitted document.
 
 ## Scrum and Project Management Evidence
 
@@ -243,7 +243,7 @@ This release represents the final viable product for submission.
 
 Do not commit `.env` files, API keys, database keys, email passwords, or deployment secrets to the repository.
 
-Secret values required to run the application are included only in the final Word document submitted on Moodle.
+Secret values required to run the application are included only in the final document submitted on Moodle.
 
 ## Contributors
 
