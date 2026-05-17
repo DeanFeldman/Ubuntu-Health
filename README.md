@@ -187,11 +187,11 @@ cd clinic-system/server
 npm test
 ```
 
-### Frontend build check
+### Frontend tests
 
 ```bash
 cd clinic-system/client
-npm run build
+npm test
 ```
 
 ## Deployment Notes
