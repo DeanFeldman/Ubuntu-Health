@@ -11,9 +11,9 @@ The system helps patients book appointments, join virtual clinic queues, and tra
 | Public hosted application | https://ubuntu-health-geb6dbegejfmenc7.southafricanorth-01.azurewebsites.net |
 | Screen recording demo | https://youtu.be/bxhLHU6GLcc |
 | GitHub repository | https://github.com/DeanFeldman/Ubuntu-Health |
-| Final Word document | Submitted on Moodle |
+| Final document | Submitted on Moodle |
 
-> **Important:** Required secret values, credentials, and environment variable values are provided in the Word document submitted on Moodle. They are not committed to this repository.
+> **Important:** Required secret values, credentials, and environment variable values are provided in the document submitted on Moodle. They are not committed to this repository.
 
 ## Project Overview
 
@@ -66,7 +66,7 @@ The project includes the required South African data integration by using real S
 
 The dataset supports clinic records such as clinic names, locations, facility information, provinces, regions/districts, and filtering/search functionality.
 
-The source choice and justification are documented in the submitted Word document and project artefacts.
+The source choice and justification are documented in the submitted document and project artefacts.
 
 ## Tech Stack
 
@@ -113,7 +113,7 @@ Create a `.env` file inside `clinic-system/server`.
 touch .env
 ```
 
-Add the required environment variables. The actual secret values are provided in the submitted Word document.
+Add the required environment variables. The actual secret values are provided in the submitted document.
 
 ```env
 SUPABASE_URL= 
@@ -121,7 +121,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 PORT=8080
 ```
 
-Depending on the final configuration, some variable names may differ slightly. Use the submitted Word document as the source for the final secret values.
+Depending on the final configuration, some variable names may differ slightly. Use the submitted document as the source for the final secret values.
 
 ### 4. Start the backend
 
@@ -196,7 +196,7 @@ npm test
 
 ## Deployment Notes
 
-The final hosted application link is provided in the final submission links section and in the submitted Word document.
+The final hosted application link is provided in the final submission links section and in the submitted document.
 
 Secrets are not stored in GitHub. Deployment environment variables must be configured in the deployment provider using the values from the submitted document.
 
