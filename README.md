@@ -23,7 +23,6 @@ Public health clinics in South Africa are often overcrowded, and patients may wa
 - virtual queue joining,
 - real-time queue position tracking,
 - clinic and staff management,
-- notifications and reminders,
 - admin analytics and reporting,
 - South African clinic/facility data integration.
 
@@ -35,7 +34,6 @@ Public health clinics in South Africa are often overcrowded, and patients may wa
 - Browse and search real clinic data.
 - View clinic details and available slots.
 - Book, reschedule, and cancel appointments.
-- View future appointments and appointment history.
 - Join a virtual clinic queue.
 - Track queue position and estimated wait time.
 - View predicted wait time separately from the live queue estimate.
@@ -90,7 +88,7 @@ Ubuntu-Health/
 ```
 
 ## Running the Project Locally
-
+Note: Appointment booking depends on clinic setup. A clinic must have assigned staff and configured staff availability before appointment slots will appear. If no staff capacity is available, wait time estimates safely fall back to “Estimate not available”. 
 ### 1. Clone the repository
 
 ```bash
@@ -132,13 +130,13 @@ npm run dev
 The backend should run on:
 
 ```text
-http://localhost:3000
+http://localhost:8080
 ```
 
 You can test the API health route with:
 
 ```text
-http://localhost:3000/api
+http://localhost:8080/api
 ```
 
 ### 5. Install frontend dependencies
