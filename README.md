@@ -80,6 +80,37 @@ The source choice and justification are documented in the submitted document and
 | CI/CD | GitHub Actions |
 | Deployment | Public hosted deployment link provided above |
 
+## Dependency Summary
+
+Ubuntu Health is split into two applications, so dependencies are installed separately for the backend and frontend.
+
+| Part | Location | Purpose |
+|---|---|---|
+| Backend | `clinic-system/server` | Node.js/Express API, Supabase communication, validation, routes, reports, notifications, and backend tests. |
+| Frontend | `clinic-system/client` | React/Vite user interface for Patient, Staff, and Admin workflows. |
+
+Key backend packages include:
+
+- `express` for the API server and routes
+- `@supabase/supabase-js` for Supabase database communication
+- `cors` for frontend/backend communication
+- `dotenv` for environment variables
+- `nodemailer` for appointment email notifications
+- `jest` and `supertest` for backend testing
+
+Key frontend packages include:
+
+- `react` and `react-dom` for the user interface
+- `react-router-dom` for routing
+- `@supabase/supabase-js` for Supabase communication where needed
+- `vite` and `@vitejs/plugin-react` for development and builds
+- `jest`, `babel-jest`, `jsdom`, and React Testing Library packages for frontend testing
+
+For the complete dependency list, see the `package.json` files in:
+
+- `clinic-system/server/package.json`
+- `clinic-system/client/package.json`
+
 ## Repository Structure
 
 ```text
