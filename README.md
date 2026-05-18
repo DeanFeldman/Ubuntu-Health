@@ -208,8 +208,7 @@ The final submission includes evidence of Scrum methodology, including:
 - daily stand-up summaries,
 - sprint review evidence,
 - sprint retrospective reports,
-- GitHub issues and project board evidence,
-- pull requests and commit history.
+- GitHub issues, project board evidence, and commit history.
 
 The repository and documentation are structured so that markers can navigate the project artefacts and verify the development process.
 
