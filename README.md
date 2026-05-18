@@ -9,7 +9,7 @@ The system helps patients book appointments, join virtual clinic queues, and tra
 | Item | Link |
 |---|---|
 | Public hosted application | https://ubuntu-health-geb6dbegejfmenc7.southafricanorth-01.azurewebsites.net |
-| Screen recording demo | [ADD PUBLIC VIDEO LINK HERE] |
+| Screen recording demo | https://youtu.be/bxhLHU6GLcc |
 | GitHub repository | https://github.com/DeanFeldman/Ubuntu-Health |
 | Final Word document | Submitted on Moodle |
 
