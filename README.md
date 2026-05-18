@@ -122,6 +122,8 @@ Ubuntu-Health/
 
 ## Running the Project Locally
 Note: Appointment booking depends on clinic setup. A clinic must have assigned staff and configured staff availability before appointment slots will appear. If no staff capacity is available, wait time estimates safely fall back to “Estimate not available”. 
+
+```Install Node before procceeding```
 ### 1. Clone the repository
 
 ```bash
