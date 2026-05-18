@@ -1,5 +1,7 @@
 # Ubuntu Health
 
+[![codecov](https://codecov.io/gh/DeanFeldman/Ubuntu-Health/graph/badge.svg?token=YOUR_CODECOV_TOKEN)](https://codecov.io/gh/DeanFeldman/Ubuntu-Health)
+
 Ubuntu Health is a web-based **Community Clinic Appointment and Queue Management System** built for the COMS3009A Software Design Project 2026.
 
 The system helps patients book appointments, join virtual clinic queues, and track their waiting position, while giving clinic staff and admins tools to manage patient flow, clinic information, notifications, and analytics.
