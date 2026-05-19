@@ -11,7 +11,7 @@ The system helps patients book appointments, join virtual clinic queues, and tra
 | Item | Link |
 |---|---|
 | Public hosted application | https://ubuntu-health-geb6dbegejfmenc7.southafricanorth-01.azurewebsites.net |
-| Screen recording demo | See documentation for the Link  |
+| Screen recording demo | https://drive.google.com/file/d/1zAa0TzdL2wF9s8nlcpkOshnYktXRuQIW/view?usp=sharing  |
 | GitHub repository | https://github.com/DeanFeldman/Ubuntu-Health |
 | Final document | Submitted on Moodle |
 
@@ -121,9 +121,13 @@ Ubuntu-Health/
 ```
 
 ## Running the Project Locally
-Note: Appointment booking depends on clinic setup. A clinic must have assigned staff and configured staff availability before appointment slots will appear. If no staff capacity is available, wait time estimates safely fall back to “Estimate not available”. 
 
-```Install Node.js before proceeding```
+Note: Appointment booking depends on clinic setup. A clinic must have assigned staff and configured staff availability before appointment slots will appear. If no staff capacity is available, wait time estimates safely fall back to “Estimate not available”.
+
+```text
+Install Node.js before proceeding
+```
+
 ### 1. Clone the repository
 
 ```bash
@@ -138,27 +142,109 @@ cd server
 npm install
 ```
 
-### 3. Create backend environment file
+### 3. Create environment files
 
-Create a `.env` file inside `clinic-system/server`.
+Ubuntu Health uses three `.env` files depending on where the app is being run from. These files are required for local development and deployment configuration, but they must not be committed to GitHub.
+
+The actual secret values are provided separately in the submitted Moodle document.
+
+#### 3.1 Frontend environment file
+
+Create this file inside:
+
+```text
+clinic-system/client/.env
+```
 
 ```bash
+cd ../client
 touch .env
 ```
 
-Add the required environment variables. The actual secret values are provided in the submitted document.
+Add the required frontend environment variables using the placeholder structure below:
 
 ```env
-SUPABASE_URL= 
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+VITE_API_BASE_URL=
+VITE_API_URL=
+```
+
+Variable purpose:
+
+```text
+VITE_SUPABASE_URL        Supabase project URL used by the frontend
+VITE_SUPABASE_ANON_KEY   Supabase public anon/publishable key used by the frontend
+VITE_API_BASE_URL        Deployed backend API URL
+VITE_API_URL             Local frontend or API-related development URL
+```
+
+#### 3.2 Backend environment file
+
+Create this file inside:
+
+```text
+clinic-system/server/.env
+```
+
+```bash
+cd ../server
+touch .env
+```
+
+Add the required backend environment variables using the placeholder structure below:
+
+```env
+SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 PORT=8080
 ```
+
+Variable purpose:
+
+```text
+SUPABASE_URL                 Supabase project URL used by the backend
+SUPABASE_SERVICE_ROLE_KEY    Supabase service role key used by the backend
+PORT                         Local backend server port
+```
+
+#### 3.3 Root clinic-system environment file
+
+Create this file inside:
+
+```text
+clinic-system/.env
+```
+
+```bash
+cd ..
+touch .env
+```
+
+Add the required root environment variables using the placeholder structure below:
+
+```env
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+Variable purpose:
+
+```text
+SUPABASE_URL                 Supabase project URL used by shared scripts or project-level configuration
+SUPABASE_SERVICE_ROLE_KEY    Supabase service role key used by shared scripts or project-level configuration
+```
+
+Do not commit `.env` files, Supabase keys, service role keys, API keys, or email credentials to GitHub. The README only includes placeholder structures. The real values are included only in the submitted Moodle document or shared securely where required for assessment.
 
 Depending on the final configuration, some variable names may differ slightly. Use the submitted document as the source for the final secret values.
 
 ### 4. Start the backend
 
+From the backend folder:
+
 ```bash
+cd clinic-system/server
 npm run dev
 ```
 
@@ -183,23 +269,7 @@ cd Ubuntu-Health/clinic-system/client
 npm install
 ```
 
-### 6. Create frontend environment file
-
-Create a `.env` file inside `clinic-system/client` if required by the final build.
-
-```bash
-touch .env
-```
-
-Example:
-
-```env
-VITE_API_URL=
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
-```
-
-### 7. Start the frontend
+### 6. Start the frontend
 
 ```bash
 npm run dev
